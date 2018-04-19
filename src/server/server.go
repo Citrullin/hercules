@@ -14,7 +14,8 @@ import (
 const (
 	flushInterval = time.Duration(1) * time.Second
 	maxQueueSize  = 1000000
-	UDPPacketSize = 1500
+	UDPPacketSize = 1650
+	maxNeighbors = 32
 )
 
 var address string
@@ -27,6 +28,7 @@ var nbWorkers = runtime.NumCPU()
 
 type Neighbor struct {
 	Addr string
+	UDPAddr *net.UDPAddr
 }
 
 type Message struct {
@@ -63,6 +65,7 @@ var mqo messageQueue
 var server *Server
 var config *ServerConfig
 var neighbors []Neighbor
+var connection net.PacketConn
 
 func Create (serverConfig *ServerConfig) *Server {
 	config = serverConfig
@@ -73,18 +76,21 @@ func Create (serverConfig *ServerConfig) *Server {
 		Outgoing: make(messageQueue, maxQueueSize)}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	neighbors = make([]Neighbor, maxNeighbors)
+	for i := range config.Neighbors {
+		neighbors[i] = createNeighbor(config.Neighbors[i])
+	}
 
 	bufferPool = sync.Pool{
 		New: func() interface{} { return make([]byte, UDPPacketSize) },
 	}
 
-	remote, _ := net.ResolveUDPAddr("udp", config.Neighbors[0])
-	local, _ := net.ResolveUDPAddr("udp", ":" + config.Port)
-	c, err := net.DialUDP("udp", local, remote)
+	c, err := net.ListenPacket("udp", ":" + config.Port)
 	if err != nil {
 		panic(err)
 	}
-	server.listenAndReceive(c, nbWorkers)
+	connection = c
+	server.listenAndReceive(nbWorkers)
 
 	// Clean exit:
 	ch := make(chan os.Signal, 1)
@@ -108,38 +114,50 @@ func Create (serverConfig *ServerConfig) *Server {
 
 	go func() {
 		for msg := range server.Outgoing {
-			server.Write(c, msg)
+			// TODO: if msg contains address, find neighbor with the given address and talk to him
+			server.Write(msg)
 		}
 	}()
-	server.Write(c, Message{ Addr: config.Neighbors[0], Msg: []byte("PING"), Length: 4 })
+	server.Write(Message{ Msg: []byte("PING"), Length: 4 })
 	return server
 }
 
 func createNeighbor (address string) Neighbor {
- return Neighbor{}
+	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
+ 	neighbor := Neighbor{
+ 		Addr: address,
+		UDPAddr: UDPAddr}
+ 	return neighbor
 }
 
-func (server Server) Write(c *net.UDPConn, msg Message) {
-	c.Write(msg.Msg[0:msg.Length])
+func (server Server) Write(msg Message) {
+	for _, neighbor := range neighbors {
+		neighbor.Write(msg)
+	}
 }
 
-func (server Server) listenAndReceive(c *net.UDPConn, maxWorkers int) error {
+func (neighbor Neighbor) Write(msg Message) {
+	connection.WriteTo(msg.Msg[0:msg.Length], neighbor.UDPAddr)
+}
+
+func (server Server) listenAndReceive(maxWorkers int) error {
 	for i := 0; i < maxWorkers; i++ {
 		go mq.dequeue()
-		go server.receive(c)
+		go server.receive()
 	}
 	return nil
 }
 
 // receive accepts incoming datagrams on c and calls handleMessage() for each message
-func (server Server) receive(c *net.UDPConn) {
+func (server Server) receive() {
 	for {
 		msg := bufferPool.Get().([]byte)
-		nbytes, addr, err := c.ReadFrom(msg[0:])
+		nbytes, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {
 			log.Printf("Error %s", err)
 			continue
 		}
+		// TODO: filter unknown addresses
 		mq.enqueue(Message{addr.String(), msg, nbytes})
 	}
 }
