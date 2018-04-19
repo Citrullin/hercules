@@ -41,7 +41,7 @@ func TritsToTrytes (trits []int) string {
 
 	for i := 0; i < size; i += 1 {
 		pos := (trits[i * 3 + 0]) + (trits[i * 3 + 1]) * 3 + (trits[ i * 3 + 2]) * 9+ 13
-		trytes += string(charCodeAt(TRYTES, pos))
+		trytes += string(CharCodeAt(TRYTES, pos))
 	}
 
 	return trytes
@@ -55,7 +55,7 @@ func TrytesToTrits (trytes string) []int {
 
 
 	for i, j := 0, 0; i < size; i, j = i + 1, j + 3 {
-		char := int(charCodeAt(trytes, i))
+		char := int(CharCodeAt(trytes, i))
 		k = (char - 64) * 3
 
 		if k < 0 {
@@ -70,7 +70,7 @@ func TrytesToTrits (trytes string) []int {
 	return trits
 }
 
-func charCodeAt(s string, n int) rune {
+func CharCodeAt(s string, n int) rune {
 	i := 0
 	for _, r := range s {
 		if i == n {

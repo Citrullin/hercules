@@ -1,12 +1,13 @@
 package main
 
 import (
-	"../server"
+	"server"
 	"flag"
 	"strings"
 )
 
 var serverConfig *server.ServerConfig
+var srv *server.Server
 
 func init() {
 	var ns string
@@ -26,7 +27,11 @@ func init() {
 }
 
 func main () {
-	var srv = server.Create(serverConfig)
+	srv = server.Create(serverConfig)
+	listenForIncomingMessage()
+}
+
+func listenForIncomingMessage () {
 	for inc := range srv.Incoming {
 		srv.Outgoing <- server.Message{
 			Addr: inc.Addr,

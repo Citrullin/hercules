@@ -34,3 +34,13 @@ func BytesToTrits (bytes []byte) []int {
 	}
 	return trits
 }
+
+func TritsToInt (trits []int) int {
+	var returnValue = 0
+
+	for i := len(trits); i > 0; i-- {
+		returnValue = returnValue * 3 + trits[ i - 1 ]
+	}
+
+	return returnValue
+}

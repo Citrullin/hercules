@@ -23,7 +23,14 @@ func TestBytesToTrits(t *testing.T) {
 	}
 }
 
-
+func TestTritsToInt(t *testing.T) {
+	trits := TrytesToTrits("HELLOWORLD")
+	expected := 33792688625192
+	result := TritsToInt(trits)
+	if !reflect.DeepEqual(expected, result) {
+		t.Error("Trits int converion wrong!", expected, result)
+	}
+}
 
 func TestConversions(t *testing.T) {
 	word := "ANSDJDAAODSA999DASDW"
