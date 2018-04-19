@@ -4,7 +4,6 @@ import (
 	"../server"
 	"flag"
 	"strings"
-	"fmt"
 )
 
 var serverConfig *server.ServerConfig
@@ -24,7 +23,6 @@ func init() {
 	serverConfig = &server.ServerConfig{
 		Neighbors: neighbors,
 		Port: port}
-	fmt.Print("config", serverConfig)
 }
 
 func main () {

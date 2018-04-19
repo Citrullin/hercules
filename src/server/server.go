@@ -64,7 +64,7 @@ var mq messageQueue
 var mqo messageQueue
 var server *Server
 var config *ServerConfig
-var neighbors []Neighbor
+var neighbors []*Neighbor
 var connection net.PacketConn
 
 func Create (serverConfig *ServerConfig) *Server {
@@ -76,7 +76,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		Outgoing: make(messageQueue, maxQueueSize)}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	neighbors = make([]Neighbor, maxNeighbors)
+	neighbors = make([]*Neighbor, maxNeighbors)
 	for i := range config.Neighbors {
 		neighbors[i] = createNeighbor(config.Neighbors[i])
 	}
@@ -114,7 +114,12 @@ func Create (serverConfig *ServerConfig) *Server {
 
 	go func() {
 		for msg := range server.Outgoing {
-			// TODO: if msg contains address, find neighbor with the given address and talk to him
+			if len(msg.Addr) > 0 {
+				neighbor := FindNeighbor(msg.Addr)
+				if neighbor != nil {
+					neighbor.Write(msg)
+				}
+			}
 			server.Write(msg)
 		}
 	}()
@@ -122,22 +127,33 @@ func Create (serverConfig *ServerConfig) *Server {
 	return server
 }
 
-func createNeighbor (address string) Neighbor {
+func FindNeighbor (address string) *Neighbor {
+	for _, neighbor := range neighbors {
+		if neighbor.Addr == address {
+			return neighbor
+		}
+	}
+	return nil
+}
+
+func createNeighbor (address string) *Neighbor {
 	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
  	neighbor := Neighbor{
  		Addr: address,
 		UDPAddr: UDPAddr}
- 	return neighbor
-}
-
-func (server Server) Write(msg Message) {
-	for _, neighbor := range neighbors {
-		neighbor.Write(msg)
-	}
+ 	return &neighbor
 }
 
 func (neighbor Neighbor) Write(msg Message) {
 	connection.WriteTo(msg.Msg[0:msg.Length], neighbor.UDPAddr)
+}
+
+func (server Server) Write(msg Message) {
+	for _, neighbor := range neighbors {
+		if neighbor != nil {
+			neighbor.Write(msg)
+		}
+	}
 }
 
 func (server Server) listenAndReceive(maxWorkers int) error {
@@ -157,8 +173,13 @@ func (server Server) receive() {
 			log.Printf("Error %s", err)
 			continue
 		}
-		// TODO: filter unknown addresses
-		mq.enqueue(Message{addr.String(), msg, nbytes})
+		address := addr.String()
+		neighbor := FindNeighbor(address)
+		if neighbor != nil {
+			mq.enqueue(Message{address, msg, nbytes})
+		} else {
+			bufferPool.Put(msg)
+		}
 	}
 }
 
