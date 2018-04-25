@@ -3,12 +3,11 @@ package server
 import (
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+	"fmt"
 )
 
 const (
@@ -34,7 +33,6 @@ type Neighbor struct {
 type Message struct {
 	Addr   string
 	Msg    []byte
-	Length int
 }
 
 type ServerConfig struct {
@@ -42,14 +40,14 @@ type ServerConfig struct {
 	Port string
 }
 
-type messageQueue chan Message
+type messageQueue chan *Message
 
 type Server struct {
 	Incoming messageQueue
 	Outgoing messageQueue
 }
 
-func (mq messageQueue) enqueue(m Message) {
+func (mq messageQueue) enqueue(m *Message) {
 	mq <- m
 }
 
@@ -68,6 +66,9 @@ var neighbors []*Neighbor
 var connection net.PacketConn
 
 func Create (serverConfig *ServerConfig) *Server {
+	// TODO: allow hostname neighbors, periodically check for changed IP
+	//ip, err := net.LookupIP("192.168.1.1")
+
 	config = serverConfig
 	mq = make(messageQueue, maxQueueSize)
 	mqo = make(messageQueue, maxQueueSize)
@@ -75,7 +76,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		Incoming: make(messageQueue, maxQueueSize),
 		Outgoing: make(messageQueue, maxQueueSize)}
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 	neighbors = make([]*Neighbor, maxNeighbors)
 	for i := range config.Neighbors {
 		neighbors[i] = createNeighbor(config.Neighbors[i])
@@ -90,23 +91,12 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(nbWorkers)
-
-	// Clean exit:
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt)
-	go func() {
-		for range ch {
-			atomic.AddUint64(&total, ops)
-			log.Printf("Total ops %d", total)
-			os.Exit(0)
-		}
-	}()
+	server.listenAndReceive(2)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
 		for range flushTicker.C {
-			log.Printf("Ops/s %f", float64(ops)/flushInterval.Seconds())
+			log.Printf("iTXs/s %f", float64(ops)/flushInterval.Seconds())
 			atomic.AddUint64(&total, ops)
 			atomic.StoreUint64(&ops, 0)
 		}
@@ -123,13 +113,17 @@ func Create (serverConfig *ServerConfig) *Server {
 			server.Write(msg)
 		}
 	}()
-	server.Write(Message{ Msg: []byte("PING"), Length: 4 })
 	return server
+}
+
+func End () {
+	atomic.AddUint64(&total, ops)
+	log.Printf("Total iTXs %d", total)
 }
 
 func FindNeighbor (address string) *Neighbor {
 	for _, neighbor := range neighbors {
-		if neighbor.Addr == address {
+		if neighbor != nil && neighbor.Addr == address {
 			return neighbor
 		}
 	}
@@ -144,11 +138,14 @@ func createNeighbor (address string) *Neighbor {
  	return &neighbor
 }
 
-func (neighbor Neighbor) Write(msg Message) {
-	connection.WriteTo(msg.Msg[0:msg.Length], neighbor.UDPAddr)
+func (neighbor Neighbor) Write(msg *Message) {
+	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
+	if err != nil {
+		fmt.Println("Error!", err)
+	}
 }
 
-func (server Server) Write(msg Message) {
+func (server Server) Write(msg *Message) {
 	for _, neighbor := range neighbors {
 		if neighbor != nil {
 			neighbor.Write(msg)
@@ -168,7 +165,7 @@ func (server Server) listenAndReceive(maxWorkers int) error {
 func (server Server) receive() {
 	for {
 		msg := bufferPool.Get().([]byte)
-		nbytes, addr, err := connection.ReadFrom(msg[0:])
+		_, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {
 			log.Printf("Error %s", err)
 			continue
@@ -176,14 +173,14 @@ func (server Server) receive() {
 		address := addr.String()
 		neighbor := FindNeighbor(address)
 		if neighbor != nil {
-			mq.enqueue(Message{address, msg, nbytes})
+			mq.enqueue(&Message{address, msg})
 		} else {
 			bufferPool.Put(msg)
 		}
 	}
 }
 
-func handleMessage(msg Message) {
+func handleMessage(msg *Message) {
 	server.Incoming <- msg
 	atomic.AddUint64(&ops, 1)
 }

@@ -35,12 +35,18 @@ var TRYTES_TO_TRITS = []int{
 }
 
 func TritsToTrytes (trits []int) string {
+	l := len(trits)
 	size := int(math.Ceil(float64(len(trits)) / 3))
+
+	index := func (i int) int {
+		if i >= l { return 0 }
+		return trits[i]
+	}
 
 	trytes := ""
 
 	for i := 0; i < size; i += 1 {
-		pos := (trits[i * 3 + 0]) + (trits[i * 3 + 1]) * 3 + (trits[ i * 3 + 2]) * 9+ 13
+		pos := index(i * 3 + 0) + (index(i * 3 + 1)) * 3 + (index( i * 3 + 2)) * 9+ 13
 		trytes += string(CharCodeAt(TRYTES, pos))
 	}
 
