@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 	"runtime"
-	"strings"
 	"sync"
 	"db"
+	"convert"
+	"github.com/dgraph-io/badger"
 )
 
 const (
@@ -18,8 +19,8 @@ const (
 )
 
 type Message struct {
-	Trytes string
-	Requested string
+	Trytes *[]byte
+	Requested *[]byte
 	Addr string
 }
 
@@ -45,6 +46,8 @@ type TXS struct {
 }
 var requests Requests
 var txs TXS
+var received = 0
+var confirmed = 0
 
 func Start () *Tangle {
 	txs.Data = make(map[string]*TX)
@@ -62,76 +65,100 @@ func Start () *Tangle {
 
 func listenToIncoming () {
 	for msg := range tangle.Incoming {
-		db.Locker.Lock()
-		db.Locker.Unlock()
-		tx := TrytesToObject(msg.Trytes)
-		db.Requests.Delete(tx.Hash)
+		_ = db.DB.Update(func(txn *badger.Txn) error {
+			trytes := convert.BytesToTrytes(*msg.Trytes)[:2673]
+			tx := TrytesToObject(trytes)
+			db.Remove(db.GetHashKey(tx.Hash, db.KEY_REQUESTS), txn)
+			milestone := isMilestone(tx)
 
-		if !db.Transactions.Has(tx.Hash) {
-			db.Transactions.Save(tx.Hash, &db.DatabaseTransaction{tx.TrunkTransaction, tx.BranchTransaction}, &msg.Trytes)
-			if !db.Transactions.Has(tx.TrunkTransaction) && !db.Requests.Has(tx.TrunkTransaction) {
-				db.Requests.SaveNow(tx.TrunkTransaction)
-				// TODO: try a milestone first, then a recent TX, then empty TX
-				tangle.Outgoing <- &Message{msg.Trytes, tx.TrunkTransaction, msg.Addr}
-			}
-			if !db.Transactions.Has(tx.BranchTransaction) && !db.Requests.Has(tx.BranchTransaction) {
-				db.Requests.SaveNow(tx.BranchTransaction)
-				// TODO: try a milestone first, then a recent TX, then empty TX
-				tangle.Outgoing <- &Message{msg.Trytes, tx.BranchTransaction, msg.Addr}
-			}
-		}
+			if !db.Has(db.GetHashKey(tx.Hash, db.KEY_HASH), txn) {
+				trunkBytes := convert.TrytesToBytes(tx.TrunkTransaction)
+				branchBytes := convert.TrytesToBytes(tx.BranchTransaction)
+				trunk := db.GetByteKey(trunkBytes, db.KEY_TRANSACTION)
+				branch := db.GetByteKey(branchBytes, db.KEY_TRANSACTION)
+				both := make([]byte, 32)
+				copy(both, trunk)
+				copy(both[16:], branch)
 
-		if isMaster(tx) || db.UnknownConfirmations.Has(tx.Hash) {
-			go confirm(tx)
-		}
+				db.Put(db.GetHashKey(tx.Hash, db.KEY_HASH), convert.TrytesToBytes(tx.Hash), txn)
+				db.Put(db.GetHashKey(tx.Hash, db.KEY_TIMESTAMP), tx.Timestamp, txn)
+				db.Put(db.GetHashKey(tx.Hash, db.KEY_TRANSACTION), *msg.Trytes, txn)
+				//db.Put(db.GetHashKey(tx.Hash, db.KEY_RELATION), both, txn)
+				if milestone {
+					db.Put(db.GetHashKey(tx.Hash, db.KEY_MILESTONE), both, txn)
+				}
+
+				if !db.Has(db.GetHashKey(tx.TrunkTransaction, db.KEY_HASH), txn) && !db.Has(db.GetHashKey(tx.TrunkTransaction, db.KEY_REQUESTS), txn) {
+					db.Put(db.GetHashKey(tx.TrunkTransaction, db.KEY_REQUESTS), time.Now().Unix(), txn)
+					// TODO: try a milestone first, then a recent TX, then empty TX
+					tangle.Outgoing <- &Message{msg.Trytes, &trunkBytes, msg.Addr}
+				}
+				if !db.Has(db.GetHashKey(tx.BranchTransaction, db.KEY_HASH), txn) && !db.Has(db.GetHashKey(tx.BranchTransaction, db.KEY_REQUESTS), txn) {
+					db.Put(db.GetHashKey(tx.TrunkTransaction, db.KEY_REQUESTS), time.Now().Unix(), txn)
+					// TODO: try a milestone first, then a recent TX, then empty TX
+					tangle.Outgoing <- &Message{msg.Trytes, &branchBytes, msg.Addr}
+				}
+				received++
+			}
+
+			if milestone || db.Has(db.GetHashKey(tx.Hash, db.KEY_UNKNOWN), txn) {
+				confirm(tx, txn)
+			}
+			return nil
+		})
 	}
 }
 
-func confirm (tx *TX) {
-	db.UnknownConfirmations.Delete(tx.Hash)
-	db.Confirmations.Save(tx.Hash, time.Unix(int64(tx.Timestamp), 0))
-	confirmChild(tx.TrunkTransaction)
-	confirmChild(tx.BranchTransaction)
+func confirm (tx *TX, txn *badger.Txn) {
+	db.Remove(db.GetHashKey(tx.Hash, db.KEY_UNKNOWN), txn)
+	db.Put(db.GetHashKey(tx.Hash, db.KEY_CONFIRMED), tx.Timestamp, txn)
+	confirmed++
+	confirmChild(tx.TrunkTransaction, txn)
+	confirmChild(tx.BranchTransaction, txn)
 }
 
-func confirmChild (hash string) {
-	if db.Confirmations.Has(hash) { return }
-	if db.Transactions.Has(hash) {
-		trytes, err := db.Transactions.GetTrytes(hash)
+func confirmChild (hash string, txn *badger.Txn) {
+	if db.Has(db.GetHashKey(hash, db.KEY_CONFIRMED), txn) { return }
+	if db.Has(db.GetHashKey(hash, db.KEY_TRANSACTION), txn) {
+		var bytes []byte
+		err := db.Get(db.GetHashKey(hash, db.KEY_TRANSACTION), &bytes, txn)
 		if err != nil {
-			tx := TrytesToObject(trytes)
+			tx := TrytesToObject(convert.BytesToTrytes(bytes[:1604])[:2673])
 			if tx != nil {
-				confirm(tx)
+				confirm(tx, txn)
 			}
 		} else {
-			// TODO: remove and re-request the transaction
+			// TODO: remove all and re-request the transaction?
 		}
 	} else {
-		db.UnknownConfirmations.SaveNow(hash)
+		db.Put(db.GetHashKey(hash, db.KEY_UNKNOWN), time.Now().Unix(), txn)
 		// TODO: not random, return milestone or so
-		tangle.Outgoing <- &Message{strings.Repeat("9", 2673), hash, ""}
+		tx := make([]byte, 1604)
+		r := convert.TrytesToBytes(hash)
+		tangle.Outgoing <- &Message{&tx, &r, ""}
 	}
 
 }
 
-func isMaster(tx *TX) bool {
+func isMilestone(tx *TX) bool {
 	return tx.Address == cooAddress
-}
-
-func getRandomMessage () *Message {
-	return &Message{strings.Repeat("9", 2673), strings.Repeat("9", 81), ""}
 }
 
 func requestTip () {
 	ticker := time.NewTicker(pingInterval)
 	for range ticker.C {
-		tangle.Outgoing <- getRandomMessage()
+		tx := make([]byte, 1604)
+		r := make([]byte, 46)
+		tangle.Outgoing <- &Message{&tx, &r, ""}
 	}
 }
 
 func report () {
 	flushTicker := time.NewTicker(flushInterval)
 	for range flushTicker.C {
-		fmt.Printf("TXs: %v/%v, Queue: %v, Requests: %v \n", db.Confirmations.Count(), db.Transactions.Count(), len(tangle.Incoming), db.Requests.Count())
+		fmt.Printf("TXs: %v/%v, Queue: %v PEnding: %v\n", confirmed, received, len(tangle.Incoming), db.Count(db.KEY_REQUESTS))
 	}
 }
+
+// TODO: periodically re-request old TXs
+// TODO: return knows TXs

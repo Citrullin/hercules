@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"fmt"
 )
 
 const (
@@ -64,6 +63,7 @@ var server *Server
 var config *ServerConfig
 var neighbors []*Neighbor
 var connection net.PacketConn
+var ended = false
 
 func Create (serverConfig *ServerConfig) *Server {
 	// TODO: allow hostname neighbors, periodically check for changed IP
@@ -104,6 +104,7 @@ func Create (serverConfig *ServerConfig) *Server {
 
 	go func() {
 		for msg := range server.Outgoing {
+			if ended { break }
 			if len(msg.Addr) > 0 {
 				neighbor := FindNeighbor(msg.Addr)
 				if neighbor != nil {
@@ -117,6 +118,8 @@ func Create (serverConfig *ServerConfig) *Server {
 }
 
 func End () {
+	ended = true
+	connection.Close()
 	atomic.AddUint64(&total, ops)
 	log.Printf("Total iTXs %d", total)
 }
@@ -141,7 +144,7 @@ func createNeighbor (address string) *Neighbor {
 func (neighbor Neighbor) Write(msg *Message) {
 	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
 	if err != nil {
-		fmt.Println("Error!", err)
+		log.Fatalln("Error!", err)
 	}
 }
 
@@ -163,7 +166,7 @@ func (server Server) listenAndReceive(maxWorkers int) error {
 
 // receive accepts incoming datagrams on c and calls handleMessage() for each message
 func (server Server) receive() {
-	for {
+	for !ended {
 		msg := bufferPool.Get().([]byte)
 		_, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {

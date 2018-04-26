@@ -76,6 +76,14 @@ func TrytesToTrits (trytes string) []int {
 	return trits
 }
 
+func TrytesToBytes (trytes string) []byte {
+	return TritsToBytes(TrytesToTrits(trytes))
+}
+
+func BytesToTrytes (bytes []byte) string {
+	return TritsToTrytes(BytesToTrits(bytes))
+}
+
 func CharCodeAt(s string, n int) rune {
 	i := 0
 	for _, r := range s {
