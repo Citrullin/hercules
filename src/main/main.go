@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"crypto/md5"
 	"crypt"
+	"log"
 )
 
 func init() {
@@ -50,7 +51,7 @@ var seenQueue map[[md5.Size]byte]bool
 func StartHercules () {
 	seenQueue = make(map[[md5.Size]byte]bool)
 	cwd, _ := os.Getwd()
-	db.LoadDB(&db.DatabaseConfig{path.Join(cwd, "data"), 10})
+	db.Load(&db.DatabaseConfig{path.Join(cwd, "data"), 10})
 	tng = tangle.Start()
 	srv = server.Create(serverConfig)
 	flushTicker := time.NewTicker(flushInterval)
@@ -65,9 +66,10 @@ func StartHercules () {
 	go func() {
 		for range ch {
 			// Clean exit
+			log.Println("Hercules is shutting down. Please wait...")
 			server.End()
-			time.Sleep(time.Duration(1500) * time.Millisecond)
-			db.EndDB()
+			time.Sleep(time.Duration(5000) * time.Millisecond)
+			db.End()
 			os.Exit(0)
 		}
 	}()
@@ -106,7 +108,6 @@ func listenForIncomingMessage () {
 
 func listenForTangleRequests() {
 	for out := range tng.Outgoing {
-		//fmt.Println("L", len(*out.Trytes), len(*out.Requested))
 		data := append((*out.Trytes)[:1604], (*out.Requested)[:46]...)
 		srv.Outgoing <- &server.Message{out.Addr, data}
 	}

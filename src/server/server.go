@@ -91,11 +91,12 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(2)
+	server.listenAndReceive(4)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
 		for range flushTicker.C {
+			if ended { break }
 			log.Printf("iTXs/s %f", float64(ops)/flushInterval.Seconds())
 			atomic.AddUint64(&total, ops)
 			atomic.StoreUint64(&ops, 0)

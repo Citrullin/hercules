@@ -42,12 +42,14 @@ func BytesToTrits (bytes []byte) []int {
 	return trits
 }
 
-func TritsToInt (trits []int) int {
-	var returnValue = 0
+func TritsToInt (trits []int) int64 {
+	var returnValue = int64(0)
 
 	for i := len(trits); i > 0; i-- {
-		returnValue = returnValue * 3 + trits[ i - 1 ]
+		returnValue = returnValue * 3 + int64(trits[ i - 1 ])
 	}
 
 	return returnValue
 }
+
+//func IntToTrits

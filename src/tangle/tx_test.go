@@ -17,7 +17,7 @@ func TestTrytesToObject(t *testing.T) {
 	if !reflect.DeepEqual(result.Bundle, "BFISVJDKLL9XYGQNPQZZCWCJISYRJZGYAJNDVVJQYEPHUYI9VOFVKAXSAWUD9JFALDKIQJGHPQKRDD99A") {
 		t.Error("Wrong bundle!")
 	}
-	if !reflect.DeepEqual(result.Value, 0) {
+	if !reflect.DeepEqual(result.Value, int64(0)) {
 		t.Error("Wrong value!")
 	}
 	if !reflect.DeepEqual(result.Nonce, "CAB9999999IWB99999999999999") {
