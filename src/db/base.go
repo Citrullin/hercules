@@ -7,9 +7,14 @@ import (
 	"encoding/gob"
 	"bytes"
 	"time"
+	"fmt"
+	"utils"
 )
 
+const minPickDuration = time.Duration(15) * time.Second
+
 const (
+	KEY_FINGERPRINT = byte(0) // hash -> tx.hash trytes
 	KEY_HASH = byte(1) // hash -> tx.hash trytes
 	KEY_TIMESTAMP = byte(2) // hash -> time
 	KEY_TRANSACTION = byte(3) // hash -> raw tx trytes
@@ -39,22 +44,58 @@ func GetByteKey (bytes []byte, key byte) []byte {
 }
 
 func Has (key []byte, txn *badger.Txn) bool {
-	_, err := txn.Get(key)
-	return !(err != nil)
+	tx := txn
+	var err error = nil
+	if txn == nil {
+		tx = DB.NewTransaction(false)
+		defer func () error {
+			tx.Commit(func(e error) {})
+			return err
+		}()
+	}
+	_, err = tx.Get(key)
+	return err == nil
 }
 
-func Put (key []byte, value interface{}, txn *badger.Txn) error {
+func Put (key []byte, value interface{}, ttl *time.Duration, txn *badger.Txn) error {
+	tx := txn
+	var err error = nil
+	if txn == nil {
+		tx = DB.NewTransaction(true)
+		defer func () error {
+			if err != nil {
+				tx.Discard()
+				return err
+			}
+			return tx.Commit(func(e error) {})
+		}()
+	}
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(value)
+	err = enc.Encode(value)
 	if err != nil {
 		return err
 	}
-	return txn.Set(key, buf.Bytes())
+	if ttl != nil {
+		return tx.SetWithTTL(key, buf.Bytes(), *ttl)
+	}
+	return tx.Set(key, buf.Bytes())
 }
 
 func Get (key []byte, data interface{}, txn *badger.Txn) error {
-	item, err := txn.Get(key)
+	tx := txn
+	var err error = nil
+	if txn == nil {
+		tx = DB.NewTransaction(false)
+		defer func () error {
+			if err != nil {
+				tx.Discard()
+				return err
+			}
+			return tx.Commit(func(e error) {})
+		}()
+	}
+	item, err := tx.Get(key)
 	if err != nil {
 		return err
 	}
@@ -90,7 +131,12 @@ func GetInt64(key []byte, txn *badger.Txn) (int64, error) {
 }
 
 func Remove (key []byte, txn *badger.Txn) error {
-	return txn.Delete(key)
+	tx := txn
+	if txn == nil {
+		tx = DB.NewTransaction(true)
+		defer tx.Commit(func(e error) {})
+	}
+	return tx.Delete(key)
 }
 
 func Count(key byte) int {
@@ -114,9 +160,14 @@ Returns latest key iterating over all items of certain type.
 The value is expected to be a unix timestamp
  */
 func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
+	tx := txn
+	if txn == nil {
+		tx = DB.NewTransaction(false)
+		defer tx.Commit(func(e error) {})
+	}
 	var latest []byte
 	var current = 0
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	it := tx.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	prefix := []byte{key}
@@ -146,22 +197,38 @@ Returns latest random key iterating over all items of certain type.
 The value is expected to be a unix timestamp. //When picked, the value is updated
  */
 func PickRandomKey(key byte, txn *badger.Txn) []byte {
+	tx := txn
+	if txn == nil {
+		tx = DB.NewTransaction(false)
+		defer tx.Commit(func(e error) {})
+	}
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
-	it := txn.NewIterator(opts)
+	it := tx.NewIterator(opts)
 	defer it.Close()
 
-	pos := 0
 	// TODO: when some buffers (like requests) fill up to a certain point, remove half of them, maybe?
-	r := random(0, 10000)
-	var result []byte
+	var result []byte = nil
 
 	prefix := []byte{key}
-	for it.Seek(prefix); it.ValidForPrefix(prefix) && pos <= r; it.Next(){
-		r++
-		result = it.Item().Key()
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next(){
+		if utils.Random(0, 100) < 10 {
+			item := it.Item()
+			v, err := item.Value()
+			if err == nil {
+				var data int
+				buf := bytes.NewBuffer(v)
+				dec := gob.NewDecoder(buf)
+				err = dec.Decode(data)
+				if err == nil && time.Now().Sub(time.Unix(int64(data), 0)) > minPickDuration {
+					result = item.Key()
+					fmt.Println("FOUND!", time.Now().Sub(time.Unix(int64(data), 0)))
+					break
+				}
+			}
+		}
 	}
-	Put(result, time.Now().Unix(), txn)
+	Put(result, time.Now().Unix(), nil, txn)
 	return result
 }
 
@@ -171,6 +238,6 @@ func IncrBy(key []byte, value int64, deleteOnZero bool, txn *badger.Txn) (int64,
 	if balance == 0 && deleteOnZero && err != nil {
 		Remove(key, txn)
 	}
-	err = Put(key, balance, txn)
+	err = Put(key, balance, nil, txn)
 	return balance, err
 }

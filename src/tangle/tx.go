@@ -24,6 +24,31 @@ type TX struct {
 	Nonce                         string
 }
 
+type FastTX struct {
+	// Hash as bytes
+	// Trunk/branch as bytes
+	// Address as bytes
+	// Timestamp as int
+	// Value as int64
+	Hash                          []byte
+	Address                       []byte
+	Value                         int64
+	Timestamp                     int
+	TrunkTransaction              []byte
+	BranchTransaction             []byte
+}
+
+func TritsToFastTX (trits *[]int) *FastTX {
+	return &FastTX{
+		Hash: convert.TritsToBytes(crypt.Curl(*trits))[:49],
+		Address: convert.TritsToBytes((*trits)[6561:6804])[:49],
+		Value: value64((*trits)[6804:6837]),
+		Timestamp: value((*trits)[6966:6993]),
+		TrunkTransaction: convert.TritsToBytes((*trits)[7290:7533])[:49],
+		BranchTransaction: convert.TritsToBytes((*trits)[7533:7776])[:49],
+	}
+}
+
 func TrytesToObject (trytes string) *TX {
 	if len(trytes) < 1 {
 		return nil
