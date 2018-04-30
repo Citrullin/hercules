@@ -108,6 +108,7 @@ func Create (serverConfig *ServerConfig) *Server {
 
 func End () {
 	ended = true
+	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
 	atomic.AddUint64(&total, ops)
 	log.Printf("Total iTXs %d", total)

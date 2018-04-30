@@ -8,17 +8,6 @@ import (
 	"bytes"
 )
 
-func confirmationRunner () {
-	db.Locker.Lock()
-	db.Locker.Unlock()
-	for tx := range confirmationQueue {
-		_ = db.DB.Update(func(txn *badger.Txn) error {
-			tx.confirm(txn)
-			return nil
-		})
-	}
-}
-
 func (tx *FastTX) confirm (txn *badger.Txn) {
 	db.Remove(db.GetByteKey(tx.Hash, db.KEY_UNKNOWN), txn)
 	db.Put(db.GetByteKey(tx.Hash, db.KEY_CONFIRMED), tx.Timestamp, nil, txn)

@@ -42,7 +42,6 @@ type TXQueue chan *FastTX
 var srv *server.Server
 var nbWorkers = runtime.NumCPU()
 var requestReplyQueue RequestQueue
-var confirmationQueue TXQueue
 var outgoingQueue MessageQueue
 var incomingQueue MessageQueue
 
@@ -66,9 +65,7 @@ func Start (s *server.Server) {
 	incomingQueue = make(MessageQueue, maxQueueSize)
 	outgoingQueue = make(MessageQueue, maxQueueSize)
 	requestReplyQueue = make(RequestQueue, maxQueueSize)
-	confirmationQueue = make(TXQueue, maxQueueSize)
 
-	go confirmationRunner()
 	go periodicRequest()
 	go periodicTipRequest()
 
@@ -224,10 +221,11 @@ func report () {
 	flushTicker := time.NewTicker(flushInterval)
 	for range flushTicker.C {
 		fmt.Printf("I: %v/%v O: %v/%v Saved: %v Discarded: %v \n", incomingProcessed, incoming, outgoingProcessed, outgoing, saved, discarded)
-		fmt.Printf("Queues: I: %v O: %v C: %v R: %v \n",
+		fmt.Printf("Queues: SI I/O: %v/%v I: %v O: %v R: %v \n",
+			len(srv.Incoming),
+			len(srv.Outgoing),
 			len(incomingQueue),
 			len(outgoingQueue),
-			len(confirmationQueue),
 			len(requestReplyQueue))
 		fmt.Printf("Totals: TXs %v/%v, Req: %v, Unknown: %v \n",
 			db.Count(db.KEY_CONFIRMED),

@@ -50,9 +50,12 @@ func StartHercules () {
 		for range ch {
 			// Clean exit
 			log.Println("Hercules is shutting down. Please wait...")
-			server.End()
+			go func () {
+				time.Sleep(time.Duration(5000) * time.Millisecond)
+				os.Exit(0)
+			}()
+			go server.End()
 			db.End()
-			os.Exit(0)
 		}
 	}()
 	for {

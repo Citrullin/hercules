@@ -7,16 +7,19 @@ import (
 	"time"
 )
 
-// TODO: reverse transactions to reflect approvees (memory only store)?
+const (
+	dbCleanupInterval = time.Duration(5) * time.Minute
+)
+
+// TODO: (OPT) reverse transactions to reflect approvees (memory only store)?
 // TODO: periodic snapshots
-// TODO: write tests
+// TODO: (OPT) write tests
 
 type DatabaseConfig struct {
 	Path       string
 	SavePeriod int
 }
 
-var conf *DatabaseConfig
 var DB *badger.DB
 var Locker = &sync.Mutex{}
 
@@ -29,14 +32,28 @@ func Load(config *DatabaseConfig) {
 		log.Fatal(err)
 	}
 	DB = db
-	db.PurgeOlderVersions()
-	db.RunValueLogGC(0.5)
+	cleanupDB()
+	go periodicDatabaseCleanup()
 }
 
 func End() {
 	Locker.Lock()
 	time.Sleep(time.Duration(5) * time.Second)
 	DB.Close()
+}
+
+func periodicDatabaseCleanup () {
+	for {
+		time.Sleep(dbCleanupInterval)
+		cleanupDB()
+	}
+}
+
+func cleanupDB() {
+	Locker.Lock()
+	DB.PurgeOlderVersions()
+	DB.RunValueLogGC(0.5)
+	Locker.Unlock()
 }
 
 func Snapshot () {

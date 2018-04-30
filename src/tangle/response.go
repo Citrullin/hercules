@@ -38,7 +38,7 @@ func replyToRequest (msg *Request) {
 			outgoingQueue <- message
 		} else {
 			// If I do not have this TX, request from somewhere else?
-			// TODO: not always. Have a random drop ratio as in IRI.
+			// TODO: (OPT) not always. Have a random drop ratio as in IRI.
 			requestIfMissing(msg.Requested, "", txn)
 		}
 		return nil
@@ -76,8 +76,9 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	var hash []byte
 	// Try getting latest milestone
 	if tx == nil {
-		key, _, _ := db.GetLatestKey(db.KEY_MILESTONE, txn)
-		if key != nil {
+		var key []byte
+		err := db.Get(latestMilestoneKey, key, txn)
+		if err == nil && key != nil {
 			key[0] = db.KEY_TRANSACTION
 			t, _ := db.GetBytes(key, txn)
 			tx = t
