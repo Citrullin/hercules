@@ -5,6 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"convert"
 	"time"
+	"bytes"
 )
 
 func confirmationRunner () {
@@ -41,7 +42,12 @@ func confirmChild (hash []byte, txn *badger.Txn) {
 			tx.confirm(txn)
 		}
 	} else {
-		db.Put(db.GetByteKey(hash, db.KEY_UNKNOWN), int(time.Now().Unix()), nil, txn)
+		db.Put(db.GetByteKey(hash, db.KEY_UNKNOWN), int(time.Now().Unix()), nil, nil)
 	}
 
+}
+
+func isMilestone(tx *FastTX) bool {
+	// TODO: check if really milestone
+	return bytes.Equal(tx.Address, coo)
 }

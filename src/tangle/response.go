@@ -3,8 +3,8 @@ package tangle
 import (
 	"db"
 	"github.com/dgraph-io/badger"
-	"time"
 	"bytes"
+	"server"
 )
 
 func responseRunner () {
@@ -35,13 +35,11 @@ func replyToRequest (msg *Request) {
 		if msg.Tip || resp != nil {
 			message := getMessage(resp, nil, false, txn)
 			message.Addr = msg.Addr
-			tangle.Outgoing <- message
-		} else if !msg.Tip && resp == nil && db.Has(db.GetByteKey(msg.Requested, db.KEY_REQUESTS), txn) {
+			outgoingQueue <- message
+		} else {
 			// If I do not have this TX, request from somewhere else?
 			// TODO: not always. Have a random drop ratio as in IRI.
-			db.Put(db.GetByteKey(msg.Requested, db.KEY_REQUESTS), int(time.Now().Unix()), nil, txn)
-			db.Put(db.GetByteKey(msg.Requested, db.KEY_REQUESTS_HASH), msg.Requested, nil, txn)
-			tangle.Outgoing <- getMessage(nil, msg.Requested, false, txn)
+			requestIfMissing(msg.Requested, "", txn)
 		}
 		return nil
 	})
@@ -58,13 +56,16 @@ func respond (msg *Message) {
 
 		if !tipRequest {
 			fingerprint = db.GetByteKey(append(*msg.Requested, msg.Addr...), db.KEY_FINGERPRINT)
-			if db.Has(fingerprint, nil) {
+			if db.Has(fingerprint, txn) {
 				has = true
+			} else {
+				db.Put(fingerprint, true, &reRequestTTL, txn)
 			}
 		}
 		if !has {
 			outgoingProcessed++
-			tangle.Outgoing <- msg
+			data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
+			srv.Outgoing <- &server.Message{msg.Addr, data}
 		}
 		return nil
 	})
@@ -115,21 +116,14 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			key := db.PickRandomKey(db.KEY_UNKNOWN, txn)
+			key := db.PickRandomKey(db.KEY_REQUESTS_HASH, txn)
 			if key != nil {
 				key[0] = db.KEY_REQUESTS_HASH
 				t, _ := db.GetBytes(key, txn)
 				req = t
 			} else {
-				key := db.PickRandomKey(db.KEY_REQUESTS, txn)
-				if key != nil {
-					key[0] = db.KEY_REQUESTS_HASH
-					t, _ := db.GetBytes(key, txn)
-					req = t
-				} else {
-					// If tip=false and no pending, force tip=true
-					req = hash
-				}
+				// If tip=false and no pending, force tip=true
+				req = hash
 			}
 		}
 	}

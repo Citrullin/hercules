@@ -4,6 +4,7 @@ import (
 	"sync"
 	"github.com/dgraph-io/badger"
 	"log"
+	"time"
 )
 
 // TODO: reverse transactions to reflect approvees (memory only store)?
@@ -34,6 +35,7 @@ func Load(config *DatabaseConfig) {
 
 func End() {
 	Locker.Lock()
+	time.Sleep(time.Duration(5) * time.Second)
 	DB.Close()
 }
 

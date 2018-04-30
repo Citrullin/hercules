@@ -2,7 +2,6 @@ package db
 
 import (
 	"github.com/dgraph-io/badger"
-	"convert"
 	"crypto/md5"
 	"encoding/gob"
 	"bytes"
@@ -11,7 +10,7 @@ import (
 	"utils"
 )
 
-const minPickDuration = time.Duration(15) * time.Second
+const minPickDuration = time.Duration(5) * time.Second
 
 const (
 	KEY_FINGERPRINT = byte(0) // hash -> tx.hash trytes
@@ -28,13 +27,6 @@ const (
 	KEY_SNAPSHOT = byte(120) // hash -> hash+int64+hash+int64+...
 	KEY_TEST = byte(187) // hash -> bool
 )
-
-// Returns a 16-bytes key based on a string hash
-func GetHashKey (hash string, key byte) []byte {
-	resp := md5.Sum(convert.TrytesToBytes(hash))
-	resp[0] = key
-	return resp[:]
-}
 
 // Returns a 16-bytes key based on bytes
 func GetByteKey (bytes []byte, key byte) []byte {

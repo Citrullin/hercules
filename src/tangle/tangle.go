@@ -10,13 +10,16 @@ import (
 	"strings"
 	"bytes"
 	"utils"
+	"crypt"
+	"server"
 )
 
 const (
+	MWM = 14
 	maxQueueSize = 100000
 	flushInterval = time.Duration(10) * time.Second
 	pingInterval = time.Duration(100) * time.Millisecond
-	tipPingInterval = time.Duration(10) * time.Millisecond
+	tipPingInterval = time.Duration(100) * time.Millisecond
 	cooAddress = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 )
 
@@ -36,13 +39,8 @@ type RequestQueue chan *Request
 type MessageQueue chan *Message
 type TXQueue chan *FastTX
 
-type Tangle struct {
-	Incoming MessageQueue
-	Outgoing MessageQueue
-}
-
+var srv *server.Server
 var nbWorkers = runtime.NumCPU()
-var tangle *Tangle
 var requestReplyQueue RequestQueue
 var confirmationQueue TXQueue
 var outgoingQueue MessageQueue
@@ -54,6 +52,7 @@ var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
 var tipFastTX = TritsToFastTX(&tipTrits)
 var coo = convert.TrytesToBytes(cooAddress)[:49]
 var fingerprintTTL = time.Duration(10) * time.Minute
+var reRequestTTL = time.Duration(5) * time.Second
 
 var incoming = 0
 var incomingProcessed = 0
@@ -62,43 +61,45 @@ var outgoingProcessed = 0
 var saved = 0
 var discarded = 0
 
-func Start () *Tangle {
-	tangle = &Tangle{
-		Incoming: make(MessageQueue, maxQueueSize),
-		Outgoing: make(MessageQueue, maxQueueSize)}
+func Start (s *server.Server) {
+	srv = s
 	incomingQueue = make(MessageQueue, maxQueueSize)
 	outgoingQueue = make(MessageQueue, maxQueueSize)
 	requestReplyQueue = make(RequestQueue, maxQueueSize)
 	confirmationQueue = make(TXQueue, maxQueueSize)
 
 	go confirmationRunner()
-	go requestReplyRunner()
-	go incomingRunner()
-	go responseRunner()
-
-	//go periodicRequest()
+	go periodicRequest()
 	go periodicTipRequest()
 
-	for i := 0; i < nbWorkers; i++ {
+	for i := 0; i < nbWorkers / 2; i++ {
+		go incomingRunner()
 		go listenToIncoming()
+		go requestReplyRunner()
+		go responseRunner()
 	}
 	go report()
-	return tangle
 }
 
 func incomingRunner () {
-	for msg := range tangle.Incoming {
+	for raw := range srv.Incoming {
+		data := raw.Msg[:1604]
+		req := raw.Msg[1604:1650]
+		msg := &Message{&data,&req, raw.Addr}
+
 		incoming++
+
 		db.Locker.Lock()
 		db.Locker.Unlock()
+
 		_ = db.DB.Update(func(txn *badger.Txn) error {
 			var fingerprint []byte
 			var has = bytes.Equal(*msg.Bytes, tipBytes)
 
 			if !has {
 				fingerprint = db.GetByteKey(*msg.Bytes, db.KEY_FINGERPRINT)
-				if !db.Has(fingerprint, nil) {
-					db.Put(fingerprint, true, &fingerprintTTL, nil)
+				if !db.Has(fingerprint, txn) {
+					db.Put(fingerprint, true, &fingerprintTTL, txn)
 					incomingQueue <- msg
 					incomingProcessed++
 				}
@@ -110,52 +111,41 @@ func incomingRunner () {
 
 func listenToIncoming () {
 	for msg := range incomingQueue {
+		trits := convert.BytesToTrits(*msg.Bytes)[:8019]
+		tx := TritsToFastTX(&trits)
+		if !crypt.IsValidPoW(tx.Hash, MWM) { continue }
+
 		db.Locker.Lock()
 		db.Locker.Unlock()
+
 		_ = db.DB.Update(func(txn *badger.Txn) error {
-			trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-			tx := TritsToFastTX(&trits)
-			//if db.Has(db.GetByteKey(tx.Hash, db.KEY_REQUESTS), nil) { rreceived-- }
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS), nil)
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS_HASH), nil)
+			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS), txn)
+			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS_HASH), txn)
 
 			// TODO: check if the TX is recent (than snapshot). Otherwise drop.
 
-			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), nil) {
-				db.Put(db.GetByteKey(tx.Hash, db.KEY_HASH), tx.Hash, nil, nil)
-				db.Put(db.GetByteKey(tx.Hash, db.KEY_TIMESTAMP), tx.Timestamp, nil, nil)
-				db.Put(db.GetByteKey(tx.Hash, db.KEY_TRANSACTION), (*msg.Bytes)[:1604], nil, nil)
+			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
+				db.Put(db.GetByteKey(tx.Hash, db.KEY_HASH), tx.Hash, nil, txn)
+				db.Put(db.GetByteKey(tx.Hash, db.KEY_TIMESTAMP), tx.Timestamp, nil, txn)
+				db.Put(db.GetByteKey(tx.Hash, db.KEY_TRANSACTION), (*msg.Bytes)[:1604], nil, txn)
 				milestone := isMilestone(tx)
 				if milestone {
 					milestoneKey := db.GetByteKey(tx.Hash, db.KEY_MILESTONE)
 
 					// Update the latest milestone saved
-					_, timestamp, err := db.GetLatestKey(db.KEY_MILESTONE, nil)
+					_, timestamp, err := db.GetLatestKey(db.KEY_MILESTONE, txn)
 					if err != nil || timestamp < tx.Timestamp {
-						db.Put(latestMilestoneKey, milestoneKey, nil, nil)
+						db.Put(latestMilestoneKey, milestoneKey, nil, txn)
 					}
 
 					// Save Milestone
-					db.Put(milestoneKey, tx.Timestamp, nil, nil)
+					db.Put(milestoneKey, tx.Timestamp, nil, txn)
 				}
+				requestIfMissing(tx.TrunkTransaction, "", txn)
+				requestIfMissing(tx.BranchTransaction, "", txn)
 
-				if !db.Has(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH), nil) && !db.Has(db.GetByteKey(tx.BranchTransaction, db.KEY_REQUESTS), nil){
-					db.Put(db.GetByteKey(tx.TrunkTransaction, db.KEY_REQUESTS), int(time.Now().Unix()), nil, nil)
-					db.Put(db.GetByteKey(tx.TrunkTransaction, db.KEY_REQUESTS_HASH), tx.TrunkTransaction, nil, nil)
-					message := getMessage(nil, tx.TrunkTransaction, false, nil)
-					message.Addr = msg.Addr
-					outgoingQueue <- message
-				}
-				if !db.Has(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH), nil) && !db.Has(db.GetByteKey(tx.BranchTransaction, db.KEY_REQUESTS), nil) {
-					db.Put(db.GetByteKey(tx.BranchTransaction, db.KEY_REQUESTS), int(time.Now().Unix()), nil, nil)
-					db.Put(db.GetByteKey(tx.BranchTransaction, db.KEY_REQUESTS_HASH), tx.BranchTransaction, nil, nil)
-					message := getMessage(nil, tx.BranchTransaction, false, nil)
-					message.Addr = msg.Addr
-					outgoingQueue <- message
-				}
-
-				if milestone || db.Has(db.GetByteKey(tx.Hash, db.KEY_UNKNOWN), nil) {
-					confirmationQueue <- tx
+				if tx != tipFastTX && (milestone || db.Has(db.GetByteKey(tx.Hash, db.KEY_UNKNOWN), txn)) {
+					tx.confirm(txn)
 				}
 
 				// Re-broadcast new TX. Not always.
@@ -171,20 +161,17 @@ func listenToIncoming () {
 
 			// Add request
 
-			tipRequest := bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], *msg.Requested)
-			req := make([]byte, 49)
-			copy(req, *msg.Requested)
-			requestReplyQueue <- &Request{req, msg.Addr, tipRequest}
+			if len(requestReplyQueue) < 1000 {
+				tipRequest := bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
+				req := make([]byte, 49)
+				copy(req, *msg.Requested)
+				requestReplyQueue <- &Request{req, msg.Addr, tipRequest}
+			}
 
 			return nil
 
 		})
 	}
-}
-
-func isMilestone(tx *FastTX) bool {
-	// TODO: check if really milestone
-	return bytes.Equal(tx.Address, coo)
 }
 
 func periodicRequest() {
@@ -213,13 +200,31 @@ func periodicTipRequest() {
 	}
 }
 
+func requestIfMissing (hash []byte, addr string, txn *badger.Txn) bool {
+	tx := txn
+	has := true
+	if txn == nil {
+		tx = db.DB.NewTransaction(true)
+		defer func () error {
+			return tx.Commit(func(e error) {})
+		}()
+	}
+	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_REQUESTS), tx) {
+		db.Put(db.GetByteKey(hash, db.KEY_REQUESTS), int(time.Now().Unix()), nil, tx)
+		db.Put(db.GetByteKey(hash, db.KEY_REQUESTS_HASH), hash, nil, tx)
+		message := getMessage(nil, hash, false, tx)
+		message.Addr = addr
+		outgoingQueue <- message
+		has = false
+	}
+	return has
+}
+
 func report () {
 	flushTicker := time.NewTicker(flushInterval)
 	for range flushTicker.C {
 		fmt.Printf("I: %v/%v O: %v/%v Saved: %v Discarded: %v \n", incomingProcessed, incoming, outgoingProcessed, outgoing, saved, discarded)
-		fmt.Printf("Queues: TI: %v TO: %v I: %v O: %v C: %v R: %v \n",
-			len(tangle.Incoming),
-			len(tangle.Outgoing),
+		fmt.Printf("Queues: I: %v O: %v C: %v R: %v \n",
 			len(incomingQueue),
 			len(outgoingQueue),
 			len(confirmationQueue),

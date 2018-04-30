@@ -4,7 +4,6 @@ import (
 	"log"
 	"net"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -16,9 +15,6 @@ const (
 	maxNeighbors = 32
 )
 
-var address string
-var remoteAddress string
-var bufferPool sync.Pool
 var ops uint64 = 0
 var total uint64 = 0
 var flushTicker *time.Ticker
@@ -53,12 +49,10 @@ func (mq messageQueue) enqueue(m *Message) {
 func (mq messageQueue) dequeue() {
 	for m := range mq {
 		handleMessage(m)
-		bufferPool.Put(m.Msg)
 	}
 }
 
 var mq messageQueue
-var mqo messageQueue
 var server *Server
 var config *ServerConfig
 var neighbors []*Neighbor
@@ -71,19 +65,13 @@ func Create (serverConfig *ServerConfig) *Server {
 
 	config = serverConfig
 	mq = make(messageQueue, maxQueueSize)
-	mqo = make(messageQueue, maxQueueSize)
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
 		Outgoing: make(messageQueue, maxQueueSize)}
 
-	//runtime.GOMAXPROCS(runtime.NumCPU())
 	neighbors = make([]*Neighbor, maxNeighbors)
 	for i := range config.Neighbors {
 		neighbors[i] = createNeighbor(config.Neighbors[i])
-	}
-
-	bufferPool = sync.Pool{
-		New: func() interface{} { return make([]byte, UDPPacketSize) },
 	}
 
 	c, err := net.ListenPacket("udp", ":" + config.Port)
@@ -91,7 +79,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(nbWorkers)
+	server.listenAndReceive(nbWorkers / 2)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
@@ -168,7 +156,7 @@ func (server Server) listenAndReceive(maxWorkers int) error {
 // receive accepts incoming datagrams on c and calls handleMessage() for each message
 func (server Server) receive() {
 	for !ended {
-		msg := bufferPool.Get().([]byte)
+		msg := make([]byte, UDPPacketSize)
 		_, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {
 			log.Printf("Error %s", err)
@@ -178,8 +166,6 @@ func (server Server) receive() {
 		neighbor := FindNeighbor(address)
 		if neighbor != nil {
 			mq.enqueue(&Message{address, msg})
-		} else {
-			bufferPool.Put(msg)
 		}
 	}
 }
