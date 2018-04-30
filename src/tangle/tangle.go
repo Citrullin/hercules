@@ -110,7 +110,10 @@ func listenToIncoming () {
 	for msg := range incomingQueue {
 		trits := convert.BytesToTrits(*msg.Bytes)[:8019]
 		tx := TritsToFastTX(&trits)
-		if !crypt.IsValidPoW(tx.Hash, MWM) { continue }
+		if !crypt.IsValidPoW(tx.Hash, MWM) {
+			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
+			continue
+		}
 
 		db.Locker.Lock()
 		db.Locker.Unlock()
@@ -151,6 +154,7 @@ func listenToIncoming () {
 						outgoingQueue <- getMessage(*msg.Bytes, nil, false, txn)
 					}
 				}()
+				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, New: 1}
 				saved++
 			} else {
 				discarded++

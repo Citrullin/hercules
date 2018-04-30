@@ -12,12 +12,16 @@ import (
 	"os/signal"
 	"log"
 	"runtime"
+	"api"
 )
+
+var apiPort string
 
 func init() {
 	var ns string
 	var port string
-	flag.StringVar(&port, "p", "14600", "Node Port to listen to")
+	flag.StringVar(&port, "u", "14600", "UDP Port")
+	flag.StringVar(&apiPort, "p", "14265", "Node Port to listen to")
 	flag.StringVar(&ns, "n", "", "Initial Node neighbors")
 
 	flag.Parse()
@@ -43,6 +47,7 @@ func StartHercules () {
 	db.Load(&db.DatabaseConfig{path.Join(cwd, "data"), 10})
 	srv := server.Create(serverConfig)
 	tangle.Start(srv)
+	api.Start(":" + apiPort)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
