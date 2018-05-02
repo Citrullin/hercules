@@ -116,8 +116,9 @@ func Create (serverConfig *ServerConfig) *Server {
 				if neighbor != nil {
 					neighbor.Write(msg)
 				}
+			} else {
+				server.Write(msg)
 			}
-			server.Write(msg)
 		}
 	}()
 	return server
@@ -132,6 +133,9 @@ func End () {
 }
 
 func AddNeighbor (address string) int {
+	if len(address) < 4 {
+		return 0
+	}
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 

@@ -69,11 +69,11 @@ func Start (s *server.Server) {
 	go periodicRequest()
 	go periodicTipRequest()
 
-	for i := 0; i < nbWorkers / 2; i++ {
+	for i := 0; i < nbWorkers; i++ {
+		go responseRunner()
 		go incomingRunner()
 		go listenToIncoming()
 		go requestReplyRunner()
-		go responseRunner()
 	}
 	go report()
 }

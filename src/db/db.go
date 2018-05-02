@@ -3,6 +3,7 @@ package db
 import (
 	"sync"
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"log"
 	"time"
 )
@@ -27,6 +28,8 @@ func Load(config *DatabaseConfig) {
 	opts := badger.DefaultOptions
 	opts.Dir = config.Path
 	opts.ValueDir = config.Path
+	// TODO: only for small devices?
+	opts.ValueLogLoadingMode = options.FileIO
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)

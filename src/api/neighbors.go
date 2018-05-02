@@ -48,6 +48,11 @@ func getNeighbors (request Request, c *gin.Context) {
 			"numberOfInvalidTransactions": neighbor.Invalid,
 			"numberOfNewTransactions": neighbor.New})
 	}
+
+	if neighbors == nil {
+		neighbors = make([]interface{}, 0)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"neighbors": neighbors,
 		"duration":       0,
