@@ -14,33 +14,54 @@ const minPickDuration = time.Duration(5) * time.Second
 
 const (
 	KEY_FINGERPRINT = byte(0) // hash -> tx.hash trytes
-	KEY_HASH = byte(1) // hash -> tx.hash trytes
-	KEY_TIMESTAMP = byte(2) // hash -> time
+
+	// TRANSACTION SAVING
+	KEY_HASH        = byte(1) // hash -> tx.hash
+	KEY_TIMESTAMP   = byte(2) // hash -> time
 	KEY_TRANSACTION = byte(3) // hash -> raw tx trytes
-	KEY_RELATION = byte(4) // hash -> hash+hash
-	KEY_CONFIRMED = byte(5) // hash -> time
-	KEY_MILESTONE = byte(6) // hash -> time
-	KEY_REQUESTS = byte(20) // hash -> time
-	KEY_REQUESTS_HASH = byte(21) // hash -> time
-	KEY_UNKNOWN = byte(25) // hash -> time
-	KEY_ACCOUNT = byte(100) // hash -> int64
-	KEY_SNAPSHOT = byte(120) // hash -> hash+int64+hash+int64+...
-	KEY_TEST = byte(187) // hash -> bool
+	KEY_BUNDLE      = byte(4) // bundle hash + index -> tx hash
+	KEY_ADDRESS     = byte(5) // address hash + hash -> value
+	KEY_TAG         = byte(6) // tag hash + hash -> empty
+
+	KEY_BORDERLINE  = byte(10) // hash -> time
+
+	// RELATIONS
+	KEY_RELATION = byte(15) // hash -> hash+hash
+	KEY_APPROVEE = byte(16) // hash + parent hash -> empty
+
+	// MILESTONE/CONFIRMATION RELATED
+	KEY_MILESTONE       = byte(20) // hash -> time
+	KEY_SOLID_MILESTONE = byte(21) // hash -> time
+	KEY_CONFIRMED       = byte(25) // hash -> time
+
+	// PENDING UNKNOWN TRANSACTIONS
+	KEY_PENDING           = byte(30) // hash -> parent time
+	KEY_PENDING_HASH      = byte(31) // hash -> hash
+	KEY_PENDING_CONFIRMED = byte(35) // hash -> parent time
+
+	// PERSISTENT EVENTS
+	KEY_EVENT_MILESTONE_PENDING   = byte(50)  // hash (999 address) -> milestone hash
+	KEY_EVENT_MILESTONE_CONFIRMED = byte(51)  // hash (coo address) -> index
+	KEY_BALANCE                   = byte(100) // address hash -> int64
+	KEY_SPENT                     = byte(101) // address hash -> bool
+	KEY_SNAPSHOT                  = byte(120) // hash -> hash+int64+hash+int64+...
+	KEY_TEST                      = byte(187) // hash -> bool
+	KEY_OTHER                     = byte(255) // XXXX -> any bytes
 )
 
 // Returns a 16-bytes key based on bytes
-func GetByteKey (bytes []byte, key byte) []byte {
+func GetByteKey(bytes []byte, key byte) []byte {
 	b := md5.Sum(bytes)
 	b[0] = key
 	return b[:]
 }
 
-func Has (key []byte, txn *badger.Txn) bool {
+func Has(key []byte, txn *badger.Txn) bool {
 	tx := txn
 	var err error = nil
 	if txn == nil {
 		tx = DB.NewTransaction(false)
-		defer func () error {
+		defer func() error {
 			tx.Commit(func(e error) {})
 			return err
 		}()
@@ -49,12 +70,12 @@ func Has (key []byte, txn *badger.Txn) bool {
 	return err == nil
 }
 
-func Put (key []byte, value interface{}, ttl *time.Duration, txn *badger.Txn) error {
+func Put(key []byte, value interface{}, ttl *time.Duration, txn *badger.Txn) error {
 	tx := txn
 	var err error = nil
 	if txn == nil {
 		tx = DB.NewTransaction(true)
-		defer func () error {
+		defer func() error {
 			if err != nil {
 				tx.Discard()
 				return err
@@ -74,12 +95,12 @@ func Put (key []byte, value interface{}, ttl *time.Duration, txn *badger.Txn) er
 	return tx.Set(key, buf.Bytes())
 }
 
-func Get (key []byte, data interface{}, txn *badger.Txn) error {
+func Get(key []byte, data interface{}, txn *badger.Txn) error {
 	tx := txn
 	var err error = nil
 	if txn == nil {
 		tx = DB.NewTransaction(false)
-		defer func () error {
+		defer func() error {
 			if err != nil {
 				tx.Discard()
 				return err
@@ -122,7 +143,7 @@ func GetInt64(key []byte, txn *badger.Txn) (int64, error) {
 	return resp, err
 }
 
-func Remove (key []byte, txn *badger.Txn) error {
+func Remove(key []byte, txn *badger.Txn) error {
 	tx := txn
 	if txn == nil {
 		tx = DB.NewTransaction(true)
@@ -139,7 +160,7 @@ func Count(key byte) int {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{key}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next(){
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			count++
 		}
 		return nil
@@ -163,7 +184,7 @@ func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
 	defer it.Close()
 
 	prefix := []byte{key}
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next(){
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
 		v, err := item.Value()
 		if err != nil {
@@ -203,7 +224,7 @@ func PickRandomKey(key byte, txn *badger.Txn) []byte {
 	var result []byte = nil
 
 	prefix := []byte{key}
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next(){
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		if utils.Random(0, 100) < 10 {
 			item := it.Item()
 			v, err := item.Value()

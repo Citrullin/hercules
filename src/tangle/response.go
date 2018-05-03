@@ -117,9 +117,9 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			key := db.PickRandomKey(db.KEY_REQUESTS_HASH, txn)
+			key := db.PickRandomKey(db.KEY_PENDING_HASH, txn)
 			if key != nil {
-				key[0] = db.KEY_REQUESTS_HASH
+				key[0] = db.KEY_PENDING_HASH
 				t, _ := db.GetBytes(key, txn)
 				req = t
 			} else {

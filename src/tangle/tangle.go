@@ -12,6 +12,7 @@ import (
 	"utils"
 	"crypt"
 	"server"
+	"transaction"
 )
 
 const (
@@ -37,7 +38,7 @@ type Request struct {
 
 type RequestQueue chan *Request
 type MessageQueue chan *Message
-type TXQueue chan *FastTX
+type TXQueue chan *transaction.FastTX
 
 var srv *server.Server
 var nbWorkers = runtime.NumCPU()
@@ -48,7 +49,7 @@ var incomingQueue MessageQueue
 var latestMilestoneKey = []byte("MilestoneLatest")
 var tipBytes = convert.TrytesToBytes(strings.Repeat("9", 2673))[:1604]
 var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
-var tipFastTX = TritsToFastTX(&tipTrits)
+var tipFastTX = transaction.TritsToFastTX(&tipTrits)
 var coo = convert.TrytesToBytes(cooAddress)[:49]
 var fingerprintTTL = time.Duration(10) * time.Minute
 var reRequestTTL = time.Duration(5) * time.Second
@@ -109,7 +110,7 @@ func incomingRunner () {
 func listenToIncoming () {
 	for msg := range incomingQueue {
 		trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-		tx := TritsToFastTX(&trits)
+		tx := transaction.TritsToFastTX(&trits)
 		if !crypt.IsValidPoW(tx.Hash, MWM) {
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
 			continue
@@ -119,8 +120,8 @@ func listenToIncoming () {
 		db.Locker.Unlock()
 
 		_ = db.DB.Update(func(txn *badger.Txn) error {
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS), txn)
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_REQUESTS_HASH), txn)
+			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING), txn)
+			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING_HASH), txn)
 
 			// TODO: check if the TX is recent (than snapshot). Otherwise drop.
 
@@ -144,8 +145,8 @@ func listenToIncoming () {
 				requestIfMissing(tx.TrunkTransaction, "", txn)
 				requestIfMissing(tx.BranchTransaction, "", txn)
 
-				if tx != tipFastTX && (milestone || db.Has(db.GetByteKey(tx.Hash, db.KEY_UNKNOWN), txn)) {
-					tx.confirm(txn)
+				if tx != tipFastTX && (milestone || db.Has(db.GetByteKey(tx.Hash, db.KEY_PENDING_CONFIRMED), txn)) {
+					confirm(tx, txn)
 				}
 
 				// Re-broadcast new TX. Not always.
@@ -210,9 +211,9 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) bool {
 			return tx.Commit(func(e error) {})
 		}()
 	}
-	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_REQUESTS), tx) {
-		db.Put(db.GetByteKey(hash, db.KEY_REQUESTS), int(time.Now().Unix()), nil, tx)
-		db.Put(db.GetByteKey(hash, db.KEY_REQUESTS_HASH), hash, nil, tx)
+	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_PENDING), tx) {
+		db.Put(db.GetByteKey(hash, db.KEY_PENDING), int(time.Now().Unix()), nil, tx)
+		db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, tx)
 		message := getMessage(nil, hash, false, tx)
 		message.Addr = addr
 		outgoingQueue <- message
@@ -234,7 +235,7 @@ func report () {
 		fmt.Printf("Totals: TXs %v/%v, Req: %v, Unknown: %v \n",
 			db.Count(db.KEY_CONFIRMED),
 			db.Count(db.KEY_TRANSACTION),
-			db.Count(db.KEY_REQUESTS),
-			db.Count(db.KEY_UNKNOWN))
+			db.Count(db.KEY_PENDING),
+			db.Count(db.KEY_PENDING_CONFIRMED))
 	}
 }

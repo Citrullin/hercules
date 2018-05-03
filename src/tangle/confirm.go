@@ -6,13 +6,14 @@ import (
 	"convert"
 	"time"
 	"bytes"
+	"transaction"
 )
 
-func (tx *FastTX) confirm (txn *badger.Txn) {
-	db.Remove(db.GetByteKey(tx.Hash, db.KEY_UNKNOWN), txn)
+func confirm (tx *transaction.FastTX, txn *badger.Txn) {
+	db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING_CONFIRMED), txn)
 	db.Put(db.GetByteKey(tx.Hash, db.KEY_CONFIRMED), tx.Timestamp, nil, txn)
 	if tx.Value > 0 {
-		_, err := db.IncrBy(db.GetByteKey(tx.Hash, db.KEY_ACCOUNT), tx.Value, true, txn)
+		_, err := db.IncrBy(db.GetByteKey(tx.Hash, db.KEY_BALANCE), tx.Value, true, txn)
 		if err != nil {
 			panic("Could not update account balance!")
 		}
@@ -26,17 +27,17 @@ func confirmChild (hash []byte, txn *badger.Txn) {
 	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_TRANSACTION), txn)
 	if err != nil && len(txBytes) > 0 {
 		trits := convert.BytesToTrits(txBytes)[:8019]
-		tx := TritsToFastTX(&trits)
+		tx := transaction.TritsToFastTX(&trits)
 		if tx != nil {
-			tx.confirm(txn)
+			confirm(tx, txn)
 		}
 	} else {
-		db.Put(db.GetByteKey(hash, db.KEY_UNKNOWN), int(time.Now().Unix()), nil, nil)
+		db.Put(db.GetByteKey(hash, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil, nil)
 	}
 
 }
 
-func isMilestone(tx *FastTX) bool {
+func isMilestone(tx *transaction.FastTX) bool {
 	// TODO: check if really milestone
 	return bytes.Equal(tx.Address, coo)
 }

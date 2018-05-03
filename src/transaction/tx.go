@@ -1,4 +1,4 @@
-package tangle
+package transaction
 
 import (
 	"crypt"
@@ -40,7 +40,7 @@ type FastTX struct {
 
 func TritsToFastTX (trits *[]int) *FastTX {
 	return &FastTX{
-		Hash: convert.TritsToBytes(crypt.Curl(*trits))[:49],
+		Hash: convert.TritsToBytes(crypt.RunHashCurl(*trits))[:49],
 		Address: convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value: value64((*trits)[6804:6837]),
 		Timestamp: value((*trits)[6966:6993]),
@@ -62,7 +62,7 @@ func TrytesToObject (trytes string) *TX {
 
 	trits := convert.TrytesToTrits(trytes)
 	return &TX{
-		Hash:                          convert.TritsToTrytes(crypt.Curl(trits)),
+		Hash:                          convert.TritsToTrytes(crypt.RunHashCurl(trits)),
 		SignatureMessageFragment:      trytes[:2187],
 		Address:                       trytes[2187:2268],
 		Value:                         value64(trits[6804:6837]),

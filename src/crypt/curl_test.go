@@ -10,7 +10,7 @@ const trytes = "QBTCHDEADDPCXCSCEAXCBDEAXCCDHDPCGDEAUCCDFDEAGDIDDDDDCDFDHDXCBDVC
 const hash = "HTULPSHIZIRNQMSEUNKFBQZRZ9JZVCIUZILZWWV9QVSNDRBLRHLYWTCPNFSJWBATJVSNMKUUFYSJA9999"
 
 func TestCurl(t *testing.T) {
-	result := Curl(convert.TrytesToTrits(trytes))
+	result := RunHashCurl(convert.TrytesToTrits(trytes))
 	if !reflect.DeepEqual(result, convert.TrytesToTrits(hash)) {
 		t.Error("Wrong curl!", result)
 	}
