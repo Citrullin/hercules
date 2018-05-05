@@ -73,6 +73,7 @@ var connection net.PacketConn
 var ended = false
 
 func Create (serverConfig *ServerConfig) *Server {
+	// TODO: add Hostname support
 	// TODO: allow hostname Neighbors, periodically check for changed IP
 	//ip, err := net.LookupIP("192.168.1.1")
 

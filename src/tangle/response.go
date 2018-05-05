@@ -3,7 +3,6 @@ package tangle
 import (
 	"db"
 	"github.com/dgraph-io/badger"
-	"bytes"
 	"server"
 )
 
@@ -27,7 +26,7 @@ func replyToRequest (msg *Request) {
 		var resp []byte = nil
 
 		if !msg.Tip {
-			t, err := db.GetBytes(db.GetByteKey(msg.Requested, db.KEY_TRANSACTION), txn)
+			t, err := db.GetBytes(db.GetByteKey(msg.Requested, db.KEY_BYTES), txn)
 			if err == nil {
 				resp = t
 			}
@@ -46,44 +45,26 @@ func replyToRequest (msg *Request) {
 }
 
 func respond (msg *Message) {
-	db.Locker.Lock()
-	db.Locker.Unlock()
-	_ = db.DB.Update(func(txn *badger.Txn) error {
-		outgoing++
-		var fingerprint []byte
-		var has = false
-		var tipRequest = bytes.Equal(*msg.Requested, tipFastTX.Hash[:46])
-
-		if !tipRequest {
-			fingerprint = db.GetByteKey(append(*msg.Requested, msg.Addr...), db.KEY_FINGERPRINT)
-			if db.Has(fingerprint, txn) {
-				has = true
-			} else {
-				db.Put(fingerprint, true, &reRequestTTL, txn)
-			}
-		}
-		if !has {
-			outgoingProcessed++
-			data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
-			srv.Outgoing <- &server.Message{msg.Addr, data}
-		}
-		return nil
-	})
+	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
+	srv.Outgoing <- &server.Message{msg.Addr, data}
 }
 
 
 func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	var hash []byte
+	// TODO: how to prefer tips with value?
+	// TODO: First, try to get a TIP from MEMORY
 	// Try getting latest milestone
 	if tx == nil {
 		var key []byte
-		err := db.Get(latestMilestoneKey, key, txn)
+		// TODO: get from MEMORY, if at all
+		err := db.Get(latestMilestoneKey, &key, txn)
 		if err == nil && key != nil {
-			key[0] = db.KEY_TRANSACTION
+			key = db.AsKey(key, db.KEY_BYTES)
 			t, _ := db.GetBytes(key, txn)
 			tx = t
 			if req == nil {
-				key[0] = db.KEY_HASH
+				key = db.AsKey(key, db.KEY_HASH)
 				t, _ := db.GetBytes(key, txn)
 				hash = t
 			}
@@ -93,11 +74,11 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	if tx == nil {
 		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, txn)
 		if key != nil {
-			key[0] = db.KEY_TRANSACTION
+			key = db.AsKey(key, db.KEY_BYTES)
 			t, _ := db.GetBytes(key, txn)
 			tx = t
 			if req == nil {
-				key[0] = db.KEY_HASH
+				key = db.AsKey(key, db.KEY_HASH)
 				t, _ := db.GetBytes(key, txn)
 				hash = t
 			}
@@ -119,7 +100,7 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		} else {
 			key := db.PickRandomKey(db.KEY_PENDING_HASH, txn)
 			if key != nil {
-				key[0] = db.KEY_PENDING_HASH
+				key = db.AsKey(key, db.KEY_PENDING_HASH)
 				t, _ := db.GetBytes(key, txn)
 				req = t
 			} else {

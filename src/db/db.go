@@ -3,7 +3,7 @@ package db
 import (
 	"sync"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	//"github.com/dgraph-io/badger/options"
 	"log"
 	"time"
 )
@@ -12,8 +12,7 @@ const (
 	dbCleanupInterval = time.Duration(5) * time.Minute
 )
 
-// TODO: (OPT) reverse transactions to reflect approvees (memory only store)?
-// TODO: periodic snapshots
+// TODO: (OPT) periodic snapshots
 // TODO: (OPT) write tests
 
 type DatabaseConfig struct {
@@ -28,8 +27,8 @@ func Load(config *DatabaseConfig) {
 	opts := badger.DefaultOptions
 	opts.Dir = config.Path
 	opts.ValueDir = config.Path
-	// TODO: only for small devices?
-	opts.ValueLogLoadingMode = options.FileIO
+	// TODO: only for small devices? Compare performance, add as configurable
+	//opts.ValueLogLoadingMode = options.FileIO
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)

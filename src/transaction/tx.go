@@ -30,26 +30,38 @@ type FastTX struct {
 	// Address as bytes
 	// Timestamp as int
 	// Value as int64
-	Hash                          []byte
-	Address                       []byte
-	Value                         int64
-	Timestamp                     int
-	TrunkTransaction              []byte
-	BranchTransaction             []byte
+	Hash              []byte
+	Address           []byte
+	Value             int64
+	Timestamp         int
+	CurrentIndex      int
+	TrunkTransaction  []byte
+	BranchTransaction []byte
+	Bundle            []byte
+	Tag               []byte
+	ObsoleteTag       []byte
+	SignatureMessageFragment []int
+	Bytes			  []byte
 }
 
-func TritsToFastTX (trits *[]int) *FastTX {
+func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
 	return &FastTX{
-		Hash: convert.TritsToBytes(crypt.RunHashCurl(*trits))[:49],
-		Address: convert.TritsToBytes((*trits)[6561:6804])[:49],
-		Value: value64((*trits)[6804:6837]),
-		Timestamp: value((*trits)[6966:6993]),
-		TrunkTransaction: convert.TritsToBytes((*trits)[7290:7533])[:49],
+		Hash:              convert.TritsToBytes(crypt.RunHashCurl(*trits))[:49],
+		Address:           convert.TritsToBytes((*trits)[6561:6804])[:49],
+		Value:             value64((*trits)[6804:6837]),
+		Timestamp:         value((*trits)[6966:6993]),
+		CurrentIndex:      value((*trits)[6993:7020]),
+		TrunkTransaction:  convert.TritsToBytes((*trits)[7290:7533])[:49],
 		BranchTransaction: convert.TritsToBytes((*trits)[7533:7776])[:49],
+		Bundle:            convert.TritsToBytes((*trits)[7047:7290])[:49],
+		Tag:               convert.TritsToBytes((*trits)[7776:7857]),
+		ObsoleteTag:       convert.TritsToBytes((*trits)[6885:6966]),
+		SignatureMessageFragment: (*trits)[:6561],
+		Bytes: 			   raw,
 	}
 }
 
-func TrytesToObject (trytes string) *TX {
+func TrytesToObject(trytes string) *TX {
 	if len(trytes) < 1 {
 		return nil
 	}
@@ -81,10 +93,10 @@ func TrytesToObject (trytes string) *TX {
 	}
 }
 
-func value (trits []int) int {
+func value(trits []int) int {
 	return int(value64(trits))
 }
 
-func value64 (trits []int) int64 {
+func value64(trits []int) int64 {
 	return convert.TritsToInt(trits)
 }

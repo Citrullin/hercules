@@ -45,7 +45,7 @@ func Digest(normalizedBundleFragment []int, signatureFragment []int) []int {
 	hash.Initialize(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
 	total := 0
 
-	// TODO: This is ALWAYS 378 Rounds! IRI, too?
+	// FIXME: (???) This is ALWAYS 351 Rounds! IRI, too?
 	for j := 0; j < NUMBER_OF_FRAGMENT_CHUNKS; j++ {
 		for k := normalizedBundleFragment[j] - MIN_TRYTE_VALUE - 1; k >= 0; k-- {
 			total ++
@@ -75,7 +75,6 @@ func NormalizedBundle (bundle []int) []int {
 			sum += normalizedBundle[j]
 		}
 		if sum > 0 {
-			// TODO: for sum loops might be wrong
 			for sum > 0 {
 				sum--
 				for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i + 1) * NORMALIZED_FRAGMENT_LENGTH; j++ {
