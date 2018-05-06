@@ -200,8 +200,21 @@ func Count(key byte) int {
 		defer it.Close()
 		prefix := []byte{key}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if item.Key()[0] != key { continue }
+			count++
+		}
+		return nil
+	})
+	return count
+}
+
+func CountByPrefix(prefix []byte) int {
+	count := 0
+	_ = DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			count++
 		}
 		return nil
@@ -227,7 +240,6 @@ func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
 	prefix := []byte{key}
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
-		if item.Key()[0] != key { continue }
 		v, err := item.Value()
 		if err != nil {
 			return nil, 0, err
@@ -245,36 +257,6 @@ func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
 		}
 	}
 	return latest, current, nil
-}
-
-// returns
-func GetByPrefix(prefix []byte, txn *badger.Txn) []KeyValue {
-	tx := txn
-	if txn == nil {
-		tx = DB.NewTransaction(false)
-		defer tx.Commit(func(e error) {})
-	}
-	opts := badger.DefaultIteratorOptions
-	it := tx.NewIterator(opts)
-	defer it.Close()
-	var resp []KeyValue
-
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		key := item.Key()
-		if bytes.Equal(key[:len(prefix)], prefix) {
-			value, err := item.Value()
-			if err == nil {
-				//log.Println("     APPEND", key, prefix)
-				resp = append(resp, KeyValue{key,value})
-				//log.Println("           ->", resp[len(resp)-1].Key)
-			}
-		}
-	}
-	if len(resp) > 0 {
-		//log.Println("    RETURN", resp[0].Key)
-	}
-	return resp
 }
 
 /*
@@ -299,13 +281,12 @@ func PickRandomKey(key byte, txn *badger.Txn) []byte {
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		if utils.Random(0, 100) < 10 {
 			item := it.Item()
-			if item.Key()[0] != key { continue }
 			v, err := item.Value()
 			if err == nil {
 				var data int
 				buf := bytes.NewBuffer(v)
 				dec := gob.NewDecoder(buf)
-				err = dec.Decode(data)
+				err = dec.Decode(&data)
 				if err == nil && time.Now().Sub(time.Unix(int64(data), 0)) > minPickDuration {
 					result = item.Key()
 					fmt.Println("FOUND!", time.Now().Sub(time.Unix(int64(data), 0)))

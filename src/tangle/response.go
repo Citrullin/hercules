@@ -19,9 +19,8 @@ func requestReplyRunner() {
 }
 
 func replyToRequest (msg *Request) {
-	db.Locker.Lock()
-	db.Locker.Unlock()
-	_ = db.DB.Update(func(txn *badger.Txn) error {
+	// FIXME: Update too slow, but pending request timestamps are updated?
+	_ = db.DB.View(func(txn *badger.Txn) error {
 		// Reply to requests:
 		var resp []byte = nil
 
@@ -52,21 +51,23 @@ func respond (msg *Message) {
 
 func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	var hash []byte
-	// TODO: how to prefer tips with value?
-	// TODO: First, try to get a TIP from MEMORY
+	// Try getting a weighted random tip (those with more value are preferred)
+	if tx == nil {
+		tip := getRandomTip()
+		if tip != nil {
+			tx = tip.Bytes
+			if req == nil {
+				hash = tip.Hash
+			}
+		}
+	}
 	// Try getting latest milestone
 	if tx == nil {
-		var key []byte
-		// TODO: get from MEMORY, if at all
-		err := db.Get(latestMilestoneKey, &key, txn)
-		if err == nil && key != nil {
-			key = db.AsKey(key, db.KEY_BYTES)
-			t, _ := db.GetBytes(key, txn)
-			tx = t
+		milestone, ok := milestones[db.KEY_MILESTONE]
+		if ok && milestone.TX != nil {
+			tx = milestone.TX.Bytes
 			if req == nil {
-				key = db.AsKey(key, db.KEY_HASH)
-				t, _ := db.GetBytes(key, txn)
-				hash = t
+				hash = milestone.TX.Hash
 			}
 		}
 	}
@@ -92,7 +93,7 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		}
 	}
 
-	// If no request
+	// If no request (with a tx provided)
 	if req == nil {
 		// Select tip, if so requested, or one of the pending requests.
 		if tip {

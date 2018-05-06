@@ -41,16 +41,22 @@ func milestoneOnLoad() {
 func loadLatestMilestone (dbKey byte) {
 	log.Printf("Loading latest %v...\n", milestoneType(dbKey))
 	_ = db.DB.View(func(txn *badger.Txn) error {
-		kvs := db.GetByPrefix([]byte{dbKey}, txn)
 		latest := 0
 		milestones[dbKey] = &Milestone{nil,latest}
-		for _, kv := range kvs {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{dbKey}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := item.Key()
+			value, _ := item.Value()
 			var ms = 0
-			buf := bytes.NewBuffer(kv.Value)
+			buf := bytes.NewBuffer(value)
 			dec := gob.NewDecoder(buf)
 			err := dec.Decode(&ms)
 			if err == nil && ms > latest {
-				key := db.AsKey(kv.Key, db.KEY_BYTES)
+				key := db.AsKey(key, db.KEY_BYTES)
 				txBytes, err := db.GetBytes(key, txn)
 				if err == nil {
 					trits := convert.BytesToTrits(txBytes)[:8019]

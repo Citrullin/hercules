@@ -25,5 +25,6 @@ func report () {
 		fmt.Printf("Milestone: TXs %v, Pending: %v\n",
 			db.Count(db.KEY_MILESTONE),
 			db.Count(db.KEY_EVENT_MILESTONE_PENDING))
+		fmt.Printf("TIPs: %v\n", db.Count(db.KEY_TIP))
 	}
 }
