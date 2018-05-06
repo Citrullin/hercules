@@ -31,8 +31,8 @@ func loadTips() {
 			var value int64
 			buf := bytes.NewBuffer(kv.Value)
 			dec := gob.NewDecoder(buf)
-			err := dec.Decode(value)
-			if err != nil {
+			err := dec.Decode(&value)
+			if err == nil {
 				key := db.AsKey(kv.Key, db.KEY_BYTES)
 				txBytes, err := db.GetBytes(key, txn)
 				if err == nil {

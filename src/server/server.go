@@ -94,7 +94,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(nbWorkers / 2)
+	server.listenAndReceive(1)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {

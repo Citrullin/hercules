@@ -11,6 +11,7 @@ import (
 	"path"
 	"os/signal"
 	"log"
+	"runtime"
 	"api"
 )
 
@@ -35,7 +36,7 @@ func init() {
 }
 
 func main () {
-	//runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	StartHercules()
 }
 

@@ -5,7 +5,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"time"
 )
-const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond
+const CONFIRM_CHECK_INTERVAL = time.Duration(10) * time.Second
 
 func confirmOnLoad() {
 	go startConfirmThread()

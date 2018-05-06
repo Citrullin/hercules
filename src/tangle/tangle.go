@@ -14,7 +14,7 @@ const (
 	MWM             = 14
 	maxQueueSize    = 100000
 	reportInterval  = time.Duration(10) * time.Second
-	pingInterval    = time.Duration(100) * time.Millisecond
+	pingInterval    = time.Duration(10) * time.Millisecond
 	tipPingInterval = time.Duration(100) * time.Millisecond
 	)
 
@@ -69,9 +69,9 @@ func Start (s *server.Server) {
 	go periodicRequest()
 	go periodicTipRequest()
 
-	for i := 0; i < nbWorkers; i++ {
-		go responseRunner()
+	for i := 0; i < 3; i++ {
 		go incomingRunner()
+		go responseRunner()
 		go listenToIncoming()
 		go requestReplyRunner()
 	}

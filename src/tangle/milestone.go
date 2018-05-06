@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const MILESTONE_CHECK_INTERVAL = time.Duration(2) * time.Second
+const MILESTONE_CHECK_INTERVAL = time.Duration(15) * time.Second
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
 
@@ -91,7 +91,6 @@ func startSolidMilestoneChecker () {
 }
 
 func startMilestoneChecker() {
-	//log.Println("================ Milestone check staring...")
 	total := 0
 	db.Locker.Lock()
 	_ = db.DB.Update(func(txn *badger.Txn) error {
@@ -129,14 +128,11 @@ func startMilestoneChecker() {
 					db.Remove(key, txn)
 					panic("PANIC: A milestone has disappeared!")
 				}
-			} else {
-				//log.Println("Whoopsy", len(tx2HashBytes), err, tx2HashBytes, "///", txHashBytes)
 			}
 		}
 		return nil
 	})
 	db.Locker.Unlock()
-	//log.Println("================ Milestone check finished...", total)
 	time.Sleep(MILESTONE_CHECK_INTERVAL)
 	go startMilestoneChecker()
 }
@@ -166,7 +162,6 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 	}
 
 	db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
-	//log.Println("REMOVED KEY_EVENT_MILESTONE_PENDING", db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), err)
 	// Save milestone and update latest:
 	db.Put(db.GetByteKey(tx.Hash, db.KEY_MILESTONE), milestoneIndex, nil, txn)
 	checkIsLatestMilestone(milestoneIndex, tx, db.KEY_MILESTONE)
@@ -174,7 +169,6 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 	// TODO: async confirm ?
 	// Trigger confirmation cascade:
 	db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
-	//confirm(tx, txn)
 	return true
 }
 
