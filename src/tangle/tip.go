@@ -94,12 +94,12 @@ func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) {
 }
 
 func getRandomTip () *transaction.FastTX {
+	TipsLocker.Lock()
+	defer TipsLocker.Unlock()
+
 	if len(tips) < 1 {
 		return nil
 	}
-
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
 
 	return tips[utils.Random(0, len(tips))].TX
 }

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	flushInterval = time.Duration(1) * time.Second
+	flushInterval = time.Duration(10) * time.Second
 	maxQueueSize  = 1000000
 	UDPPacketSize = 1650
 )
@@ -100,7 +100,7 @@ func Create (serverConfig *ServerConfig) *Server {
 	go func() {
 		for range flushTicker.C {
 			if ended { break }
-			log.Printf("iTXs/s %f", float64(ops)/flushInterval.Seconds())
+			log.Printf("SERVER         Incoming TX/s: %.2f\n", float64(ops)/10)
 			atomic.AddUint64(&total, ops)
 			atomic.StoreUint64(&ops, 0)
 		}
@@ -130,7 +130,7 @@ func End () {
 	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
 	atomic.AddUint64(&total, ops)
-	log.Printf("Total iTXs %d", total)
+	//log.Printf("Total iTXs %d", total)
 }
 
 func AddNeighbor (address string) int {

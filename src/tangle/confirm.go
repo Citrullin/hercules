@@ -39,16 +39,20 @@ func confirm (key []byte, txn *badger.Txn) {
 	relation, err4 := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
 	if err != nil || err2 != nil || err3 != nil || err4 != nil {
 		// Clearly missing transaction parts
-		//log.Println("WHOOPS", len(key), err, err2, err3, err4)
-		//panic("TX parts missing for confirmation!")
-		return
+		panic("TX parts missing for confirmation!")
 	}
 	db.Put(db.AsKey(key, db.KEY_CONFIRMED), timestamp, nil, txn)
 	db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
-	if value > 0 {
-		_, err := db.IncrBy(db.AsKey(address, db.KEY_BALANCE), value, true, txn)
+	if value != 0 {
+		_, err := db.IncrBy(db.AsKey(address, db.KEY_BALANCE), value, false, txn)
 		if err != nil {
 			panic("Could not update account balance!")
+		}
+		if value < 0 {
+			err = db.Put(db.AsKey(address, db.KEY_SPENT), true, nil, txn)
+			if err != nil {
+				panic("Could not update account spent status!")
+			}
 		}
 	}
 	confirmChild(relation[:16], txn)
