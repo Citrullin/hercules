@@ -4,13 +4,13 @@ import (
 	"transaction"
 	"github.com/dgraph-io/badger"
 	"db"
-	"log"
 	"convert"
 	"bytes"
 	"encoding/gob"
 	"sync"
 	"math"
 	"utils"
+	"logs"
 )
 
 type Tip struct {
@@ -26,7 +26,7 @@ func tipOnLoad() {
 }
 
 func loadTips() {
-	log.Println("Loading tips...")
+	logs.Log.Info("Loading tips...")
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
@@ -55,7 +55,7 @@ func loadTips() {
 		}
 		return nil
 	})
-	log.Printf("    ---> %v\n", len(tips))
+	logs.Log.Infof("Loaded tips: %v\n", len(tips))
 }
 
 func addTip (tx *transaction.FastTX) {
@@ -77,10 +77,13 @@ func removeTip (tx *transaction.FastTX) {
 	tips = b
 }
 
-func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) {
+func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error {
 	key := db.GetByteKey(tx.Hash, db.KEY_APPROVEE)
 	if db.CountByPrefix(db.GetByteKey(tx.Hash, db.KEY_APPROVEE)) < 1 {
-		db.Put(db.AsKey(key, db.KEY_TIP), int64(math.Abs(float64(tx.Value))) + 1000000, nil, txn)
+		err := db.Put(db.AsKey(key, db.KEY_TIP), int64(math.Abs(float64(tx.Value))) + 1000000, nil, txn)
+		if err != nil {
+			return err
+		}
 		addTip(tx)
 	}
 	err := db.Remove(db.GetByteKey(tx.TrunkTransaction, db.KEY_TIP), txn)
@@ -91,6 +94,7 @@ func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) {
 	if err == nil {
 		removeTip(tx)
 	}
+	return nil
 }
 
 func getRandomTip () *transaction.FastTX {

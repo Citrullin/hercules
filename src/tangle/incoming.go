@@ -2,6 +2,7 @@ package tangle
 
 import (
 	"db"
+	"errors"
 	"utils"
 	"server"
 	"bytes"
@@ -9,6 +10,7 @@ import (
 	"convert"
 	"transaction"
 	"crypt"
+	"logs"
 )
 
 func incomingRunner () {
@@ -51,28 +53,39 @@ func listenToIncoming () {
 		db.Locker.Lock()
 		db.Locker.Unlock()
 
-		_ = db.DB.Update(func(txn *badger.Txn) error {
+		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+			defer func() {
+				if err := recover(); err != nil {
+					e = errors.New("Failed processing incoming TX!")
+				}
+			}()
+
 			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING), txn)
 			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING_HASH), txn)
 
 			// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
 
 			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
-				saveTX(tx, msg.Bytes, txn)
+				err := saveTX(tx, msg.Bytes, txn)
+				_checkIncomingError(tx, err)
 				if isMaybeMilestone(tx) {
-					db.PutBytes(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING),
+					err := db.PutBytes(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING),
 						db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES),nil, txn)
-					//log.Println("ADDED KEY_EVENT_MILESTONE_PENDING", db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES))
+					_checkIncomingError(tx, err)
 				}
-				requestIfMissing(tx.TrunkTransaction, msg.Addr, txn)
-				requestIfMissing(tx.BranchTransaction, msg.Addr, txn)
+				_, err = requestIfMissing(tx.TrunkTransaction, msg.Addr, txn)
+				_checkIncomingError(tx, err)
+				_, err = requestIfMissing(tx.BranchTransaction, msg.Addr, txn)
+				_checkIncomingError(tx, err)
 
 				// EVENTS:
 
 				pendingConfirmationKey := db.GetByteKey(tx.Hash, db.KEY_PENDING_CONFIRMED)
 				if db.Has(pendingConfirmationKey, txn) {
-					db.Remove(pendingConfirmationKey, txn)
-					db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+					err = db.Remove(pendingConfirmationKey, txn)
+					_checkIncomingError(tx, err)
+					err = db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+					_checkIncomingError(tx, err)
 				}
 
 				// Re-broadcast new TX. Not always.
@@ -89,15 +102,20 @@ func listenToIncoming () {
 
 			// Add request
 
-			if len(requestReplyQueue) < 1000 {
-				tipRequest := bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
-				req := make([]byte, 49)
-				copy(req, *msg.Requested)
-				requestReplyQueue <- &Request{req, msg.Addr, tipRequest}
-			}
+			tipRequest := bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
+			req := make([]byte, 49)
+			copy(req, *msg.Requested)
+			requestReplyQueue <- &Request{req, msg.Addr, tipRequest}
 
 			return nil
 
 		})
+	}
+}
+
+func _checkIncomingError(tx *transaction.FastTX, err error) {
+	if err != nil {
+		logs.Log.Errorf("Failed processing TX %v", convert.BytesToTrytes(tx.Hash)[:81], err)
+		panic(err)
 	}
 }

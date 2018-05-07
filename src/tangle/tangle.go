@@ -7,7 +7,7 @@ import (
 	"strings"
 	"server"
 	"transaction"
-	"log"
+	"logs"
 )
 
 const (
@@ -36,12 +36,10 @@ type TXQueue chan *transaction.FastTX
 
 // "constants"
 var nbWorkers = runtime.NumCPU()
-var latestMilestoneKey = []byte("MilestoneLatest")
 var tipBytes = convert.TrytesToBytes(strings.Repeat("9", 2673))[:1604]
 var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
 var tipFastTX = transaction.TritsToFastTX(&tipTrits, tipBytes)
 var fingerprintTTL = time.Duration(10) * time.Minute
-var reRequestTTL = time.Duration(5) * time.Second
 
 var srv *server.Server
 var requestReplyQueue RequestQueue
@@ -69,12 +67,12 @@ func Start (s *server.Server) {
 	go periodicRequest()
 	go periodicTipRequest()
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < nbWorkers; i++ {
 		go incomingRunner()
 		go responseRunner()
 		go listenToIncoming()
 		go requestReplyRunner()
 	}
 	go report()
-	log.Println("Tangle started!")
+	logs.Log.Info("Tangle started!")
 }

@@ -1,12 +1,12 @@
 package server
 
 import (
-	"log"
 	"net"
 	"runtime"
 	"sync/atomic"
 	"time"
 	"sync"
+	"logs"
 )
 
 const (
@@ -100,7 +100,7 @@ func Create (serverConfig *ServerConfig) *Server {
 	go func() {
 		for range flushTicker.C {
 			if ended { break }
-			log.Printf("SERVER         Incoming TX/s: %.2f\n", float64(ops)/10)
+			report()
 			atomic.AddUint64(&total, ops)
 			atomic.StoreUint64(&ops, 0)
 		}
@@ -130,7 +130,7 @@ func End () {
 	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
 	atomic.AddUint64(&total, ops)
-	//log.Printf("Total iTXs %d", total)
+	logs.Log.Debugf("Total iTXs %d\n", total)
 }
 
 func AddNeighbor (address string) int {
@@ -193,7 +193,7 @@ func listenNeighborTracker () {
 func (neighbor Neighbor) Write(msg *Message) {
 	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
 	if err != nil {
-		log.Fatalln("Error!", err)
+		logs.Log.Errorf("Error sending to neighbor %v: %v", neighbor.Addr, err)
 	}
 }
 
@@ -222,7 +222,7 @@ func (server Server) receive() {
 		msg := make([]byte, UDPPacketSize)
 		_, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {
-			log.Printf("Error %s", err)
+			logs.Log.Errorf("Error reading incoming packet: %v", err)
 			continue
 		}
 		address := addr.String()
@@ -239,4 +239,8 @@ func handleMessage(msg *Message) {
 	server.Incoming <- msg
 	NeighborTrackingQueue <- &NeighborTrackingMessage{Addr: msg.Addr, Incoming: 1}
 	atomic.AddUint64(&ops, 1)
+}
+
+func report () {
+	logs.Log.Debugf("Incoming TX/s: %.2f\n", float64(ops)/10)
 }

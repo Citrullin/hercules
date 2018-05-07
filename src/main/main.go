@@ -10,9 +10,9 @@ import (
 	"os"
 	"path"
 	"os/signal"
-	"log"
 	"runtime"
 	"api"
+	"logs"
 )
 
 var apiPort string
@@ -36,6 +36,7 @@ func init() {
 }
 
 func main () {
+	logs.Setup()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	StartHercules()
 }
@@ -54,7 +55,7 @@ func StartHercules () {
 	go func() {
 		for range ch {
 			// Clean exit
-			log.Println("Hercules is shutting down. Please wait...")
+			logs.Log.Info("Hercules is shutting down. Please wait...")
 			go func () {
 				time.Sleep(time.Duration(5000) * time.Millisecond)
 				os.Exit(0)

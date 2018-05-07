@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"convert"
 	"db"
+	"errors"
 	"github.com/dgraph-io/badger"
-	"log"
 	"encoding/gob"
 	"sync"
 	"time"
+	"logs"
 )
 
 const MILESTONE_CHECK_INTERVAL = time.Duration(15) * time.Second
@@ -32,14 +33,13 @@ func milestoneOnLoad() {
 	milestones = make(map[byte]*Milestone)
 
 	loadLatestMilestone(db.KEY_MILESTONE)
-	loadLatestMilestone(db.KEY_SOLID_MILESTONE)
 
 	go startSolidMilestoneChecker()
 	go startMilestoneChecker()
 }
 
 func loadLatestMilestone (dbKey byte) {
-	log.Printf("Loading latest %v...\n", milestoneType(dbKey))
+	logs.Log.Infof("Loading latest %v...", milestoneType(dbKey))
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		latest := 0
 		milestones[dbKey] = &Milestone{nil,latest}
@@ -70,7 +70,7 @@ func loadLatestMilestone (dbKey byte) {
 		}
 		return nil
 	})
-	log.Printf("    ---> %v\n", milestones[dbKey].Index)
+	logs.Log.Infof("Loaded latest %v: %v", milestoneType(dbKey), milestones[dbKey].Index)
 }
 
 func getLatestMilestone(dbKey byte) *Milestone {
@@ -85,7 +85,7 @@ func checkIsLatestMilestone (index int, tx *transaction.FastTX, dbKey byte) bool
 		MilestoneLocker.Lock()
 		defer MilestoneLocker.Unlock()
 		milestones[dbKey] = &Milestone{tx,index}
-		log.Printf("Latest %v changed to: %v \n", milestoneType(dbKey), index)
+		logs.Log.Infof("Latest %v changed to: %v", milestoneType(dbKey), index)
 		return true
 	}
 	return false
@@ -96,10 +96,18 @@ func startSolidMilestoneChecker () {
 	// checkIsLatestMilestone
 }
 
+/*
+Runs checking of pending milestones. If the
+ */
 func startMilestoneChecker() {
 	total := 0
 	db.Locker.Lock()
-	_ = db.DB.Update(func(txn *badger.Txn) error {
+	_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+		defer func() {
+			if err := recover(); err != nil {
+				e = errors.New("Failed saving TX!")
+			}
+		}()
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
@@ -132,7 +140,8 @@ func startMilestoneChecker() {
 					// The 0-index milestone TX doesn't exist.
 					// Clearly an error here!
 					db.Remove(key, txn)
-					panic("PANIC: A milestone has disappeared!")
+					logs.Log.Panicf("A milestone has disappeared: %v", convert.BytesToTrytes(txHashBytes))
+					panic("A milestone has disappeared!")
 				}
 			}
 		}
@@ -144,10 +153,19 @@ func startMilestoneChecker() {
 }
 
 func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
+	discardMilestone := func () {
+		err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
+		if err != nil {
+			logs.Log.Errorf("Could not remove pending milestone: %v", err)
+			panic(err)
+		}
+	}
+
+	// Verify correct bundle structure:
 	if !bytes.Equal(tx2.Address, COO_ADDRESS2_BYTES) ||
 		!bytes.Equal(tx2.TrunkTransaction, tx.BranchTransaction) ||
 		!bytes.Equal(tx2.Bundle, tx.Bundle) {
-		log.Println(
+		logs.Log.Warning(
 			"Milestone bundle verification failed for:\n ",
 			convert.BytesToTrytes(tx.Hash),
 			convert.BytesToTrytes(tx2.Hash),
@@ -157,24 +175,37 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 			convert.BytesToTrytes(tx.BranchTransaction),
 			convert.BytesToTrytes(tx2.Bundle),
 			convert.BytesToTrytes(tx.Bundle))
+		discardMilestone()
 		return false
 	}
 
 	// Verify milestone signature and get the index:
 	milestoneIndex := getMilestoneIndex(tx, trits)
 	if milestoneIndex < 0 {
-		log.Println("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Hash))
+		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Hash))
+		discardMilestone()
 		return false
 	}
 
-	db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
-	// Save milestone and update latest:
-	db.Put(db.GetByteKey(tx.Hash, db.KEY_MILESTONE), milestoneIndex, nil, txn)
+	// Save milestone (remove pending) and update latest:
+	err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
+	if err != nil {
+		logs.Log.Errorf("Could not remove pending milestone: %v", err)
+		panic(err)
+	}
+	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_MILESTONE), milestoneIndex, nil, txn)
+	if err != nil {
+		logs.Log.Errorf("Could not save milestone: %v", err)
+		panic(err)
+	}
 	checkIsLatestMilestone(milestoneIndex, tx, db.KEY_MILESTONE)
 
-	// TODO: async confirm ?
-	// Trigger confirmation cascade:
-	db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+	// Trigger confirmations
+	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+	if err != nil {
+		logs.Log.Errorf("Could save pending confirmation: %v", err)
+		panic(err)
+	}
 	return true
 }
 

@@ -6,11 +6,8 @@ import (
 	"encoding/gob"
 	"bytes"
 	"time"
-	"fmt"
 	"utils"
 )
-
-const minPickDuration = time.Duration(5) * time.Second
 
 const (
 	KEY_FINGERPRINT = byte(0) // hash -> tx.hash trytes
@@ -272,6 +269,10 @@ func PickRandomKey(key byte, txn *badger.Txn) []byte {
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
 	it := tx.NewIterator(opts)
+	max := Count(key)
+	if max == 0 { return nil }
+	target := utils.Random(0, max)
+	step := 0
 	defer it.Close()
 
 	// TODO: (OPT) when some buffers (like requests) fill up to a certain point, remove half of them, maybe?
@@ -279,23 +280,11 @@ func PickRandomKey(key byte, txn *badger.Txn) []byte {
 
 	prefix := []byte{key}
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		if utils.Random(0, 100) < 10 {
-			item := it.Item()
-			v, err := item.Value()
-			if err == nil {
-				var data int
-				buf := bytes.NewBuffer(v)
-				dec := gob.NewDecoder(buf)
-				err = dec.Decode(&data)
-				if err == nil && time.Now().Sub(time.Unix(int64(data), 0)) > minPickDuration {
-					result = item.Key()
-					fmt.Println("FOUND!", time.Now().Sub(time.Unix(int64(data), 0)))
-					break
-				}
-			}
+		if step == target {
+			return it.Item().Key()
 		}
+		step++
 	}
-	Put(result, time.Now().Unix(), nil, txn)
 	return result
 }
 

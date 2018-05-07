@@ -19,7 +19,6 @@ func requestReplyRunner() {
 }
 
 func replyToRequest (msg *Request) {
-	// FIXME: Update too slow, but pending request timestamps are updated?
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		// Reply to requests:
 		var resp []byte = nil
@@ -37,7 +36,7 @@ func replyToRequest (msg *Request) {
 		} else {
 			// If I do not have this TX, request from somewhere else?
 			// TODO: (OPT) not always. Have a random drop ratio as in IRI.
-			requestIfMissing(msg.Requested, "", txn)
+			requestIfMissing(msg.Requested, "", nil)
 		}
 		return nil
 	})
