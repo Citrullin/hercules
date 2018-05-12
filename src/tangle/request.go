@@ -5,42 +5,8 @@ import (
 	"db"
 	"github.com/dgraph-io/badger"
 	"logs"
-	"convert"
-	"bytes"
-	"encoding/gob"
 	"server"
 )
-
-func loadPendings () {
-	logs.Log.Info("Loading Pending TXs")
-	PendingsLocker.Lock()
-	db.Locker.Lock()
-	_ = db.DB.Update(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_PENDING_HASH}
-		var err error
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			value, err := item.Value()
-			if err != nil {
-				continue
-			}
-			var hash []byte
-			buf := bytes.NewBuffer(value)
-			dec := gob.NewDecoder(buf)
-			err = dec.Decode(&hash)
-			if err == nil {
-				pendings[convert.BytesToTrytes(hash)[:81]] = time.Now().UnixNano()
-			}
-		}
-		return err
-	})
-	db.Locker.Unlock()
-	PendingsLocker.Unlock()
-	logs.Log.Info("Pending TXs Loaded")
-}
 
 func periodicRequest() {
 	ticker := time.NewTicker(pingInterval)
@@ -72,12 +38,8 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 			logs.Log.Error("Failed saving new TX request", err2)
 			return has, err2
 		}
-		PendingsLocker.Lock()
-		pendings[convert.BytesToTrytes(hash)] = time.Now().Unix()
-		PendingsLocker.Unlock()
 
 		request(hash, addr,false)
-
 		has = false
 	}
 	return has, nil
@@ -98,7 +60,7 @@ func request (hash []byte, addr string, tip bool) {
 		case msg := <- *queue:
 			request = msg
 		default:
-			request = request
+			request = nil
 		}
 		if request != nil {
 			if !request.Tip {
@@ -120,18 +82,64 @@ func request (hash []byte, addr string, tip bool) {
 	srv.Outgoing <- &server.Message{addr, data}
 }
 
-func oldestPending () (string, int64) {
-	var max int64 = 0
-	var result string
-	PendingsLocker.Lock()
-	defer PendingsLocker.Unlock()
-	for hash, timestamp := range pendings {
-		current := time.Now().Sub(time.Unix(0, timestamp)).Nanoseconds()
-		if current > max {
-			result = hash
-			max = current
+func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
+	var hash []byte
+	// Try getting a weighted random tip (those with more value are preferred)
+	if resp == nil {
+		hash, resp = getRandomTip()
+	}
+	// Try getting latest milestone
+	if resp == nil {
+		milestone, ok := milestones[db.KEY_MILESTONE]
+		if ok && milestone.TX != nil {
+			resp = milestone.TX.Bytes
+			if req == nil {
+				hash = milestone.TX.Hash
+			}
+		}
+	}
+	// Otherwise, latest TX
+	if resp == nil {
+		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, txn)
+		if key != nil {
+			key = db.AsKey(key, db.KEY_BYTES)
+			resp, _ = db.GetBytes(key, txn)
+			if req == nil {
+				key = db.AsKey(key, db.KEY_HASH)
+				hash, _ = db.GetBytes(key, txn)
+			}
+		}
+	}
+	// Random
+	if resp == nil {
+		resp = make([]byte, 1604)
+		if req == nil {
+			hash = make([]byte, 46)
 		}
 	}
 
-	return result, max
+	// If no request provided
+	if req == nil {
+		// Select tip, if so requested, or one of the random pending requests.
+		if tip {
+			req = hash
+		} else {
+			key := db.PickRandomKey(db.KEY_PENDING_HASH, txn)
+			if key != nil {
+				key = db.AsKey(key, db.KEY_PENDING_HASH)
+				t, _ := db.GetBytes(key, txn)
+				req = t
+			} else {
+				// If tip=false and no pending, force tip=true
+				req = hash
+			}
+		}
+	}
+	if req == nil {
+		req = hash
+	}
+	if req == nil {
+		req = make([]byte, 46)
+	}
+	return &Message{&resp, &req, ""}
 }

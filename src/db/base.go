@@ -270,7 +270,7 @@ The value is expected to be a unix timestamp. //When picked, the value is update
 func PickRandomKey(key byte, txn *badger.Txn) []byte {
 	tx := txn
 	if txn == nil {
-		tx = DB.NewTransaction(true)
+		tx = DB.NewTransaction(false)
 		defer tx.Commit(func(e error) {})
 	}
 	opts := badger.DefaultIteratorOptions

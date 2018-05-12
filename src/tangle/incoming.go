@@ -10,7 +10,7 @@ import (
 	"transaction"
 	"crypt"
 	"logs"
-	"time"
+	"utils"
 )
 
 func incomingRunner () {
@@ -57,13 +57,6 @@ func incomingRunner () {
 				pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
 				pendingTrytes = convert.BytesToTrytes(tx.Hash)
 				db.Remove(pendingKey, nil)
-				PendingsLocker.Lock()
-				_, ok := pendings[pendingTrytes]
-				if ok {
-					delete(pendings, pendingTrytes)
-					//logs.Log.Warning("Time to reply", time.Now().Sub(time.Unix(t, 0)))
-				}
-				PendingsLocker.Unlock()
 
 				// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
 
@@ -98,14 +91,14 @@ func incomingRunner () {
 					}
 
 					// Re-broadcast new TX. Not always.
-					// TODO: rework how responses are sent
-					/*
-					go func () {
-						if utils.Random(0,100) < 10 {
-							outgoingQueue <- getMessage(*msg.Bytes, nil, false, txn)
+					// Here, it is actually possible to favor nearer neighbours!
+					if utils.Random(0,100) < 5 {
+						for addr, queue := range requestReplyQueues {
+							if addr != msg.Addr && len(*queue) < 1000 {
+								*queue <- &Request{tx.Hash, false}
+							}
 						}
-					}()
-					*/
+					}
 
 					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, New: 1}
 					saved++
@@ -135,9 +128,6 @@ func incomingRunner () {
 			}
 		} else {
 			if pendingKey != nil {
-				PendingsLocker.Lock()
-				pendings[pendingTrytes] = time.Now().Unix()
-				PendingsLocker.Unlock()
 				db.Put(pendingKey, hash, nil, nil)
 			}
 		}

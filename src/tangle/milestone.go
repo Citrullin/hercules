@@ -182,7 +182,7 @@ func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
 			// TODO: improvement: theoretically we do not need hash of tx2 - lighter version of obj?
 			tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
 
-			if checkMilestone(key, tx, tx2, trits2, txn) {
+			if checkMilestone(tx, tx2, trits2, txn) {
 				return 1
 			}
 		} else {
@@ -203,7 +203,7 @@ func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
 	return 0
 }
 
-func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
+func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
 	discardMilestone := func () {
 		err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
 		if err != nil {

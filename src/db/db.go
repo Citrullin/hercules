@@ -28,6 +28,7 @@ func Load(config *DatabaseConfig) {
 	opts.Dir = config.Path
 	opts.ValueDir = config.Path
 	// TODO: only for small devices? Compare performance, add as configurable
+	// Also, tweak these: https://github.com/dgraph-io/badger#memory-usage
 	//opts.ValueLogLoadingMode = options.FileIO
 	db, err := badger.Open(opts)
 	if err != nil {
