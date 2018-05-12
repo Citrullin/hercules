@@ -41,6 +41,7 @@ const (
 
 	// PERSISTENT EVENTS
 	KEY_EVENT_MILESTONE_PENDING        = byte(50)  // trunk hash (999 address) -> tx hash
+	KEY_EVENT_MILESTONE_PAIR_PENDING   = byte(51)  // trunk hash (999 address) -> tx hash
 	KEY_EVENT_CONFIRMATION_PENDING     = byte(56)  // hash (coo address) -> index
 
 	// OTHER
@@ -169,6 +170,12 @@ func GetBytes(key []byte, txn *badger.Txn) ([]byte, error) {
 
 func GetInt(key []byte, txn *badger.Txn) (int, error) {
 	var resp = 0
+	err := Get(key, &resp, txn)
+	return resp, err
+}
+
+func GetBool(key []byte, txn *badger.Txn) (bool, error) {
+	var resp = false
 	err := Get(key, &resp, txn)
 	return resp, err
 }

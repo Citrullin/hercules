@@ -28,8 +28,10 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	_checkSaveError(tx, err)
 	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_BYTES), (*raw)[:1604], nil, txn)
 	_checkSaveError(tx, err)
+	// TODO: delete after confirmation?:
 	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_VALUE), tx.Value, nil, txn)
 	_checkSaveError(tx, err)
+	// TODO: delete after confirmation?:
 	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
@@ -50,6 +52,7 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
 		tx.Value, nil, txn)
 	_checkSaveError(tx, err)
+	// TODO: delete after confirmation?:
 	err = db.Put(
 		db.GetByteKey(tx.Hash, db.KEY_RELATION),
 		append(
@@ -61,13 +64,13 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 		append(
 			db.GetByteKey(tx.TrunkTransaction, db.KEY_APPROVEE),
 			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
-		"", nil, txn)
+		true, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
 			db.GetByteKey(tx.BranchTransaction, db.KEY_APPROVEE),
 			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
-		"", nil, txn)
+		false, nil, txn)
 	_checkSaveError(tx, err)
 
 	err = updateTipsOnNewTransaction(tx, txn)

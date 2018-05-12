@@ -9,11 +9,10 @@ import (
 	"github.com/dgraph-io/badger"
 	"encoding/gob"
 	"sync"
-	"time"
 	"logs"
+	"time"
 )
 
-const MILESTONE_CHECK_INTERVAL = time.Duration(15) * time.Second
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
 
@@ -22,8 +21,15 @@ type Milestone struct {
 	Index int
 }
 
+type PendingMilestone struct {
+	Key        []byte
+	TX2Bytes   []byte
+}
+type PendingMilestoneQueue chan *PendingMilestone
+
 var COO_ADDRESS_BYTES = convert.TrytesToBytes(COO_ADDRESS)[:49]
 var COO_ADDRESS2_BYTES = convert.TrytesToBytes(COO_ADDRESS2)[:49]
+var pendingMilestoneQueue PendingMilestoneQueue
 
 var milestones map[byte]*Milestone
 var MilestoneLocker = &sync.Mutex{}
@@ -31,6 +37,7 @@ var MilestoneLocker = &sync.Mutex{}
 func milestoneOnLoad() {
 	// TODO: milestone from snapshot?
 	milestones = make(map[byte]*Milestone)
+	pendingMilestoneQueue = make(PendingMilestoneQueue, maxQueueSize)
 
 	loadLatestMilestone(db.KEY_MILESTONE)
 
@@ -92,8 +99,15 @@ func checkIsLatestMilestone (index int, tx *transaction.FastTX, dbKey byte) bool
 }
 
 func startSolidMilestoneChecker () {
-	// TODO: implement and run periodic milestone checker
+	// TODO: implement and run periodic milestone checker? How to know when in sync?
 	// checkIsLatestMilestone
+}
+
+func addPendingMilestoneToQueue (pendingMilestone *PendingMilestone) {
+	go func() {
+		time.Sleep(time.Second * time.Duration(2))
+		pendingMilestoneQueue <- pendingMilestone
+	}()
 }
 
 /*
@@ -105,7 +119,7 @@ func startMilestoneChecker() {
 	_ = db.DB.Update(func(txn *badger.Txn) (e error) {
 		defer func() {
 			if err := recover(); err != nil {
-				e = errors.New("Failed saving TX!")
+				e = errors.New("Failed startup milestone check!")
 			}
 		}()
 		opts := badger.DefaultIteratorOptions
@@ -116,40 +130,77 @@ func startMilestoneChecker() {
 			item := it.Item()
 			key := item.Key()
 			value, _ := item.Value()
-			var txHashBytes = db.AsKey(key, db.KEY_BYTES)
 			var tx2HashBytes = value
-
-			// 2. Check if 1-index TX already exists
-			tx2Bytes, err := db.GetBytes(tx2HashBytes, txn)
-			if err == nil {
-				// 3. Check that the 0-index TX also exists.
-				txBytes, err := db.GetBytes(txHashBytes, txn)
-				if err == nil {
-
-					//Get TX objects and validate
-					trits := convert.BytesToTrits(txBytes)[:8019]
-					tx := transaction.TritsToFastTX(&trits, txBytes)
-
-					trits2 := convert.BytesToTrits(tx2Bytes)[:8019]
-					tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
-
-					if checkMilestone(key, tx, tx2, trits2, txn) {
-						total++
-					}
-				} else {
-					// The 0-index milestone TX doesn't exist.
-					// Clearly an error here!
-					db.Remove(key, txn)
-					logs.Log.Panicf("A milestone has disappeared: %v", convert.BytesToTrytes(txHashBytes))
-					panic("A milestone has disappeared!")
-				}
-			}
+			total += preCheckMilestone(key, tx2HashBytes, txn)
 		}
 		return nil
 	})
 	db.Locker.Unlock()
-	time.Sleep(MILESTONE_CHECK_INTERVAL)
-	go startMilestoneChecker()
+
+	// Now, listen to the chan
+	for pendingMilestone := range pendingMilestoneQueue {
+		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+			defer func() {
+				if err := recover(); err != nil {
+					e = errors.New("Failed queue milestone check!")
+				}
+			}()
+			key := pendingMilestone.Key
+			tx2HashBytes := pendingMilestone.TX2Bytes
+			if tx2HashBytes == nil {
+				relation, err := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
+				if err == nil {
+					tx2HashBytes = db.AsKey(relation[:16], db.KEY_HASH)
+				} else {
+					// The 0-index milestone TX relations doesn't exist.
+					// Clearly an error here!
+					db.Remove(key, txn)
+					logs.Log.Panicf("A milestone has disappeared!")
+					panic("A milestone has disappeared!")
+				}
+			}
+			preCheckMilestone(key, tx2HashBytes, txn)
+			return nil
+		})
+	}
+}
+
+func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
+	var txHashBytes = db.AsKey(key, db.KEY_BYTES)
+	// 2. Check if 1-index TX already exists
+	tx2Bytes, err := db.GetBytes(tx2HashBytes, txn)
+	if err == nil {
+		// 3. Check that the 0-index TX also exists.
+		txBytes, err := db.GetBytes(txHashBytes, txn)
+		if err == nil {
+
+			//Get TX objects and validate
+			trits := convert.BytesToTrits(txBytes)[:8019]
+			tx := transaction.TritsToFastTX(&trits, txBytes)
+
+			trits2 := convert.BytesToTrits(tx2Bytes)[:8019]
+			// TODO: improvement: theoretically we do not need hash of tx2 - lighter version of obj?
+			tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
+
+			if checkMilestone(key, tx, tx2, trits2, txn) {
+				return 1
+			}
+		} else {
+			// The 0-index milestone TX doesn't exist.
+			// Clearly an error here!
+			// db.Remove(key, txn)
+			addPendingMilestoneToQueue(&PendingMilestone{key, tx2HashBytes})
+			logs.Log.Panicf("A milestone has disappeared: %v", txHashBytes)
+			panic("A milestone has disappeared!")
+		}
+	} else {
+		err := db.Put(db.AsKey(tx2HashBytes, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key, nil, txn)
+		if err != nil {
+			logs.Log.Errorf("Could not add pending milestone pair: %v", err)
+			panic(err)
+		}
+	}
+	return 0
 }
 
 func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {

@@ -4,6 +4,8 @@ import (
 	"db"
 	"github.com/dgraph-io/badger"
 	"server"
+	"time"
+	"convert"
 )
 
 func responseRunner () {
@@ -12,34 +14,25 @@ func responseRunner () {
 	}
 }
 
-func requestReplyRunner() {
-	for msg := range requestReplyQueue {
-		replyToRequest(msg)
+func replyToRequest (msg *Request, addr string, req []byte, txn *badger.Txn) {
+	// Reply to requests:
+	var resp []byte = nil
+
+	if !msg.Tip {
+		t, err := db.GetBytes(db.GetByteKey(msg.Requested, db.KEY_BYTES), txn)
+		if err == nil {
+			resp = t
+		}
 	}
-}
-
-func replyToRequest (msg *Request) {
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		// Reply to requests:
-		var resp []byte = nil
-
-		if !msg.Tip {
-			t, err := db.GetBytes(db.GetByteKey(msg.Requested, db.KEY_BYTES), txn)
-			if err == nil {
-				resp = t
-			}
-		}
-		if msg.Tip || resp != nil {
-			message := getMessage(resp, nil, false, txn)
-			message.Addr = msg.Addr
-			outgoingQueue <- message
-		} else {
-			// If I do not have this TX, request from somewhere else?
-			// TODO: (OPT) not always. Have a random drop ratio as in IRI.
-			requestIfMissing(msg.Requested, "", nil)
-		}
-		return nil
-	})
+	if msg.Tip || resp != nil {
+		message := getMessage(resp, req, false, txn)
+		message.Addr = addr
+		outgoingQueue <- message
+	} else {
+		// If I do not have this TX, request from somewhere else?
+		// TODO: (OPT) not always. Have a random drop ratio as in IRI.
+		// requestIfMissing(msg.Requested, "", nil)
+	}
 }
 
 func respond (msg *Message) {
@@ -52,13 +45,7 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	var hash []byte
 	// Try getting a weighted random tip (those with more value are preferred)
 	if tx == nil {
-		tip := getRandomTip()
-		if tip != nil {
-			tx = tip.Bytes
-			if req == nil {
-				hash = tip.Hash
-			}
-		}
+		hash, tx = getRandomTip()
 	}
 	// Try getting latest milestone
 	if tx == nil {
@@ -75,12 +62,10 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, txn)
 		if key != nil {
 			key = db.AsKey(key, db.KEY_BYTES)
-			t, _ := db.GetBytes(key, txn)
-			tx = t
+			tx, _ = db.GetBytes(key, txn)
 			if req == nil {
 				key = db.AsKey(key, db.KEY_HASH)
-				t, _ := db.GetBytes(key, txn)
-				hash = t
+				hash, _ = db.GetBytes(key, txn)
 			}
 		}
 	}
@@ -98,14 +83,13 @@ func getMessage (tx []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			key := db.PickRandomKey(db.KEY_PENDING_HASH, txn)
-			if key != nil {
-				key = db.AsKey(key, db.KEY_PENDING_HASH)
-				t, _ := db.GetBytes(key, txn)
-				req = t
-			} else {
-				// If tip=false and no pending, force tip=true
-				req = hash
+			// TODO: remove this and find a way to load oldest from the DB?
+			hashTrytes, _ := oldestPending()
+			if len(hashTrytes) > 0 {
+				req = convert.TrytesToBytes(hashTrytes)
+				PendingsLocker.Lock()
+				pendings[hashTrytes] = time.Now().UnixNano()
+				PendingsLocker.Unlock()
 			}
 		}
 	}

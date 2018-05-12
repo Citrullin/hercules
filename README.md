@@ -35,3 +35,8 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 1. Lock the database.
 2. Run all confirmations recursively until the queue is at zero.
+
+
+# Pending
+
+3. Tips growth: discard tips older than certian time

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	flushInterval = time.Duration(10) * time.Second
+	flushInterval = time.Duration(1) * time.Second
 	maxQueueSize  = 1000000
 	UDPPacketSize = 1650
 )
@@ -94,7 +94,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(1)
+	server.listenAndReceive(nbWorkers)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
@@ -231,6 +231,8 @@ func (server Server) receive() {
 		NeighborsLock.RUnlock()
 		if neighbor != nil {
 			mq.enqueue(&Message{address, msg})
+		} else {
+			logs.Log.Warning("Received from an unknown neighbor", address)
 		}
 	}
 }
@@ -242,5 +244,5 @@ func handleMessage(msg *Message) {
 }
 
 func report () {
-	logs.Log.Debugf("Incoming TX/s: %.2f\n", float64(ops)/10)
+	logs.Log.Debugf("Incoming TX/s: %.2f\n", float64(ops))
 }

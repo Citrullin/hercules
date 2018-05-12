@@ -16,17 +16,18 @@ func confirmOnLoad() {
 func startConfirmThread() {
 	db.Locker.Lock()
 	db.Locker.Unlock()
-	_ = db.DB.Update(func(txn *badger.Txn) error {
+	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_EVENT_CONFIRMATION_PENDING}
-		var err error
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
-			err = confirm(key, txn)
+			_ = db.DB.Update(func(txn *badger.Txn) error {
+				return confirm(key, txn)
+			})
 		}
-		return err
+		return nil
 	})
 	time.Sleep(CONFIRM_CHECK_INTERVAL)
 	go startConfirmThread()

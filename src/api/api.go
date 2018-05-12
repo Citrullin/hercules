@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
+	"time"
+	"logs"
 )
 
 type Request struct {
@@ -12,6 +14,7 @@ type Request struct {
 }
 
 var api *gin.Engine
+var srv *http.Server
 
 func Start (address string) {
 	// TODO: allow password protection for remote access
@@ -43,6 +46,26 @@ func Start (address string) {
 			})
 		}
 	})
-	api.Run(address)
-	log.Println("API running on " + address)
+	srv = &http.Server{
+		Addr:    address,
+		Handler: api,
+	}
+	go func() {
+		// service connections
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logs.Log.Fatalf("API Server listen: %s\n", err)
+			panic(err)
+		}
+	}()
+}
+
+func End () {
+	if srv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			logs.Log.Fatal("API Server Shutdown Error:", err)
+		}
+		logs.Log.Info("API Server exiting...")
+	}
 }

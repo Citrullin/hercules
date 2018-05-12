@@ -3,7 +3,6 @@ package tangle
 import (
 	"db"
 	"errors"
-	"utils"
 	"server"
 	"bytes"
 	"github.com/dgraph-io/badger"
@@ -11,6 +10,7 @@ import (
 	"transaction"
 	"crypt"
 	"logs"
+	"time"
 )
 
 func incomingRunner () {
@@ -24,92 +24,123 @@ func incomingRunner () {
 		db.Locker.Lock()
 		db.Locker.Unlock()
 
-		_ = db.DB.Update(func(txn *badger.Txn) error {
-			var fingerprint []byte
-			var has = bytes.Equal(*msg.Bytes, tipBytes)
+		var pendingMilestone *PendingMilestone
+		var pendingKey []byte
+		var hash []byte
+		var pendingTrytes = ""
 
-			if !has {
-				fingerprint = db.GetByteKey(*msg.Bytes, db.KEY_FINGERPRINT)
-				if !db.Has(fingerprint, txn) {
-					db.Put(fingerprint, true, &fingerprintTTL, txn)
-					incomingQueue <- msg
-					incomingProcessed++
-				}
-			}
-			return nil
-		})
-	}
-}
-
-func listenToIncoming () {
-	for msg := range incomingQueue {
-		trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-		tx := transaction.TritsToFastTX(&trits, *msg.Bytes)
-		if !crypt.IsValidPoW(tx.Hash, MWM) {
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
-			continue
-		}
-
-		db.Locker.Lock()
-		db.Locker.Unlock()
-
-		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+		err := db.DB.Update(func(txn *badger.Txn) (e error) {
 			defer func() {
 				if err := recover(); err != nil {
 					e = errors.New("Failed processing incoming TX!")
 				}
 			}()
+			var fingerprint []byte
+			var isTipRequest = bytes.Equal(*msg.Bytes, tipBytes)
 
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING), txn)
-			db.Remove(db.GetByteKey(tx.Hash, db.KEY_PENDING_HASH), txn)
-
-			// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
-
-			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
-				err := saveTX(tx, msg.Bytes, txn)
-				_checkIncomingError(tx, err)
-				if isMaybeMilestone(tx) {
-					err := db.PutBytes(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING),
-						db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES),nil, txn)
-					_checkIncomingError(tx, err)
+			fingerprint = db.GetByteKey(*msg.Bytes, db.KEY_FINGERPRINT)
+			if isTipRequest || !db.Has(fingerprint, txn) {
+				if !isTipRequest {
+					db.Put(fingerprint, true, &fingerprintTTL, txn)
 				}
-				_, err = requestIfMissing(tx.TrunkTransaction, msg.Addr, txn)
-				_checkIncomingError(tx, err)
-				_, err = requestIfMissing(tx.BranchTransaction, msg.Addr, txn)
-				_checkIncomingError(tx, err)
-
-				// EVENTS:
-
-				pendingConfirmationKey := db.GetByteKey(tx.Hash, db.KEY_PENDING_CONFIRMED)
-				if db.Has(pendingConfirmationKey, txn) {
-					err = db.Remove(pendingConfirmationKey, txn)
-					_checkIncomingError(tx, err)
-					err = db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
-					_checkIncomingError(tx, err)
+				incomingProcessed++
+				trits := convert.BytesToTrits(*msg.Bytes)[:8019]
+				tx := transaction.TritsToFastTX(&trits, *msg.Bytes)
+				if !crypt.IsValidPoW(tx.Hash, MWM) {
+					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
+					return
 				}
 
-				// Re-broadcast new TX. Not always.
-				go func () {
-					if utils.Random(0,100) < 10 {
-						outgoingQueue <- getMessage(*msg.Bytes, nil, false, txn)
+				var key = db.GetByteKey(tx.Hash, db.KEY_HASH)
+				hash = tx.Hash
+
+				pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
+				pendingTrytes = convert.BytesToTrytes(tx.Hash)
+				db.Remove(pendingKey, nil)
+				PendingsLocker.Lock()
+				_, ok := pendings[pendingTrytes]
+				if ok {
+					delete(pendings, pendingTrytes)
+					//logs.Log.Warning("Time to reply", time.Now().Sub(time.Unix(t, 0)))
+				}
+				PendingsLocker.Unlock()
+
+				// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
+
+				if !isTipRequest && !db.Has(key, txn) {
+					err := saveTX(tx, msg.Bytes, txn)
+					_checkIncomingError(tx, err)
+					if isMaybeMilestone(tx) {
+						trunkHashKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
+						err := db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkHashKey,nil, txn)
+						_checkIncomingError(tx, err)
+						pendingMilestone = &PendingMilestone{key, trunkHashKey}
 					}
-				}()
-				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, New: 1}
-				saved++
-			} else {
-				discarded++
+					_, err = requestIfMissing(tx.TrunkTransaction, msg.Addr, txn)
+					_checkIncomingError(tx, err)
+					_, err = requestIfMissing(tx.BranchTransaction, msg.Addr, txn)
+					_checkIncomingError(tx, err)
+
+					// EVENTS:
+
+					pendingConfirmationKey := db.AsKey(key, db.KEY_PENDING_CONFIRMED)
+					if db.Has(pendingConfirmationKey, txn) {
+						err = db.Remove(pendingConfirmationKey, txn)
+						_checkIncomingError(tx, err)
+						err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+						_checkIncomingError(tx, err)
+					}
+
+
+					parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+					if err == nil {
+						pendingMilestone = &PendingMilestone{parentKey, key}
+					}
+
+					// Re-broadcast new TX. Not always.
+					// TODO: rework how responses are sent
+					/*
+					go func () {
+						if utils.Random(0,100) < 10 {
+							outgoingQueue <- getMessage(*msg.Bytes, nil, false, txn)
+						}
+					}()
+					*/
+
+					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, New: 1}
+					saved++
+				} else if !isTipRequest {
+					discarded++
+				}
+
+				// Add request
+
+				tipRequest := isTipRequest || bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
+				req := make([]byte, 49)
+				copy(req, *msg.Requested)
+				queue, ok := requestReplyQueues[msg.Addr]
+				if !ok {
+					q := make(RequestQueue, maxQueueSize)
+					queue = &q
+					requestReplyQueues[msg.Addr] = queue
+				}
+				*queue <- &Request{req, tipRequest}
 			}
-
-			// Add request
-
-			tipRequest := bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
-			req := make([]byte, 49)
-			copy(req, *msg.Requested)
-			requestReplyQueue <- &Request{req, msg.Addr, tipRequest}
-
 			return nil
-
 		})
+
+		if err == nil {
+			if pendingMilestone != nil {
+				addPendingMilestoneToQueue(pendingMilestone)
+			}
+		} else {
+			if pendingKey != nil {
+				PendingsLocker.Lock()
+				pendings[pendingTrytes] = time.Now().Unix()
+				PendingsLocker.Unlock()
+				db.Put(pendingKey, hash, nil, nil)
+			}
+		}
 	}
 }
 

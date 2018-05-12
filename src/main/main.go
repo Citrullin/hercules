@@ -50,21 +50,19 @@ func StartHercules () {
 	tangle.Start(srv)
 	api.Start(":" + apiPort)
 
-	ch := make(chan os.Signal, 1)
+	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, os.Interrupt)
-	go func() {
-		for range ch {
-			// Clean exit
-			logs.Log.Info("Hercules is shutting down. Please wait...")
-			go func () {
-				time.Sleep(time.Duration(5000) * time.Millisecond)
-				os.Exit(0)
-			}()
-			go server.End()
-			db.End()
-		}
-	}()
-	for {
-		time.Sleep(time.Second)
+	signal.Notify(ch, os.Kill)
+	for range ch {
+		// Clean exit
+		logs.Log.Info("Hercules is shutting down. Please wait...")
+		go func () {
+			time.Sleep(time.Duration(5000) * time.Millisecond)
+			logs.Log.Info("Bye!")
+			os.Exit(0)
+		}()
+		go api.End()
+		go server.End()
+		db.End()
 	}
 }

@@ -4,25 +4,25 @@ import (
 	"transaction"
 	"github.com/dgraph-io/badger"
 	"db"
-	"convert"
 	"bytes"
 	"encoding/gob"
 	"sync"
-	"math"
 	"utils"
 	"logs"
+	"time"
 )
 
 type Tip struct {
-	Value int64
-	TX *transaction.FastTX
+	Hash []byte
+	Value int
 }
 
-var tips []Tip
+var tips []*Tip
 var TipsLocker = &sync.Mutex{}
 
 func tipOnLoad() {
 	loadTips()
+	go startTipRemover()
 }
 
 func loadTips() {
@@ -37,20 +37,15 @@ func loadTips() {
 			key := item.Key()
 			v, _ := item.Value()
 
-			var value int64
+			var value int
 			buf := bytes.NewBuffer(v)
 			dec := gob.NewDecoder(buf)
 			err := dec.Decode(&value)
 			if err == nil {
 				key := db.AsKey(key, db.KEY_BYTES)
-				txBytes, err := db.GetBytes(key, txn)
-				if err == nil {
-					trits := convert.BytesToTrits(txBytes)[:8019]
-					tx := transaction.TritsToFastTX(&trits, txBytes)
-					TipsLocker.Lock()
-					tips = append(tips, Tip{value, tx})
-					TipsLocker.Unlock()
-				}
+				TipsLocker.Lock()
+				tips = append(tips, &Tip{key,value})
+				TipsLocker.Unlock()
 			}
 		}
 		return nil
@@ -58,19 +53,44 @@ func loadTips() {
 	logs.Log.Infof("Loaded tips: %v\n", len(tips))
 }
 
-func addTip (tx *transaction.FastTX) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
-	tips = append(tips, Tip{tx.Value, tx})
+func startTipRemover () {
+	flushTicker := time.NewTicker(tipRemoverInterval)
+	for range flushTicker.C {
+		logs.Log.Warning("Tips remover starting...")
+		_ = db.DB.Update(func(txn *badger.Txn) error {
+			var toRemove []*Tip
+			TipsLocker.Lock()
+			for _, tip := range tips {
+				tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Value), 0)).Nanoseconds())
+				tipAgeOK := tipAge < maxTipAge
+				origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
+				if !tipAgeOK || db.CountByPrefix(origKey) > 0 {
+					toRemove = append(toRemove, tip)
+				}
+			}
+			TipsLocker.Unlock()
+			logs.Log.Warning("Tips to remove:", len(toRemove))
+			for _, tip := range toRemove {
+				db.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP), txn)
+				removeTip(tip.Hash)
+			}
+			return nil
+		})
+	}
 }
 
-// TODO: remove tips randomly if more than X tips in memory/DB?
-func removeTip (tx *transaction.FastTX) {
+func addTip (hash []byte, value int) {
+	TipsLocker.Lock()
+	defer TipsLocker.Unlock()
+	tips = append(tips, &Tip{hash, value})
+}
+
+func removeTip (hash []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 	b := tips[:0]
 	for _, x := range tips {
-		if !bytes.Equal(x.TX.Hash, tx.Hash) {
+		if !bytes.Equal(x.Hash, hash) {
 			b = append(b, x)
 		}
 	}
@@ -79,31 +99,35 @@ func removeTip (tx *transaction.FastTX) {
 
 func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error {
 	key := db.GetByteKey(tx.Hash, db.KEY_APPROVEE)
-	if db.CountByPrefix(db.GetByteKey(tx.Hash, db.KEY_APPROVEE)) < 1 {
-		err := db.Put(db.AsKey(key, db.KEY_TIP), int64(math.Abs(float64(tx.Value))) + 1000000, nil, txn)
+	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tx.Timestamp), 0)).Nanoseconds())
+	if tipAge < maxTipAge && db.CountByPrefix(db.GetByteKey(tx.Hash, db.KEY_APPROVEE)) < 1 {
+		err := db.Put(db.AsKey(key, db.KEY_TIP), tx.Timestamp, nil, txn)
 		if err != nil {
 			return err
 		}
-		addTip(tx)
+		addTip(tx.Hash, tx.Timestamp)
 	}
 	err := db.Remove(db.GetByteKey(tx.TrunkTransaction, db.KEY_TIP), txn)
 	if err == nil {
-		removeTip(tx)
+		removeTip(tx.Hash)
 	}
 	err = db.Remove(db.GetByteKey(tx.BranchTransaction, db.KEY_TIP), txn)
 	if err == nil {
-		removeTip(tx)
+		removeTip(tx.Hash)
 	}
 	return nil
 }
 
-func getRandomTip () *transaction.FastTX {
+func getRandomTip () (hash []byte, txBytes []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 
 	if len(tips) < 1 {
-		return nil
+		return nil, nil
 	}
 
-	return tips[utils.Random(0, len(tips))].TX
+	hash = tips[utils.Random(0, len(tips))].Hash
+	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_BYTES), nil)
+	if err != nil { return nil, nil }
+	return hash, txBytes
 }
