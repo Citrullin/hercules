@@ -94,7 +94,7 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
-	server.listenAndReceive(nbWorkers)
+	server.listenAndReceive(1)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
@@ -234,6 +234,7 @@ func (server Server) receive() {
 		} else {
 			logs.Log.Warning("Received from an unknown neighbor", address)
 		}
+		time.Sleep(1)
 	}
 }
 

@@ -8,16 +8,14 @@ import (
 	"server"
 	"transaction"
 	"logs"
-	"math"
+	"sync"
 )
 
 const (
 	MWM             = 14
-	maxQueueSize    = 100000
+	maxQueueSize    = 20000
 	reportInterval  = time.Duration(10) * time.Second
-	pingInterval    = time.Duration(300) * time.Millisecond
-	tipPingInterval = time.Duration(300) * time.Millisecond
-	tipRemoverInterval  = time.Duration(10) * time.Second
+	tipRemoverInterval  = time.Duration(1) * time.Minute
 	maxTipAge           = time.Duration(1) * time.Hour
 	)
 
@@ -44,7 +42,11 @@ var tipFastTX = transaction.TritsToFastTX(&tipTrits, tipBytes)
 var fingerprintTTL = time.Duration(1) * time.Minute
 
 var srv *server.Server
-var requestReplyQueues map[string]*RequestQueue
+var requestQueues map[string]*RequestQueue
+var replyQueues map[string]*RequestQueue
+
+var pendingHashes [][]byte
+var pendingLocker = &sync.Mutex{}
 
 // TODO: get rid of these?
 var incoming = 0
@@ -54,7 +56,8 @@ var discarded = 0
 
 func Start (s *server.Server) {
 	srv = s
-	requestReplyQueues = make(map[string]*RequestQueue)
+	requestQueues = make(map[string]*RequestQueue)
+	replyQueues = make(map[string]*RequestQueue)
 
 	milestoneOnLoad()
 	confirmOnLoad()
@@ -62,12 +65,22 @@ func Start (s *server.Server) {
 
 	// TODO: without snapshot: load a snapshot from file into DB. Snapshot file loader needed.
 
-	go periodicRequest()
-	go periodicTipRequest()
-
-	for i := 0; i < int(math.Min(float64(nbWorkers), float64(4))); i++ {
-		go incomingRunner()
+	for i := 0; i < nbWorkers; i++ {
+		go runner()
 	}
+
 	go report()
 	logs.Log.Info("Tangle started!")
+}
+
+func runner () {
+	for {
+		select {
+		case msg := <- srv.Incoming:
+			incomingRunner(msg)
+		default:
+			outgoingRunner()
+		}
+		time.Sleep(1)
+	}
 }

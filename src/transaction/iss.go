@@ -43,12 +43,9 @@ func Digest(normalizedBundleFragment []int, signatureFragment []int) []int {
 	copy(buffer, signatureFragment)
 	hash := new(crypt.Curl)
 	hash.Initialize(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
-	total := 0
 
-	// FIXME: (???) This is ALWAYS 351 Rounds! IRI, too?
 	for j := 0; j < NUMBER_OF_FRAGMENT_CHUNKS; j++ {
 		for k := normalizedBundleFragment[j] - MIN_TRYTE_VALUE - 1; k >= 0; k-- {
-			total ++
 			hash.Reset()
 			hash.Absorb(buffer, j * HASH_LENGTH, HASH_LENGTH)
 			hash.Squeeze(buffer, j * HASH_LENGTH, HASH_LENGTH)

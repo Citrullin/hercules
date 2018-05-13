@@ -15,12 +15,15 @@ func report () {
 		logs.Log.Debugf("SERVER QUEUE:  In: %v, Out: %v \n",
 			len(srv.Incoming),
 			len(srv.Outgoing))
-		for i, queue := range requestReplyQueues {
-		logs.Log.Debugf("REPLY QUEUE:   %v - %v \n", i, len(*queue))
+		for i, queue := range requestQueues {
+		logs.Log.Debugf("PEER I QUEUE:  %v - %v \n", i, len(*queue))
 		}
-		logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v \n",
+		for i, queue := range replyQueues {
+		logs.Log.Debugf("PEER O QUEUE:  %v - %v \n", i, len(*queue))
+		}
+		logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v (%v) \n",
 			db.Count(db.KEY_HASH),
-			db.Count(db.KEY_PENDING_HASH))
+			db.Count(db.KEY_PENDING_HASH), len(pendingHashes))
 		logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
 			db.Count(db.KEY_CONFIRMED),
 			db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),

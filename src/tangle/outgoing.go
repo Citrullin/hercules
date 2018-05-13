@@ -1,24 +1,34 @@
 package tangle
 
 import (
-	"time"
 	"db"
 	"github.com/dgraph-io/badger"
 	"logs"
 	"server"
+	"time"
+	"bytes"
 )
 
-func periodicRequest() {
-	ticker := time.NewTicker(pingInterval)
-	for range ticker.C {
-		request(nil, "", false)
-	}
-}
+const (
+	tipRequestInterval = time.Duration(500) * time.Millisecond
+)
 
-func periodicTipRequest() {
-	ticker := time.NewTicker(tipPingInterval)
-	for range ticker.C {
-		request(nil, "", true)
+var lastTip = time.Now()
+
+func outgoingRunner() {
+	for addr, queue := range requestQueues {
+		select {
+		case msg := <- *queue:
+			request(msg.Requested, addr, false)
+		default:
+			now := time.Now()
+			tip := false
+			if now.Sub(lastTip) > tipRequestInterval {
+				tip = true
+				lastTip = now
+			}
+			request(nil, addr, tip)
+		}
 	}
 }
 
@@ -32,26 +42,40 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 		}()
 	}
 	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_PENDING), tx) {
-		err2 := db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, nil)
+		err := db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, nil)
 
-		if err2 != nil {
-			logs.Log.Error("Failed saving new TX request", err2)
-			return has, err2
+		if err != nil {
+			logs.Log.Error("Failed saving new TX request", err)
+			return false, err
 		}
 
-		request(hash, addr,false)
+		pendingLocker.Lock()
+		pendingHashes = append(pendingHashes, hash)
+		pendingLocker.Unlock()
+
+		queue, ok := requestQueues[addr]
+		if !ok {
+			q := make(RequestQueue, maxQueueSize)
+			queue = &q
+			requestQueues[addr] = queue
+		}
+		*queue <- &Request{hash, false}
+
 		has = false
 	}
 	return has, nil
 }
 
 func request (hash []byte, addr string, tip bool) {
+	txn := db.DB.NewTransaction(false)
+	defer txn.Commit(func(e error) {})
+
 	var resp []byte
 	var ok = false
 	var queue *RequestQueue
 
 	if len(addr) > 0 {
-		queue, ok = requestReplyQueues[addr]
+		queue, ok = replyQueues[addr]
 	}
 
 	if ok {
@@ -64,7 +88,7 @@ func request (hash []byte, addr string, tip bool) {
 		}
 		if request != nil {
 			if !request.Tip {
-				t, err := db.GetBytes(db.GetByteKey(request.Requested, db.KEY_BYTES), nil)
+				t, err := db.GetBytes(db.GetByteKey(request.Requested, db.KEY_BYTES), txn)
 				if err == nil {
 					resp = t
 				}
@@ -77,7 +101,8 @@ func request (hash []byte, addr string, tip bool) {
 		}
 	}
 
-	msg := getMessage(nil, hash, tip, nil)
+	msg := getMessage(resp, hash, tip, txn)
+	if msg == nil { return }
 	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
 	srv.Outgoing <- &server.Message{addr, data}
 }
@@ -98,9 +123,9 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 			}
 		}
 	}
-	// Otherwise, latest TX
+	// Otherwise, latest (youngest) TX
 	if resp == nil {
-		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, txn)
+		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, false, txn)
 		if key != nil {
 			key = db.AsKey(key, db.KEY_BYTES)
 			resp, _ = db.GetBytes(key, txn)
@@ -124,14 +149,13 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			key := db.PickRandomKey(db.KEY_PENDING_HASH, txn)
-			if key != nil {
-				key = db.AsKey(key, db.KEY_PENDING_HASH)
-				t, _ := db.GetBytes(key, txn)
-				req = t
+			if pendingHashes != nil && len(pendingHashes) > 0 {
+				pendingLocker.Lock()
+				req := pendingHashes[0]
+				pendingHashes = append(pendingHashes[1:], req)
+				pendingLocker.Unlock()
 			} else {
-				// If tip=false and no pending, force tip=true
-				req = hash
+				return nil
 			}
 		}
 	}
@@ -142,4 +166,19 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		req = make([]byte, 46)
 	}
 	return &Message{&resp, &req, ""}
+}
+
+func removePendingHash (hash []byte) {
+	pendingLocker.Lock()
+	defer pendingLocker.Unlock()
+	if pendingHashes == nil {
+		return
+	}
+	var hashes [][]byte
+	for _, pending := range pendingHashes {
+		if !bytes.Equal(pending, hash) {
+			hashes = append(hashes, pending)
+		}
+	}
+	pendingHashes = hashes
 }

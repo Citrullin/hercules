@@ -13,8 +13,7 @@ import (
 	"utils"
 )
 
-func incomingRunner () {
-	for raw := range srv.Incoming {
+func incomingRunner (raw *server.Message) {
 		data := raw.Msg[:1604]
 		req := raw.Msg[1604:1650]
 		msg := &Message{&data,&req, raw.Addr}
@@ -56,7 +55,10 @@ func incomingRunner () {
 
 				pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
 				pendingTrytes = convert.BytesToTrytes(tx.Hash)
-				db.Remove(pendingKey, nil)
+				err := db.Remove(pendingKey, nil)
+				if err == nil {
+					removePendingHash(tx.Hash)
+				}
 
 				// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
 
@@ -93,7 +95,7 @@ func incomingRunner () {
 					// Re-broadcast new TX. Not always.
 					// Here, it is actually possible to favor nearer neighbours!
 					if utils.Random(0,100) < 5 {
-						for addr, queue := range requestReplyQueues {
+						for addr, queue := range replyQueues {
 							if addr != msg.Addr && len(*queue) < 1000 {
 								*queue <- &Request{tx.Hash, false}
 							}
@@ -111,11 +113,11 @@ func incomingRunner () {
 				tipRequest := isTipRequest || bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
 				req := make([]byte, 49)
 				copy(req, *msg.Requested)
-				queue, ok := requestReplyQueues[msg.Addr]
+				queue, ok := replyQueues[msg.Addr]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
 					queue = &q
-					requestReplyQueues[msg.Addr] = queue
+					replyQueues[msg.Addr] = queue
 				}
 				*queue <- &Request{req, tipRequest}
 			}
@@ -131,7 +133,6 @@ func incomingRunner () {
 				db.Put(pendingKey, hash, nil, nil)
 			}
 		}
-	}
 }
 
 func _checkIncomingError(tx *transaction.FastTX, err error) {

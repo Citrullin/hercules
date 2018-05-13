@@ -41,7 +41,7 @@ func milestoneOnLoad() {
 
 	loadLatestMilestone(db.KEY_MILESTONE)
 
-	go startSolidMilestoneChecker()
+	//go startSolidMilestoneChecker()
 	go startMilestoneChecker()
 }
 
@@ -116,12 +116,8 @@ Runs checking of pending milestones. If the
 func startMilestoneChecker() {
 	total := 0
 	db.Locker.Lock()
-	_ = db.DB.Update(func(txn *badger.Txn) (e error) {
-		defer func() {
-			if err := recover(); err != nil {
-				e = errors.New("Failed startup milestone check!")
-			}
-		}()
+	var pairs []PendingMilestone
+	_ = db.DB.View(func(txn *badger.Txn) (e error) {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
@@ -130,11 +126,23 @@ func startMilestoneChecker() {
 			item := it.Item()
 			key := item.Key()
 			value, _ := item.Value()
-			var tx2HashBytes = value
-			total += preCheckMilestone(key, tx2HashBytes, txn)
+			TX2Bytes, _ := db.GetBytes(value, txn)
+			pairs = append(pairs, PendingMilestone{key, TX2Bytes})
 		}
 		return nil
 	})
+	for _, pair := range pairs {
+		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+			defer func() {
+				if err := recover(); err != nil {
+					e = errors.New("Failed startup milestone check!")
+				}
+			}()
+			total += preCheckMilestone(pair.Key, pair.TX2Bytes, txn)
+			return nil
+		})
+	}
+	pairs = nil
 	db.Locker.Unlock()
 
 	// Now, listen to the chan
@@ -205,6 +213,7 @@ func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
 
 func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
 	discardMilestone := func () {
+		panic("PANIC")
 		err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
 		if err != nil {
 			logs.Log.Errorf("Could not remove pending milestone: %v", err)
@@ -254,7 +263,7 @@ func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []in
 	// Trigger confirmations
 	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
 	if err != nil {
-		logs.Log.Errorf("Could save pending confirmation: %v", err)
+		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)
 	}
 	return true

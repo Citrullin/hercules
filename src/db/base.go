@@ -35,7 +35,7 @@ const (
 	KEY_TIP             = byte(27) // hash -> time
 
 	// PENDING + UNKNOWN CONFIRMED TRANSACTIONS
-	KEY_PENDING           = byte(30) // hash -> parent time
+	KEY_PENDING_TIMESTAMP = byte(30) // hash -> parent time
 	KEY_PENDING_HASH      = byte(31) // hash -> hash
 	KEY_PENDING_CONFIRMED = byte(35) // hash -> parent time
 
@@ -230,7 +230,7 @@ func CountByPrefix(prefix []byte) int {
 Returns latest key iterating over all items of certain type.
 The value is expected to be a unix timestamp
  */
-func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
+func GetLatestKey(key byte, oldest bool, txn *badger.Txn) ([]byte, int, error) {
 	tx := txn
 	if txn == nil {
 		tx = DB.NewTransaction(false)
@@ -255,7 +255,7 @@ func GetLatestKey(key byte, txn *badger.Txn) ([]byte, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		if data > current {
+		if (!oldest && data > current) || (oldest && data < current) {
 			current = data
 			latest = item.Key()
 		}

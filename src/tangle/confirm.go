@@ -7,30 +7,31 @@ import (
 	"logs"
 	"github.com/pkg/errors"
 )
-const CONFIRM_CHECK_INTERVAL = time.Duration(700) * time.Millisecond
+const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond
 
 func confirmOnLoad() {
 	go startConfirmThread()
 }
 
 func startConfirmThread() {
-	db.Locker.Lock()
-	db.Locker.Unlock()
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_EVENT_CONFIRMATION_PENDING}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			key := it.Item().Key()
-			_ = db.DB.Update(func(txn *badger.Txn) error {
-				return confirm(key, txn)
-			})
-		}
-		return nil
-	})
-	time.Sleep(CONFIRM_CHECK_INTERVAL)
-	go startConfirmThread()
+	for {
+		db.Locker.Lock()
+		db.Locker.Unlock()
+		_ = db.DB.View(func(txn *badger.Txn) error {
+			opts := badger.DefaultIteratorOptions
+			it := txn.NewIterator(opts)
+			defer it.Close()
+			prefix := []byte{db.KEY_EVENT_CONFIRMATION_PENDING}
+			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+				key := it.Item().Key()
+				_ = db.DB.Update(func(txn *badger.Txn) error {
+					return confirm(key, txn)
+				})
+			}
+			return nil
+		})
+		time.Sleep(CONFIRM_CHECK_INTERVAL)
+	}
 }
 
 func confirm (key []byte, txn *badger.Txn) error {
