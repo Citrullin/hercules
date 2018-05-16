@@ -35,6 +35,7 @@ var milestones map[byte]*Milestone
 var MilestoneLocker = &sync.Mutex{}
 
 func milestoneOnLoad() {
+	logs.Log.Info("Loading milestones")
 	// TODO: milestone from snapshot?
 	milestones = make(map[byte]*Milestone)
 	pendingMilestoneQueue = make(PendingMilestoneQueue, maxQueueSize)

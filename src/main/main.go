@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"os/signal"
-	"runtime"
 	"api"
 	"logs"
 )
@@ -37,13 +36,14 @@ func init() {
 
 func main () {
 	logs.Setup()
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 	StartHercules()
 }
 
 var serverConfig *server.ServerConfig
 
 func StartHercules () {
+	logs.Log.Info("Starting Hercules. Please wait...")
 	cwd, _ := os.Getwd()
 	db.Load(&db.DatabaseConfig{path.Join(cwd, "data"), 10})
 	srv := server.Create(serverConfig)

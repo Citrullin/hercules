@@ -30,9 +30,15 @@ type Request struct {
 	Tip bool
 }
 
+type IncomingTX struct {
+	TX    *transaction.FastTX
+	Addr  string
+	Bytes *[]byte
+}
+
 type RequestQueue chan *Request
 type MessageQueue chan *Message
-type TXQueue chan *transaction.FastTX
+type TXQueue chan *IncomingTX
 
 // "constants"
 var nbWorkers = runtime.NumCPU()
@@ -44,43 +50,51 @@ var fingerprintTTL = time.Duration(1) * time.Minute
 var srv *server.Server
 var requestQueues map[string]*RequestQueue
 var replyQueues map[string]*RequestQueue
+var requestLocker = &sync.RWMutex{}
+var replyLocker = &sync.RWMutex{}
 
-var pendingHashes [][]byte
-var pendingLocker = &sync.Mutex{}
+var txQueue TXQueue
 
 // TODO: get rid of these?
 var incoming = 0
 var incomingProcessed = 0
 var saved = 0
 var discarded = 0
+var outgoing = 0
 
 func Start (s *server.Server) {
 	srv = s
 	requestQueues = make(map[string]*RequestQueue)
 	replyQueues = make(map[string]*RequestQueue)
+	txQueue = make(TXQueue, maxQueueSize)
 
 	milestoneOnLoad()
 	confirmOnLoad()
 	tipOnLoad()
+	loadPendingRequests()
 
 	// TODO: without snapshot: load a snapshot from file into DB. Snapshot file loader needed.
 
 	for i := 0; i < nbWorkers; i++ {
-		go runner()
+		go incomingRunner()
 	}
 
 	go report()
 	logs.Log.Info("Tangle started!")
+
+	go runner()
 }
 
 func runner () {
 	for {
 		select {
-		case msg := <- srv.Incoming:
-			incomingRunner(msg)
+		case incomingTX := <- txQueue:
+			processIncomingTX(incomingTX)
 		default:
-			outgoingRunner()
 		}
-		time.Sleep(1)
+		outgoingRunner()
+		if len(txQueue) < 20 || len(pendingMilestoneQueue) > 50 {
+			time.Sleep(1)
+		}
 	}
 }

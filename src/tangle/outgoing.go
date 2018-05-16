@@ -7,27 +7,92 @@ import (
 	"server"
 	"time"
 	"bytes"
+	"encoding/gob"
+	"math"
 )
 
 const (
-	tipRequestInterval = time.Duration(500) * time.Millisecond
+	tipRequestInterval = 10
+	requestInterval = 2
 )
 
 var lastTip = time.Now()
+var lastRequest = time.Now()
+
+func loadPendingRequests() {
+	logs.Log.Info("Loading pending requests")
+
+	db.Locker.Lock()
+	defer db.Locker.Unlock()
+	requestLocker.Lock()
+	defer requestLocker.Unlock()
+	_ = db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_PENDING_HASH}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			v, _ := it.Item().Value()
+			var hash []byte
+			buf := bytes.NewBuffer(v)
+			dec := gob.NewDecoder(buf)
+			err := dec.Decode(&hash)
+			if err == nil {
+				for addr := range server.Neighbors {
+					queue, ok := requestQueues[addr]
+					if !ok {
+						q := make(RequestQueue, maxQueueSize)
+						queue = &q
+						requestQueues[addr] = queue
+					}
+					*queue <- &Request{hash, false}
+				}
+			} else {
+				logs.Log.Warning("Could not load pending Tx Hash")
+			}
+		}
+		return nil
+	})
+}
 
 func outgoingRunner() {
-	for addr, queue := range requestQueues {
-		select {
-		case msg := <- *queue:
-			request(msg.Requested, addr, false)
-		default:
-			now := time.Now()
-			tip := false
-			if now.Sub(lastTip) > tipRequestInterval {
-				tip = true
-				lastTip = now
+	tInterval := int(math.Max(float64(server.Speed) / 100 * tipRequestInterval, tipRequestInterval))
+	rInterval := int(math.Max(float64(server.Speed) / 100 * requestInterval, requestInterval))
+	shouldRequestTip := time.Now().Sub(lastTip) > time.Duration(tInterval) * time.Millisecond
+	shouldRequest := time.Now().Sub(lastRequest) > time.Duration(rInterval) * time.Millisecond
+	for neighbor := range server.Neighbors {
+		requestLocker.RLock()
+		requestQueue, requestOk := requestQueues[neighbor]
+		requestLocker.RUnlock()
+		replyLocker.RLock()
+		replyQueue, replyOk := replyQueues[neighbor]
+		replyLocker.RUnlock()
+		var request []byte
+		var reply []byte
+		if requestOk && len(*requestQueue) > 0 {
+			request = (<-*requestQueue).Requested
+		}
+		if replyOk && len(*replyQueue) > 0 {
+			reply, _ = db.GetBytes(db.GetByteKey((<-*replyQueue).Requested, db.KEY_BYTES), nil)
+		}
+		if request != nil || reply != nil {
+			msg := getMessage(reply, request, request == nil, nil)
+			msg.Addr = neighbor
+			sendReply(msg)
+		} else if shouldRequestTip {
+			lastTip = time.Now()
+			msg := getMessage(nil, nil, true, nil)
+			msg.Addr = neighbor
+			sendReply(msg)
+		} else if shouldRequest {
+			key := db.PickRandomKey(db.KEY_PENDING_HASH, 10000,nil)
+			hash, err := db.GetBytes(key, nil)
+			if err == nil {
+				lastRequest = time.Now()
+				msg := getMessage(nil, hash, true, nil)
+				msg.Addr = neighbor
+				sendReply(msg)
 			}
-			request(nil, addr, tip)
 		}
 	}
 }
@@ -42,23 +107,27 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 		}()
 	}
 	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_PENDING), tx) {
-		err := db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, nil)
+		err := db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, txn)
+		err2 := db.Put(db.GetByteKey(hash, db.KEY_PENDING_TIMESTAMP), time.Now().Unix(), nil, txn)
 
 		if err != nil {
 			logs.Log.Error("Failed saving new TX request", err)
 			return false, err
 		}
 
-		pendingLocker.Lock()
-		pendingHashes = append(pendingHashes, hash)
-		pendingLocker.Unlock()
+		if err2 != nil {
+			logs.Log.Error("Failed saving new TX request", err)
+			return false, err
+		}
 
+		requestLocker.Lock()
 		queue, ok := requestQueues[addr]
 		if !ok {
 			q := make(RequestQueue, maxQueueSize)
 			queue = &q
 			requestQueues[addr] = queue
 		}
+		requestLocker.Unlock()
 		*queue <- &Request{hash, false}
 
 		has = false
@@ -66,45 +135,11 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 	return has, nil
 }
 
-func request (hash []byte, addr string, tip bool) {
-	txn := db.DB.NewTransaction(false)
-	defer txn.Commit(func(e error) {})
-
-	var resp []byte
-	var ok = false
-	var queue *RequestQueue
-
-	if len(addr) > 0 {
-		queue, ok = replyQueues[addr]
-	}
-
-	if ok {
-		var request *Request = nil
-		select {
-		case msg := <- *queue:
-			request = msg
-		default:
-			request = nil
-		}
-		if request != nil {
-			if !request.Tip {
-				t, err := db.GetBytes(db.GetByteKey(request.Requested, db.KEY_BYTES), txn)
-				if err == nil {
-					resp = t
-				}
-			}
-			if !request.Tip && resp == nil {
-				// If I do not have this TX, request from somewhere else?
-				// TODO: (OPT) not always. Have a random drop ratio as in IRI.
-				// requestIfMissing(msg.Requested, "", nil)
-			}
-		}
-	}
-
-	msg := getMessage(resp, hash, tip, txn)
+func sendReply (msg *Message) {
 	if msg == nil { return }
 	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
-	srv.Outgoing <- &server.Message{addr, data}
+	srv.Outgoing <- &server.Message{msg.Addr, data}
+	outgoing++
 }
 
 func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
@@ -149,13 +184,9 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			if pendingHashes != nil && len(pendingHashes) > 0 {
-				pendingLocker.Lock()
-				req := pendingHashes[0]
-				pendingHashes = append(pendingHashes[1:], req)
-				pendingLocker.Unlock()
-			} else {
-				return nil
+			key, _, _ := db.GetLatestKey(db.KEY_PENDING_TIMESTAMP, true, txn)
+			if key != nil {
+				req, _ = db.GetBytes(db.AsKey(key, db.KEY_PENDING_HASH), txn)
 			}
 		}
 	}
@@ -166,19 +197,4 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		req = make([]byte, 46)
 	}
 	return &Message{&resp, &req, ""}
-}
-
-func removePendingHash (hash []byte) {
-	pendingLocker.Lock()
-	defer pendingLocker.Unlock()
-	if pendingHashes == nil {
-		return
-	}
-	var hashes [][]byte
-	for _, pending := range pendingHashes {
-		if !bytes.Equal(pending, hash) {
-			hashes = append(hashes, pending)
-		}
-	}
-	pendingHashes = hashes
 }

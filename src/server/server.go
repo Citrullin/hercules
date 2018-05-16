@@ -16,6 +16,7 @@ const (
 )
 
 var ops uint64 = 0
+var Speed uint64 = 1
 var total uint64 = 0
 var flushTicker *time.Ticker
 var nbWorkers = runtime.NumCPU()
@@ -102,6 +103,7 @@ func Create (serverConfig *ServerConfig) *Server {
 			if ended { break }
 			report()
 			atomic.AddUint64(&total, ops)
+			atomic.StoreUint64(&Speed, ops + 1)
 			atomic.StoreUint64(&ops, 0)
 		}
 	}()
@@ -232,7 +234,7 @@ func (server Server) receive() {
 		if neighbor != nil {
 			mq.enqueue(&Message{address, msg})
 		} else {
-			logs.Log.Warning("Received from an unknown neighbor", address)
+			//logs.Log.Warning("Received from an unknown neighbor", address)
 		}
 		time.Sleep(1)
 	}

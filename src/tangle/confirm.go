@@ -10,6 +10,7 @@ import (
 const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond
 
 func confirmOnLoad() {
+	logs.Log.Info("Starting confirmation thread")
 	go startConfirmThread()
 }
 

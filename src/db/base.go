@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"time"
 	"utils"
+	"math"
 )
 
 const (
@@ -267,7 +268,7 @@ func GetLatestKey(key byte, oldest bool, txn *badger.Txn) ([]byte, int, error) {
 Returns latest random key iterating over all items of certain type.
 The value is expected to be a unix timestamp. //When picked, the value is updated
  */
-func PickRandomKey(key byte, txn *badger.Txn) []byte {
+func PickRandomKey(key byte, maxRandom int, txn *badger.Txn) []byte {
 	tx := txn
 	if txn == nil {
 		tx = DB.NewTransaction(false)
@@ -276,7 +277,7 @@ func PickRandomKey(key byte, txn *badger.Txn) []byte {
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
 	it := tx.NewIterator(opts)
-	max := Count(key)
+	max := int(math.Min(float64(maxRandom), float64(Count(key))))
 	if max == 0 { return nil }
 	target := utils.Random(0, max)
 	step := 0
