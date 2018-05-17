@@ -73,7 +73,7 @@ func processIncomingTX (incoming *IncomingTX) {
 	var hash []byte
 	var pendingKey []byte
 	err := db.DB.Update(func(txn *badger.Txn) (e error) {
-		var key= db.GetByteKey(tx.Hash, db.KEY_HASH)
+		var key = db.GetByteKey(tx.Hash, db.KEY_HASH)
 		hash = tx.Hash
 
 		pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
@@ -91,6 +91,7 @@ func processIncomingTX (incoming *IncomingTX) {
 				_checkIncomingError(tx, err)
 				pendingMilestone = &PendingMilestone{key, trunkHashKey}
 			}
+			// TODO: discard pending, whose parent has been snapshotted
 			_, err = requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
 			_checkIncomingError(tx, err)
 			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)

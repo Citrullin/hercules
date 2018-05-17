@@ -13,8 +13,8 @@ import (
 )
 
 type Tip struct {
-	Hash []byte
-	Value int
+	Hash      []byte
+	Timestamp int
 }
 
 var tips []*Tip
@@ -37,15 +37,17 @@ func loadTips() {
 			key := item.Key()
 			v, _ := item.Value()
 
-			var value int
+			var timestamp int
 			buf := bytes.NewBuffer(v)
 			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&value)
+			err := dec.Decode(&timestamp)
 			if err == nil {
-				key := db.AsKey(key, db.KEY_BYTES)
-				TipsLocker.Lock()
-				tips = append(tips, &Tip{key,value})
-				TipsLocker.Unlock()
+				hash, err := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
+				if err == nil {
+					TipsLocker.Lock()
+					tips = append(tips, &Tip{hash, timestamp})
+					TipsLocker.Unlock()
+				}
 			}
 		}
 		return nil
@@ -57,25 +59,24 @@ func startTipRemover () {
 	flushTicker := time.NewTicker(tipRemoverInterval)
 	for range flushTicker.C {
 		logs.Log.Warning("Tips remover starting...")
-		_ = db.DB.Update(func(txn *badger.Txn) error {
-			var toRemove []*Tip
-			TipsLocker.Lock()
-			for _, tip := range tips {
-				tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Value), 0)).Nanoseconds())
-				tipAgeOK := tipAge < maxTipAge
-				origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
-				if !tipAgeOK || db.CountByPrefix(origKey) > 0 {
-					toRemove = append(toRemove, tip)
-				}
+		var toRemove []*Tip
+		TipsLocker.Lock()
+		for _, tip := range tips {
+			tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
+			tipAgeOK := tipAge < maxTipAge
+			origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
+			if !tipAgeOK || db.CountByPrefix(origKey) > 0 {
+				toRemove = append(toRemove, tip)
 			}
-			TipsLocker.Unlock()
-			logs.Log.Warning("Tips to remove:", len(toRemove))
-			for _, tip := range toRemove {
-				db.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP), txn)
+		}
+		TipsLocker.Unlock()
+		logs.Log.Warning("Tips to remove:", len(toRemove))
+		for _, tip := range toRemove {
+			err := db.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP), nil)
+			if err == nil {
 				removeTip(tip.Hash)
 			}
-			return nil
-		})
+		}
 	}
 }
 
@@ -100,13 +101,15 @@ func removeTip (hash []byte) {
 func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error {
 	key := db.GetByteKey(tx.Hash, db.KEY_APPROVEE)
 	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tx.Timestamp), 0)).Nanoseconds())
-	if tipAge < maxTipAge && db.CountByPrefix(db.GetByteKey(tx.Hash, db.KEY_APPROVEE)) < 1 {
+
+	if tipAge < maxTipAge && db.CountByPrefix(key) < 1 {
 		err := db.Put(db.AsKey(key, db.KEY_TIP), tx.Timestamp, nil, txn)
 		if err != nil {
 			return err
 		}
 		addTip(tx.Hash, tx.Timestamp)
 	}
+
 	err := db.Remove(db.GetByteKey(tx.TrunkTransaction, db.KEY_TIP), txn)
 	if err == nil {
 		removeTip(tx.Hash)

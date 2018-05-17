@@ -15,7 +15,7 @@ import (
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
-const milestoneCheckInterval = time.Duration(20) * time.Second
+const milestoneCheckInterval = time.Duration(30) * time.Second
 
 type Milestone struct {
 	TX *transaction.FastTX
@@ -23,8 +23,8 @@ type Milestone struct {
 }
 
 type PendingMilestone struct {
-	Key        []byte
-	TX2Bytes   []byte
+	Key         []byte
+	TX2BytesKey []byte
 }
 type PendingMilestoneQueue chan *PendingMilestone
 
@@ -118,6 +118,7 @@ Runs checking of pending milestones. If the
 func startMilestoneChecker() {
 	total := 0
 	db.Locker.Lock()
+	db.Locker.Unlock()
 	var pairs []PendingMilestone
 	_ = db.DB.View(func(txn *badger.Txn) (e error) {
 		opts := badger.DefaultIteratorOptions
@@ -128,8 +129,11 @@ func startMilestoneChecker() {
 			item := it.Item()
 			key := item.Key()
 			value, _ := item.Value()
-			TX2Bytes, _ := db.GetBytes(value, txn)
-			pairs = append(pairs, PendingMilestone{key, TX2Bytes})
+			k := make([]byte, len(key))
+			v := make([]byte, len(value))
+			copy(k, key)
+			copy(v, value)
+			pairs = append(pairs, PendingMilestone{k, v})
 		}
 		return nil
 	})
@@ -137,15 +141,14 @@ func startMilestoneChecker() {
 		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
 			defer func() {
 				if err := recover(); err != nil {
-					e = errors.New("Failed startup milestone check!")
+					e = errors.New("Failed milestone check!")
 				}
 			}()
-			total += preCheckMilestone(pair.Key, pair.TX2Bytes, txn)
+			total += preCheckMilestone(pair.Key, pair.TX2BytesKey, txn)
 			return nil
 		})
 	}
 	pairs = nil
-	db.Locker.Unlock()
 
 	checkMilestones()
 }
@@ -162,40 +165,44 @@ func checkMilestones () {
 			stop = true
 		}
 		if stop { break }
-
-		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
-			defer func() {
-				if err := recover(); err != nil {
-					e = errors.New("Failed queue milestone check!")
-				}
-			}()
-			key := pendingMilestone.Key
-			tx2HashBytes := pendingMilestone.TX2Bytes
-			if tx2HashBytes == nil {
-				relation, err := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
-				if err == nil {
-					tx2HashBytes = db.AsKey(relation[:16], db.KEY_HASH)
-				} else {
-					// The 0-index milestone TX relations doesn't exist.
-					// Clearly an error here!
-					db.Remove(key, txn)
-					logs.Log.Panicf("A milestone has disappeared!")
-					panic("A milestone has disappeared!")
-				}
-			}
-			preCheckMilestone(key, tx2HashBytes, txn)
-			return nil
-		})
+		incomingMilestone(pendingMilestone)
 	}
 	logs.Log.Warning("checkMilestones finish")
 	time.Sleep(milestoneCheckInterval)
-	checkMilestones()
+	startMilestoneChecker()
 }
 
-func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
+func incomingMilestone(pendingMilestone *PendingMilestone) {
+	// TODO: If confirmed, no need to check!
+	_ = db.DB.Update(func(txn *badger.Txn) (e error) {
+		defer func() {
+			if err := recover(); err != nil {
+				e = errors.New("Failed queue milestone check!")
+			}
+		}()
+		key := pendingMilestone.Key
+		TX2BytesKey := pendingMilestone.TX2BytesKey
+		if TX2BytesKey == nil {
+			relation, err := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
+			if err == nil {
+				TX2BytesKey = db.AsKey(relation[:16], db.KEY_HASH)
+			} else {
+				// The 0-index milestone TX relations doesn't exist.
+				// Clearly an error here!
+				db.Remove(key, txn)
+				logs.Log.Panicf("A milestone has disappeared!")
+				panic("A milestone has disappeared!")
+			}
+		}
+		preCheckMilestone(key, TX2BytesKey, txn)
+		return nil
+	})
+}
+
+func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 	var txHashBytes = db.AsKey(key, db.KEY_BYTES)
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := db.GetBytes(tx2HashBytes, txn)
+	tx2Bytes, err := db.GetBytes(TX2BytesKey, txn)
 	if err == nil {
 		// 3. Check that the 0-index TX also exists.
 		txBytes, err := db.GetBytes(txHashBytes, txn)
@@ -216,12 +223,12 @@ func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {
 			// The 0-index milestone TX doesn't exist.
 			// Clearly an error here!
 			// db.Remove(key, txn)
-			addPendingMilestoneToQueue(&PendingMilestone{key, tx2HashBytes})
+			addPendingMilestoneToQueue(&PendingMilestone{key, TX2BytesKey})
 			logs.Log.Panicf("A milestone has disappeared: %v", txHashBytes)
 			panic("A milestone has disappeared!")
 		}
 	} else {
-		err := db.Put(db.AsKey(tx2HashBytes, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key, nil, txn)
+		err := db.Put(db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key, nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not add pending milestone pair: %v", err)
 			panic(err)

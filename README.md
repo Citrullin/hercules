@@ -17,6 +17,7 @@
 ## Is synchronized?
 
 When there are no pending milestones left!
+ => **what about fake milestones?**
 
 ## Snapshots
 
@@ -39,4 +40,14 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 # Pending
 
-3. Tips growth: discard tips older than certian time
+3. Why in the end there are still +400 unknown/pending TXs?
+  - Maybe refs to pre-snapshot TXs? No!
+  - Wrong requests to the neighbors?
+  - Invalid PoW?
+
+3. How to mark as synchronized?
+  
+4. Adjust log levels. Cleanup.
+5. Cleanup declarations from tangle to specific files.
+6. Write comments and descriptions.
+7. Check variable names for clean code.

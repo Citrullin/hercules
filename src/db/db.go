@@ -12,6 +12,8 @@ const (
 	dbCleanupInterval = time.Duration(5) * time.Minute
 )
 
+// TODO: load snapshot
+// TODO: import snapshot data from IRI
 // TODO: (OPT) periodic snapshots
 // TODO: (OPT) write tests
 
@@ -28,7 +30,7 @@ func Load(config *DatabaseConfig) {
 	opts.Dir = config.Path
 	opts.ValueDir = config.Path
 	// TODO: only for small devices? Compare performance, add as configurable
-	// Also, tweak these: https://github.com/dgraph-io/badger#memory-usage
+	// Source: https://github.com/dgraph-io/badger#memory-usage
 	if true {
 		opts.ValueLogLoadingMode = options.FileIO
 		opts.NumLevelZeroTables = 2

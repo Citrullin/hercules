@@ -283,7 +283,6 @@ func PickRandomKey(key byte, maxRandom int, txn *badger.Txn) []byte {
 	step := 0
 	defer it.Close()
 
-	// TODO: (OPT) when some buffers (like requests) fill up to a certain point, remove half of them, maybe?
 	var result []byte = nil
 
 	prefix := []byte{key}
