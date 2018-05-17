@@ -13,11 +13,22 @@ import (
 
 const (
 	tipRequestInterval = 10
-	requestInterval = 10000
+	reRequestInterval = time.Duration(5) * time.Second
 )
 
+type PendingRequest struct {
+	Hash       []byte
+	Timestamp  int
+	LastTried  time.Time
+	LastNeighborAddr string
+}
+
 var lastTip = time.Now()
-var lastRequest = time.Now()
+var pendingRequests []*PendingRequest
+
+func pendingOnLoad () {
+	loadPendingRequests()
+}
 
 func loadPendingRequests() {
 	logs.Log.Info("Loading pending requests")
@@ -25,30 +36,39 @@ func loadPendingRequests() {
 	db.Locker.Lock()
 	defer db.Locker.Unlock()
 	requestLocker.Lock()
+	total := 0
+	added := 0
+
 	defer requestLocker.Unlock()
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_PENDING_HASH}
-		total := 0
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			total++
-			if total > 1000 { break }
-			v, _ := it.Item().Value()
+			item := it.Item()
+			v, _ := item.Value()
 			var hash []byte
 			buf := bytes.NewBuffer(v)
 			dec := gob.NewDecoder(buf)
 			err := dec.Decode(&hash)
 			if err == nil {
-				for addr := range server.Neighbors {
-					queue, ok := requestQueues[addr]
-					if !ok {
-						q := make(RequestQueue, maxQueueSize)
-						queue = &q
-						requestQueues[addr] = queue
+				timestamp, err := db.GetInt(db.AsKey(item.Key(), db.KEY_PENDING_TIMESTAMP), txn)
+				if err == nil {
+					for addr := range server.Neighbors {
+						queue, ok := requestQueues[addr]
+						if !ok {
+							q := make(RequestQueue, maxQueueSize)
+							queue = &q
+							requestQueues[addr] = queue
+						}
+						*queue <- &Request{hash, false}
 					}
-					*queue <- &Request{hash, false}
+					addPendingRequest(hash, timestamp, "")
+					added++
+				} else {
+					logs.Log.Warning("Could not load pending Tx Timestamp")
 				}
 			} else {
 				logs.Log.Warning("Could not load pending Tx Hash")
@@ -57,14 +77,12 @@ func loadPendingRequests() {
 		return nil
 	})
 
-	logs.Log.Info("Pending requests loaded")
+	logs.Log.Info("Pending requests loaded", added, total)
 }
 
 func outgoingRunner() {
 	tInterval := int(math.Max(float64(server.Speed) / 100 * tipRequestInterval, tipRequestInterval))
-	rInterval := int(math.Max(float64(server.Speed) / 100 * requestInterval, requestInterval))
 	shouldRequestTip := time.Now().Sub(lastTip) > time.Duration(tInterval) * time.Millisecond
-	shouldRequest := time.Now().Sub(lastRequest) > time.Duration(rInterval) * time.Millisecond
 	for neighbor := range server.Neighbors {
 		requestLocker.RLock()
 		requestQueue, requestOk := requestQueues[neighbor]
@@ -81,47 +99,21 @@ func outgoingRunner() {
 			reply, _ = db.GetBytes(db.GetByteKey((<-*replyQueue).Requested, db.KEY_BYTES), nil)
 		}
 		if request != nil || reply != nil {
-			msg := getMessage(reply, request, request == nil, nil)
+			msg := getMessage(reply, request, request == nil, neighbor, nil)
 			msg.Addr = neighbor
 			sendReply(msg)
 		} else if shouldRequestTip {
 			lastTip = time.Now()
-			msg := getMessage(nil, nil, true, nil)
+			msg := getMessage(nil, nil, true, neighbor,nil)
 			msg.Addr = neighbor
 			sendReply(msg)
-		} else if shouldRequest {
-			logs.Log.Warning("Injecting pending TXs...")
-			lastRequest = time.Now()
-			_ = db.DB.View(func(txn *badger.Txn) error {
-				opts := badger.DefaultIteratorOptions
-				it := txn.NewIterator(opts)
-				defer it.Close()
-				prefix := []byte{db.KEY_PENDING_HASH}
-				total := 0
-				for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-					total++
-					if total > 1000 { break }
-					value, err := it.Item().Value()
-					if err == nil {
-						var hash []byte
-						buf := bytes.NewBuffer(value)
-						dec := gob.NewDecoder(buf)
-						err = dec.Decode(&hash)
-						if err == nil && hash != nil {
-							requestLocker.Lock()
-							queue, ok := requestQueues[neighbor]
-							if !ok {
-								q := make(RequestQueue, maxQueueSize)
-								queue = &q
-								requestQueues[neighbor] = queue
-							}
-							requestLocker.Unlock()
-							*queue <- &Request{hash, false}
-						}
-					}
-				}
-				return nil
-			})
+		} else {
+			pendingRequest := getOldPending()
+			if pendingRequest != nil && pendingRequest.LastNeighborAddr != neighbor {
+				request = pendingRequest.Hash
+				pendingRequest.LastTried = time.Now()
+				pendingRequest.LastNeighborAddr = neighbor
+			}
 		}
 	}
 }
@@ -135,9 +127,11 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 			return tx.Commit(func(e error) {})
 		}()
 	}
-	if !db.Has(db.GetByteKey(hash, db.KEY_HASH), tx) { //&& !db.Has(db.GetByteKey(hash, db.KEY_PENDING), tx) {
-		err := db.Put(db.GetByteKey(hash, db.KEY_PENDING_HASH), hash, nil, txn)
-		err2 := db.Put(db.GetByteKey(hash, db.KEY_PENDING_TIMESTAMP), time.Now().Unix(), nil, txn)
+	key := db.GetByteKey(hash, db.KEY_HASH)
+	if !db.Has(key, tx) && !db.Has(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), tx) {
+		timestamp := int(time.Now().Unix())
+		err := db.Put(db.AsKey(key, db.KEY_PENDING_HASH), hash, nil, txn)
+		err2 := db.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil, txn)
 
 		if err != nil {
 			logs.Log.Error("Failed saving new TX request", err)
@@ -158,6 +152,7 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 		}
 		requestLocker.Unlock()
 		*queue <- &Request{hash, false}
+		addPendingRequest(hash, timestamp, addr)
 
 		has = false
 	}
@@ -171,7 +166,7 @@ func sendReply (msg *Message) {
 	outgoing++
 }
 
-func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
+func getMessage (resp []byte, req []byte, tip bool, addr string, txn *badger.Txn) *Message {
 	var hash []byte
 	// Try getting a weighted random tip (those with more value are preferred)
 	if resp == nil {
@@ -213,9 +208,11 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 		if tip {
 			req = hash
 		} else {
-			key, _, _ := db.GetLatestKey(db.KEY_PENDING_TIMESTAMP, true, txn)
-			if key != nil {
-				req, _ = db.GetBytes(db.AsKey(key, db.KEY_PENDING_HASH), txn)
+			pendingRequest := getOldPending()
+			if pendingRequest != nil {
+				req = pendingRequest.Hash
+				pendingRequest.LastTried = time.Now()
+				pendingRequest.LastNeighborAddr = addr
 			}
 		}
 	}
@@ -225,5 +222,51 @@ func getMessage (resp []byte, req []byte, tip bool, txn *badger.Txn) *Message {
 	if req == nil {
 		req = make([]byte, 46)
 	}
-	return &Message{&resp, &req, ""}
+	return &Message{&resp, &req, addr}
+}
+
+func (pendingRequest PendingRequest) request(addr string) {
+	queue, ok := requestQueues[addr]
+	if !ok {
+		q := make(RequestQueue, maxQueueSize)
+		queue = &q
+		requestQueues[addr] = queue
+	}
+	*queue <- &Request{pendingRequest.Hash, false}
+	pendingRequest.LastTried = time.Now()
+}
+
+func addPendingRequest (hash []byte, timestamp int, addr string) *PendingRequest {
+	pendingRequest := &PendingRequest{hash, timestamp,time.Now(), addr}
+	pendingRequestLocker.Lock()
+	pendingRequests = append(pendingRequests, pendingRequest)
+	pendingRequestLocker.Unlock()
+	return pendingRequest
+}
+
+func removePendingRequest (hash []byte) bool {
+	var which = -1
+	pendingRequestLocker.Lock()
+	defer pendingRequestLocker.Unlock()
+	for i, pendingRequest := range pendingRequests {
+		if bytes.Equal(hash, pendingRequest.Hash) {
+			which = i
+		}
+	}
+	if which > -1 {
+		pendingRequests = append(pendingRequests[0:which], pendingRequests[which+1:]...)
+		return true
+	}
+	return false
+}
+
+func getOldPending () *PendingRequest{
+	pendingRequestLocker.RLock()
+	defer pendingRequestLocker.RUnlock()
+	for _, pendingRequest := range pendingRequests {
+		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
+			return pendingRequest
+		}
+	}
+	return nil
 }

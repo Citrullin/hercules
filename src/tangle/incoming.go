@@ -36,7 +36,7 @@ func incomingRunner () {
 					db.Put(fingerprint, true, &fingerprintTTL, txn)
 				}
 				trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-				tx = transaction.TritsToFastTX(&trits, *msg.Bytes)
+				tx = transaction.TritsToTX(&trits, *msg.Bytes)
 				if !crypt.IsValidPoW(tx.Hash, MWM) {
 					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
 					return nil
@@ -79,6 +79,7 @@ func processIncomingTX (incoming *IncomingTX) {
 		pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
 		db.Remove(pendingKey, txn)
 		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
+		removePendingRequest(tx.Hash)
 
 		// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
 
@@ -140,6 +141,9 @@ func processIncomingTX (incoming *IncomingTX) {
 		if pendingKey != nil {
 			db.Put(pendingKey, hash, nil, nil)
 			db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), time.Now().Unix(), nil, nil)
+		}
+		if tx != nil {
+			addPendingRequest(tx.Hash, int(time.Now().Unix()), incoming.Addr)
 		}
 	}
 }

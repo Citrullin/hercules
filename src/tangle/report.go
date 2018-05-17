@@ -28,9 +28,9 @@ func report () {
 		}
 		replyLocker.RUnlock()
 		// TODO: have, in-memory counters instead of using db.Count
-		logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v \n",
+		logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v (%v) \n",
 			db.Count(db.KEY_HASH),
-			db.Count(db.KEY_PENDING_HASH))
+			db.Count(db.KEY_PENDING_HASH), len(pendingRequests))
 		logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
 			db.Count(db.KEY_CONFIRMED),
 			db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),

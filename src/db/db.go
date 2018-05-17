@@ -65,7 +65,6 @@ func periodicDatabaseCleanup () {
 
 func cleanupDB() {
 	Locker.Lock()
-	DB.PurgeOlderVersions()
 	DB.RunValueLogGC(0.5)
 	Locker.Unlock()
 }

@@ -44,13 +44,14 @@ type TXQueue chan *IncomingTX
 var nbWorkers = runtime.NumCPU()
 var tipBytes = convert.TrytesToBytes(strings.Repeat("9", 2673))[:1604]
 var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
-var tipFastTX = transaction.TritsToFastTX(&tipTrits, tipBytes)
+var tipFastTX = transaction.TritsToTX(&tipTrits, tipBytes)
 var fingerprintTTL = time.Duration(1) * time.Minute
 
 var srv *server.Server
 var requestQueues map[string]*RequestQueue
 var replyQueues map[string]*RequestQueue
 var requestLocker = &sync.RWMutex{}
+var pendingRequestLocker = &sync.RWMutex{}
 var replyLocker = &sync.RWMutex{}
 
 var txQueue TXQueue
@@ -69,7 +70,7 @@ func Start (s *server.Server) {
 	txQueue = make(TXQueue, maxQueueSize)
 
 	tipOnLoad()
-	loadPendingRequests()
+	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
 

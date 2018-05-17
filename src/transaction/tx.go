@@ -44,9 +44,26 @@ type FastTX struct {
 	Bytes			  []byte
 }
 
-func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
+func TritsToTX(trits *[]int, raw []byte) *FastTX {
 	return &FastTX{
 		Hash:              convert.TritsToBytes(crypt.RunHashCurl(*trits))[:49],
+		Address:           convert.TritsToBytes((*trits)[6561:6804])[:49],
+		Value:             value64((*trits)[6804:6837]),
+		Timestamp:         value((*trits)[6966:6993]),
+		CurrentIndex:      value((*trits)[6993:7020]),
+		TrunkTransaction:  convert.TritsToBytes((*trits)[7290:7533])[:49],
+		BranchTransaction: convert.TritsToBytes((*trits)[7533:7776])[:49],
+		Bundle:            convert.TritsToBytes((*trits)[7047:7290])[:49],
+		Tag:               convert.TritsToBytes((*trits)[7776:7857]),
+		ObsoleteTag:       convert.TritsToBytes((*trits)[6885:6966]),
+		SignatureMessageFragment: (*trits)[:6561],
+		Bytes: 			   raw,
+	}
+}
+
+func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
+	return &FastTX{
+		Hash:              nil,
 		Address:           convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value:             value64((*trits)[6804:6837]),
 		Timestamp:         value((*trits)[6966:6993]),

@@ -22,54 +22,56 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 			e = errors.New("Failed saving TX!")
 		}
 	}()
-	err := db.Put(db.GetByteKey(tx.Hash, db.KEY_HASH), tx.Hash, nil, txn)
+	key := db.GetByteKey(tx.Hash, db.KEY_HASH)
+	trunkKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH)
+	branchKey := db.GetByteKey(tx.BranchTransaction, db.KEY_HASH)
+
+	err := db.Put(db.AsKey(key, db.KEY_HASH), tx.Hash, nil, txn)
 	_checkSaveError(tx, err)
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_TIMESTAMP), tx.Timestamp, nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_TIMESTAMP), tx.Timestamp, nil, txn)
 	_checkSaveError(tx, err)
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_BYTES), (*raw)[:1604], nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_BYTES), (*raw)[:1604], nil, txn)
 	_checkSaveError(tx, err)
 	// TODO: delete after confirmation?:
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_VALUE), tx.Value, nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_VALUE), tx.Value, nil, txn)
 	_checkSaveError(tx, err)
 	// TODO: delete after confirmation?:
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
 			db.GetByteKey(tx.Bundle, db.KEY_BUNDLE),
-			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
+			db.AsKey(key, db.KEY_HASH)...),
 		tx.CurrentIndex, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
 			db.GetByteKey(tx.Tag, db.KEY_TAG),
-			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
+			db.AsKey(key, db.KEY_HASH)...),
 		"", nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
 			db.GetByteKey(tx.Address, db.KEY_ADDRESS),
-			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
+			db.AsKey(key, db.KEY_HASH)...),
 		tx.Value, nil, txn)
 	_checkSaveError(tx, err)
 	// TODO: delete after confirmation?:
 	err = db.Put(
-		db.GetByteKey(tx.Hash, db.KEY_RELATION),
-		append(
-			db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH),
-			db.GetByteKey(tx.BranchTransaction, db.KEY_HASH)...),
+		db.AsKey(key, db.KEY_RELATION),
+		append(trunkKey, branchKey...),
 		nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
-			db.GetByteKey(tx.TrunkTransaction, db.KEY_APPROVEE),
-			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
+			db.AsKey(trunkKey, db.KEY_APPROVEE),
+			db.AsKey(key, db.KEY_HASH)...),
 		true, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
-			db.GetByteKey(tx.BranchTransaction, db.KEY_APPROVEE),
-			db.GetByteKey(tx.Hash, db.KEY_HASH)...),
+			db.AsKey(branchKey, db.KEY_APPROVEE),
+			db.AsKey(key, db.KEY_HASH)...),
 		false, nil, txn)
 	_checkSaveError(tx, err)
 

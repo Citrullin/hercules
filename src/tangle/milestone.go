@@ -15,7 +15,10 @@ import (
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
-const milestoneCheckInterval = time.Duration(30) * time.Second
+const milestoneCheckInterval = time.Duration(20) * time.Second
+const totalMilestoneCheckInterval = time.Duration(2) * time.Minute
+
+var lastMilestoneCheck = time.Now()
 
 type Milestone struct {
 	TX *transaction.FastTX
@@ -69,7 +72,7 @@ func loadLatestMilestone (dbKey byte) {
 				txBytes, err := db.GetBytes(key, txn)
 				if err == nil {
 					trits := convert.BytesToTrits(txBytes)[:8019]
-					tx := transaction.TritsToFastTX(&trits, txBytes)
+					tx := transaction.TritsToTX(&trits, txBytes)
 					MilestoneLocker.Lock()
 					milestones[dbKey] = &Milestone{tx,ms}
 					MilestoneLocker.Unlock()
@@ -93,6 +96,9 @@ func checkIsLatestMilestone (index int, tx *transaction.FastTX, dbKey byte) bool
 	if milestone.Index < index {
 		MilestoneLocker.Lock()
 		defer MilestoneLocker.Unlock()
+		// Add milestone hash:
+		trits := convert.BytesToTrits(tx.Bytes)[:8019]
+		tx = transaction.TritsToTX(&trits, tx.Bytes)
 		milestones[dbKey] = &Milestone{tx,index}
 		logs.Log.Infof("Latest %v changed to: %v", milestoneType(dbKey), index)
 		return true
@@ -149,6 +155,7 @@ func startMilestoneChecker() {
 		})
 	}
 	pairs = nil
+	lastMilestoneCheck = time.Now()
 
 	checkMilestones()
 }
@@ -169,7 +176,11 @@ func checkMilestones () {
 	}
 	logs.Log.Warning("checkMilestones finish")
 	time.Sleep(milestoneCheckInterval)
-	startMilestoneChecker()
+	if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
+		startMilestoneChecker()
+	} else {
+		checkMilestones()
+	}
 }
 
 func incomingMilestone(pendingMilestone *PendingMilestone) {
@@ -200,12 +211,12 @@ func incomingMilestone(pendingMilestone *PendingMilestone) {
 }
 
 func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
-	var txHashBytes = db.AsKey(key, db.KEY_BYTES)
+	var txBytesKey = db.AsKey(key, db.KEY_BYTES)
 	// 2. Check if 1-index TX already exists
 	tx2Bytes, err := db.GetBytes(TX2BytesKey, txn)
 	if err == nil {
 		// 3. Check that the 0-index TX also exists.
-		txBytes, err := db.GetBytes(txHashBytes, txn)
+		txBytes, err := db.GetBytes(txBytesKey, txn)
 		if err == nil {
 
 			//Get TX objects and validate
@@ -216,7 +227,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 			// TODO: improvement: theoretically we do not need hash of tx2 - lighter version of obj?
 			tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
 
-			if checkMilestone(tx, tx2, trits2, txn) {
+			if checkMilestone(txBytesKey, tx, tx2, trits2, txn) {
 				return 1
 			}
 		} else {
@@ -224,7 +235,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 			// Clearly an error here!
 			// db.Remove(key, txn)
 			addPendingMilestoneToQueue(&PendingMilestone{key, TX2BytesKey})
-			logs.Log.Panicf("A milestone has disappeared: %v", txHashBytes)
+			logs.Log.Panicf("A milestone has disappeared: %v", txBytesKey)
 			panic("A milestone has disappeared!")
 		}
 	} else {
@@ -237,10 +248,11 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 	return 0
 }
 
-func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
+func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
+	key = db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING)
 	discardMilestone := func () {
 		panic("PANIC")
-		err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
+		err := db.Remove(key, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not remove pending milestone: %v", err)
 			panic(err)
@@ -251,16 +263,7 @@ func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []in
 	if !bytes.Equal(tx2.Address, COO_ADDRESS2_BYTES) ||
 		!bytes.Equal(tx2.TrunkTransaction, tx.BranchTransaction) ||
 		!bytes.Equal(tx2.Bundle, tx.Bundle) {
-		logs.Log.Warning(
-			"Milestone bundle verification failed for:\n ",
-			convert.BytesToTrytes(tx.Hash),
-			convert.BytesToTrytes(tx2.Hash),
-			convert.BytesToTrytes(tx2.Address),
-			convert.BytesToTrytes(COO_ADDRESS2_BYTES),
-			convert.BytesToTrytes(tx2.TrunkTransaction),
-			convert.BytesToTrytes(tx.BranchTransaction),
-			convert.BytesToTrytes(tx2.Bundle),
-			convert.BytesToTrytes(tx.Bundle))
+		logs.Log.Warning("Milestone bundle verification failed for:\n ", key)
 		discardMilestone()
 		return false
 	}
@@ -268,18 +271,18 @@ func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []in
 	// Verify milestone signature and get the index:
 	milestoneIndex := getMilestoneIndex(tx, trits)
 	if milestoneIndex < 0 {
-		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Hash))
+		logs.Log.Warning("Milestone signature verification failed for: ", key)
 		discardMilestone()
 		return false
 	}
 
 	// Save milestone (remove pending) and update latest:
-	err := db.Remove(db.GetByteKey(tx.Hash, db.KEY_EVENT_MILESTONE_PENDING), txn)
+	err := db.Remove(key, txn)
 	if err != nil {
 		logs.Log.Errorf("Could not remove pending milestone: %v", err)
 		panic(err)
 	}
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_MILESTONE), milestoneIndex, nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_MILESTONE), milestoneIndex, nil, txn)
 	if err != nil {
 		logs.Log.Errorf("Could not save milestone: %v", err)
 		panic(err)
@@ -287,7 +290,7 @@ func checkMilestone (tx *transaction.FastTX, tx2 *transaction.FastTX, trits []in
 	checkIsLatestMilestone(milestoneIndex, tx, db.KEY_MILESTONE)
 
 	// Trigger confirmations
-	err = db.Put(db.GetByteKey(tx.Hash, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
 	if err != nil {
 		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)
