@@ -61,10 +61,8 @@ func incomingRunner () {
 			incomingProcessed++
 			txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
 		}
-		if len(txQueue) > 100 {
+		if len(txQueue) > 10 {
 			time.Sleep(time.Duration(len(txQueue)) * time.Millisecond)
-		} else if len(pendingMilestoneQueue) > 50 {
-			time.Sleep(time.Duration(len(pendingMilestoneQueue)*2) * time.Millisecond)
 		}
 	}
 }

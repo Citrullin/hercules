@@ -15,6 +15,7 @@ import (
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+const milestoneCheckInterval = time.Duration(20) * time.Second
 
 type Milestone struct {
 	TX *transaction.FastTX
@@ -146,8 +147,22 @@ func startMilestoneChecker() {
 	pairs = nil
 	db.Locker.Unlock()
 
-	// Now, listen to the chan
-	for pendingMilestone := range pendingMilestoneQueue {
+	checkMilestones()
+}
+
+func checkMilestones () {
+	logs.Log.Warning("checkMilestones start")
+	stop := false
+	for !stop {
+		var pendingMilestone *PendingMilestone
+
+		select {
+		case pendingMilestone = <- pendingMilestoneQueue:
+		default:
+			stop = true
+		}
+		if stop { break }
+
 		_ = db.DB.Update(func(txn *badger.Txn) (e error) {
 			defer func() {
 				if err := recover(); err != nil {
@@ -172,6 +187,9 @@ func startMilestoneChecker() {
 			return nil
 		})
 	}
+	logs.Log.Warning("checkMilestones finish")
+	time.Sleep(milestoneCheckInterval)
+	checkMilestones()
 }
 
 func preCheckMilestone(key []byte, tx2HashBytes []byte, txn *badger.Txn) int {

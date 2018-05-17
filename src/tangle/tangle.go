@@ -68,10 +68,10 @@ func Start (s *server.Server) {
 	replyQueues = make(map[string]*RequestQueue)
 	txQueue = make(TXQueue, maxQueueSize)
 
-	milestoneOnLoad()
-	confirmOnLoad()
 	tipOnLoad()
 	loadPendingRequests()
+	milestoneOnLoad()
+	confirmOnLoad()
 
 	// TODO: without snapshot: load a snapshot from file into DB. Snapshot file loader needed.
 
@@ -81,6 +81,7 @@ func Start (s *server.Server) {
 
 	go report()
 	logs.Log.Info("Tangle started!")
+	server.Start()
 
 	go runner()
 }
@@ -93,8 +94,6 @@ func runner () {
 		default:
 		}
 		outgoingRunner()
-		if len(txQueue) < 20 || len(pendingMilestoneQueue) > 50 {
-			time.Sleep(1)
-		}
+		time.Sleep(1)
 	}
 }

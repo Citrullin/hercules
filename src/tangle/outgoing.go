@@ -13,7 +13,7 @@ import (
 
 const (
 	tipRequestInterval = 10
-	requestInterval = 2
+	requestInterval = 10000
 )
 
 var lastTip = time.Now()
@@ -31,7 +31,10 @@ func loadPendingRequests() {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_PENDING_HASH}
+		total := 0
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			total++
+			if total > 1000 { break }
 			v, _ := it.Item().Value()
 			var hash []byte
 			buf := bytes.NewBuffer(v)
@@ -53,6 +56,8 @@ func loadPendingRequests() {
 		}
 		return nil
 	})
+
+	logs.Log.Info("Pending requests loaded")
 }
 
 func outgoingRunner() {
@@ -85,14 +90,38 @@ func outgoingRunner() {
 			msg.Addr = neighbor
 			sendReply(msg)
 		} else if shouldRequest {
-			key := db.PickRandomKey(db.KEY_PENDING_HASH, 10000,nil)
-			hash, err := db.GetBytes(key, nil)
-			if err == nil {
-				lastRequest = time.Now()
-				msg := getMessage(nil, hash, true, nil)
-				msg.Addr = neighbor
-				sendReply(msg)
-			}
+			logs.Log.Warning("Injecting pending TXs...")
+			lastRequest = time.Now()
+			_ = db.DB.View(func(txn *badger.Txn) error {
+				opts := badger.DefaultIteratorOptions
+				it := txn.NewIterator(opts)
+				defer it.Close()
+				prefix := []byte{db.KEY_PENDING_HASH}
+				total := 0
+				for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+					total++
+					if total > 1000 { break }
+					value, err := it.Item().Value()
+					if err == nil {
+						var hash []byte
+						buf := bytes.NewBuffer(value)
+						dec := gob.NewDecoder(buf)
+						err = dec.Decode(&hash)
+						if err == nil && hash != nil {
+							requestLocker.Lock()
+							queue, ok := requestQueues[neighbor]
+							if !ok {
+								q := make(RequestQueue, maxQueueSize)
+								queue = &q
+								requestQueues[neighbor] = queue
+							}
+							requestLocker.Unlock()
+							*queue <- &Request{hash, false}
+						}
+					}
+				}
+				return nil
+			})
 		}
 	}
 }

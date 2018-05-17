@@ -95,6 +95,10 @@ func Create (serverConfig *ServerConfig) *Server {
 		panic(err)
 	}
 	connection = c
+	return server
+}
+
+func Start () {
 	server.listenAndReceive(1)
 
 	flushTicker = time.NewTicker(flushInterval)
@@ -124,7 +128,6 @@ func Create (serverConfig *ServerConfig) *Server {
 			}
 		}
 	}()
-	return server
 }
 
 func End () {
