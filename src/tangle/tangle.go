@@ -13,8 +13,8 @@ import (
 
 const (
 	MWM             = 14
-	maxQueueSize    = 20000
-	reportInterval  = time.Duration(10) * time.Second
+	maxQueueSize    = 1000000
+	reportInterval  = time.Duration(60) * time.Second
 	tipRemoverInterval  = time.Duration(1) * time.Minute
 	maxTipAge           = time.Duration(1) * time.Hour
 	)
@@ -95,6 +95,6 @@ func runner () {
 		default:
 		}
 		outgoingRunner()
-		time.Sleep(1)
+		time.Sleep(time.Duration(len(srv.Incoming) * 10000))
 	}
 }

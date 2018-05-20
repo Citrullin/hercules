@@ -15,8 +15,8 @@ import (
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
-const milestoneCheckInterval = time.Duration(20) * time.Second
-const totalMilestoneCheckInterval = time.Duration(2) * time.Minute
+const milestoneCheckInterval = time.Duration(10) * time.Second
+const totalMilestoneCheckInterval = time.Duration(30) * time.Minute
 
 var lastMilestoneCheck = time.Now()
 
@@ -106,11 +106,6 @@ func checkIsLatestMilestone (index int, tx *transaction.FastTX, dbKey byte) bool
 	return false
 }
 
-func startSolidMilestoneChecker () {
-	// TODO: implement and run periodic milestone checker? How to know when in sync?
-	// checkIsLatestMilestone
-}
-
 func addPendingMilestoneToQueue (pendingMilestone *PendingMilestone) {
 	go func() {
 		time.Sleep(time.Second * time.Duration(2))
@@ -161,7 +156,6 @@ func startMilestoneChecker() {
 }
 
 func checkMilestones () {
-	logs.Log.Warning("checkMilestones start")
 	stop := false
 	for !stop {
 		var pendingMilestone *PendingMilestone
@@ -174,7 +168,6 @@ func checkMilestones () {
 		if stop { break }
 		incomingMilestone(pendingMilestone)
 	}
-	logs.Log.Warning("checkMilestones finish")
 	time.Sleep(milestoneCheckInterval)
 	if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
 		startMilestoneChecker()
@@ -184,14 +177,13 @@ func checkMilestones () {
 }
 
 func incomingMilestone(pendingMilestone *PendingMilestone) {
-	// TODO: If confirmed, no need to check!
 	_ = db.DB.Update(func(txn *badger.Txn) (e error) {
 		defer func() {
 			if err := recover(); err != nil {
 				e = errors.New("Failed queue milestone check!")
 			}
 		}()
-		key := pendingMilestone.Key
+		key := db.AsKey(pendingMilestone.Key, db.KEY_EVENT_MILESTONE_PENDING)
 		TX2BytesKey := pendingMilestone.TX2BytesKey
 		if TX2BytesKey == nil {
 			relation, err := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
@@ -251,12 +243,13 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
 	key = db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING)
 	discardMilestone := func () {
-		panic("PANIC")
-		err := db.Remove(key, txn)
+		logs.Log.Error("Discarding", key)
+		err := db.Remove(key, nil)
 		if err != nil {
 			logs.Log.Errorf("Could not remove pending milestone: %v", err)
 			panic(err)
 		}
+		panic("PANIC")
 	}
 
 	// Verify correct bundle structure:

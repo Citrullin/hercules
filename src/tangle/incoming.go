@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const P_TIP_REPLY = 20
+
 func incomingRunner () {
 	for raw := range srv.Incoming {
 		data := raw.Msg[:1604]
@@ -27,22 +29,17 @@ func incomingRunner () {
 		db.Locker.Unlock()
 
 		err := db.DB.Update(func(txn *badger.Txn) (e error) {
-			var fingerprint []byte
 			isTipRequest = bytes.Equal(*msg.Bytes, tipBytes)
 
-			fingerprint = db.GetByteKey(*msg.Bytes, db.KEY_FINGERPRINT)
-			if isTipRequest || !db.Has(fingerprint, txn) {
-				if !isTipRequest {
-					db.Put(fingerprint, true, &fingerprintTTL, txn)
-				}
-				trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-				tx = transaction.TritsToTX(&trits, *msg.Bytes)
-				if !crypt.IsValidPoW(tx.Hash, MWM) {
-					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
-					return nil
-				}
-				tipRequest := isTipRequest || bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
+			trits := convert.BytesToTrits(*msg.Bytes)[:8019]
+			tx = transaction.TritsToTX(&trits, *msg.Bytes)
+			if !crypt.IsValidPoW(tx.Hash, MWM) {
+				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
+				return nil
+			}
+			tipRequest := isTipRequest || bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
 
+			if !tipRequest || utils.Random(0, 100) < P_TIP_REPLY {
 				req := make([]byte, 49)
 				copy(req, *msg.Requested)
 				replyLocker.Lock()
@@ -59,10 +56,7 @@ func incomingRunner () {
 		})
 		if err == nil && !isTipRequest && tx != nil {
 			incomingProcessed++
-			txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
-		}
-		if len(txQueue) > 10 {
-			time.Sleep(time.Duration(len(txQueue)) * time.Millisecond)
+			processIncomingTX(&IncomingTX{tx, raw.Addr, msg.Bytes})
 		}
 	}
 }
@@ -87,10 +81,10 @@ func processIncomingTX (incoming *IncomingTX) {
 			err := saveTX(tx, incoming.Bytes, txn)
 			_checkIncomingError(tx, err)
 			if isMaybeMilestone(tx) {
-				trunkHashKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
-				err := db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkHashKey, nil, txn)
+				trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
+				err := db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil, txn)
 				_checkIncomingError(tx, err)
-				pendingMilestone = &PendingMilestone{key, trunkHashKey}
+				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
 			// TODO: discard pending, whose parent has been snapshotted
 			_, err = requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
@@ -110,7 +104,7 @@ func processIncomingTX (incoming *IncomingTX) {
 
 			parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
 			if err == nil {
-				pendingMilestone = &PendingMilestone{parentKey, key}
+				pendingMilestone = &PendingMilestone{parentKey, db.AsKey(key, db.KEY_BYTES)}
 			}
 
 			// Re-broadcast new TX. Not always.

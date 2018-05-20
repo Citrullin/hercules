@@ -43,3 +43,5 @@ func report () {
 		logs.Log.Debugf("TIPS:          %v\n", db.Count(db.KEY_TIP))
 	}
 }
+
+var pendingPairs [][]byte

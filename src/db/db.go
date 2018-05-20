@@ -4,8 +4,8 @@ import (
 	"sync"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"log"
 	"time"
+	"logs"
 )
 
 const (
@@ -26,6 +26,7 @@ var DB *badger.DB
 var Locker = &sync.Mutex{}
 
 func Load(config *DatabaseConfig) {
+	logs.Log.Info("Loading database")
 	opts := badger.DefaultOptions
 	opts.Dir = config.Path
 	opts.ValueDir = config.Path
@@ -33,21 +34,22 @@ func Load(config *DatabaseConfig) {
 	// Source: https://github.com/dgraph-io/badger#memory-usage
 	if true {
 		opts.ValueLogLoadingMode = options.FileIO
-		opts.NumLevelZeroTables = 2
-		opts.NumLevelZeroTablesStall = 4
-		opts.NumMemtables = 2
-		opts.NumCompactors = 1
+		opts.NumLevelZeroTables = 3
+		opts.NumLevelZeroTablesStall = 6
+		opts.NumMemtables = 3
+		opts.NumCompactors = 2
 		opts.TableLoadingMode = options.FileIO
-		opts.MaxTableSize = 64 << 15
-		opts.ValueLogFileSize = 1 << 25
+		//opts.MaxTableSize = 64 << 15
+		//opts.ValueLogFileSize = 1 << 25
 	}
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Fatal(err)
+		logs.Log.Fatal(err)
 	}
 	DB = db
 	cleanupDB()
 	go periodicDatabaseCleanup()
+	logs.Log.Info("Database loaded")
 }
 
 func End() {
@@ -64,9 +66,11 @@ func periodicDatabaseCleanup () {
 }
 
 func cleanupDB() {
+	logs.Log.Info("Cleanup database started")
 	Locker.Lock()
 	DB.RunValueLogGC(0.5)
 	Locker.Unlock()
+	logs.Log.Info("Cleanup database finished")
 }
 
 func Snapshot () {

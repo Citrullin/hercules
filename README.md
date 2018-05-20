@@ -40,14 +40,27 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 # Pending
 
+1. TIPs not removed before restart. Why?
+
 3. Why in the end there are still +400 unknown/pending TXs?
-  - Maybe refs to pre-snapshot TXs? No!
-  - Wrong requests to the neighbors?
-  - Invalid PoW?
+    - WRONG Fingerprinting
 
 3. How to mark as synchronized?
-  
+    - No pending milestones + unknown confirmed < 20
+ 
+
+## Cleanup
+
 4. Adjust log levels. Cleanup.
 5. Cleanup declarations from tangle to specific files.
 6. Write comments and descriptions.
 7. Check variable names for clean code.
+
+## TODO:
+
+1. Load/save IRI-compatible snapshots
+2. Remove post-confirmation data (smaller DB)
+3. Better configuration (config file)
+4. API
+5. Auto-snapshots
+6. PoW - attachToTangle

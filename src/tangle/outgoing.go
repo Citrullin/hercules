@@ -8,12 +8,11 @@ import (
 	"time"
 	"bytes"
 	"encoding/gob"
-	"math"
 )
 
 const (
-	tipRequestInterval = 10
-	reRequestInterval = time.Duration(5) * time.Second
+	tipRequestInterval = time.Duration(3) * time.Second
+	reRequestInterval = time.Duration(30) * time.Second
 )
 
 type PendingRequest struct {
@@ -36,17 +35,17 @@ func loadPendingRequests() {
 	db.Locker.Lock()
 	defer db.Locker.Unlock()
 	requestLocker.Lock()
+	defer requestLocker.Unlock()
+
 	total := 0
 	added := 0
 
-	defer requestLocker.Unlock()
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_PENDING_HASH}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			total++
 			item := it.Item()
 			v, _ := item.Value()
 			var hash []byte
@@ -73,6 +72,7 @@ func loadPendingRequests() {
 			} else {
 				logs.Log.Warning("Could not load pending Tx Hash")
 			}
+			total++
 		}
 		return nil
 	})
@@ -81,8 +81,9 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
-	tInterval := int(math.Max(float64(server.Speed) / 100 * tipRequestInterval, tipRequestInterval))
-	shouldRequestTip := time.Now().Sub(lastTip) > time.Duration(tInterval) * time.Millisecond
+	var pendingRequest *PendingRequest
+	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
+
 	for neighbor := range server.Neighbors {
 		requestLocker.RLock()
 		requestQueue, requestOk := requestQueues[neighbor]
@@ -98,21 +99,31 @@ func outgoingRunner() {
 		if replyOk && len(*replyQueue) > 0 {
 			reply, _ = db.GetBytes(db.GetByteKey((<-*replyQueue).Requested, db.KEY_BYTES), nil)
 		}
+		if request == nil {
+			pendingRequest = getOldPending()
+			if pendingRequest != nil {
+				pendingRequest.LastTried = time.Now()
+				pendingRequest.LastNeighborAddr = neighbor
+				request = pendingRequest.Hash
+			}
+		}
 		if request != nil || reply != nil {
 			msg := getMessage(reply, request, request == nil, neighbor, nil)
 			msg.Addr = neighbor
 			sendReply(msg)
-		} else if shouldRequestTip {
-			lastTip = time.Now()
-			msg := getMessage(nil, nil, true, neighbor,nil)
-			msg.Addr = neighbor
-			sendReply(msg)
-		} else {
-			pendingRequest := getOldPending()
+		} else if len(srv.Incoming) < 50 {
+			pendingRequest = getOldPending()
 			if pendingRequest != nil && pendingRequest.LastNeighborAddr != neighbor {
-				request = pendingRequest.Hash
 				pendingRequest.LastTried = time.Now()
 				pendingRequest.LastNeighborAddr = neighbor
+				msg := getMessage(nil, pendingRequest.Hash, false, neighbor, nil)
+				msg.Addr = neighbor
+				sendReply(msg)
+			} else if shouldRequestTip {
+				lastTip = time.Now()
+				msg := getMessage(nil, nil, true, neighbor,nil)
+				msg.Addr = neighbor
+				sendReply(msg)
 			}
 		}
 	}
@@ -121,6 +132,9 @@ func outgoingRunner() {
 func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
 	tx := txn
 	has = true
+	if bytes.Equal(hash, tipFastTX.Hash) {
+		return has, nil
+	}
 	if txn == nil {
 		tx = db.DB.NewTransaction(true)
 		defer func () error {
