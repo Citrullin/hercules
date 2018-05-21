@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 	"logs"
+	"github.com/spf13/viper"
 )
 
 type Request struct {
@@ -15,8 +16,13 @@ type Request struct {
 
 var api *gin.Engine
 var srv *http.Server
+var config *viper.Viper
 
-func Start (address string) {
+func Start (apiConfig *viper.Viper) {
+	config = apiConfig
+	if !config.GetBool("debug") {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	// TODO: allow password protection for remote access
 	// TODO: allow certain command to be accessed locally only
 	api = gin.Default()
@@ -47,14 +53,13 @@ func Start (address string) {
 		}
 	})
 	srv = &http.Server{
-		Addr:    address,
+		Addr:    ":" + config.GetString("port"),
 		Handler: api,
 	}
 	go func() {
 		// service connections
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logs.Log.Fatalf("API Server listen: %s\n", err)
-			panic(err)
+			logs.Log.Fatal("API Server Error", err)
 		}
 	}()
 }

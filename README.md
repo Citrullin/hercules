@@ -58,9 +58,9 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 ## TODO:
 
+3. Better configuration (config file): https://github.com/spf13/viper
 1. Load/save IRI-compatible snapshots
 2. Remove post-confirmation data (smaller DB)
-3. Better configuration (config file)
 4. API
 5. Auto-snapshots
 6. PoW - attachToTangle

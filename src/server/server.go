@@ -7,6 +7,7 @@ import (
 	"time"
 	"sync"
 	"logs"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -41,11 +42,6 @@ type NeighborTrackingMessage struct {
 	Invalid int
 }
 
-type ServerConfig struct {
-	Neighbors []string
-	Port string
-}
-
 type messageQueue chan *Message
 type neighborTrackingQueue chan *NeighborTrackingMessage
 
@@ -68,12 +64,12 @@ var mq messageQueue
 var NeighborTrackingQueue neighborTrackingQueue
 var NeighborsLock sync.RWMutex
 var server *Server
-var config *ServerConfig
+var config *viper.Viper
 var Neighbors map[string]*Neighbor
 var connection net.PacketConn
 var ended = false
 
-func Create (serverConfig *ServerConfig) *Server {
+func Create (serverConfig *viper.Viper) *Server {
 	// TODO: add Hostname support
 	// TODO: allow hostname Neighbors, periodically check for changed IP
 	//ip, err := net.LookupIP("192.168.1.1")
@@ -86,11 +82,11 @@ func Create (serverConfig *ServerConfig) *Server {
 		Outgoing: make(messageQueue, maxQueueSize)}
 
 	Neighbors = make(map[string]*Neighbor)
-	for _, v := range config.Neighbors {
+	for _, v := range config.GetStringSlice("neighbors") {
 		AddNeighbor(v)
 	}
 
-	c, err := net.ListenPacket("udp", ":" + config.Port)
+	c, err := net.ListenPacket("udp", ":" + config.GetString("port"))
 	if err != nil {
 		panic(err)
 	}

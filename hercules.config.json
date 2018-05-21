@@ -1,0 +1,28 @@
+{
+  "api": {
+    "auth": {
+      "password": null,
+      "username": null
+    },
+    "debug": false,
+    "limitRemoteAccess": [
+      "getNeighbors",
+      "addNeighbors",
+      "removeNeighbors"
+    ],
+    "port": 14265
+  },
+  "database": {
+    "path": "data"
+  },
+  "log": {
+    "level": "INFO"
+  },
+  "node": {
+    "neighbors": [],
+    "port": 14600
+  },
+  "snapshots" : {
+    "path": "snapshots"
+  }
+}
