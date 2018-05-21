@@ -34,13 +34,13 @@ func Load(config *DatabaseConfig) {
 	// Source: https://github.com/dgraph-io/badger#memory-usage
 	if true {
 		opts.ValueLogLoadingMode = options.FileIO
-		opts.NumLevelZeroTables = 3
-		opts.NumLevelZeroTablesStall = 6
-		opts.NumMemtables = 3
+		opts.NumLevelZeroTables = 2
+		opts.NumLevelZeroTablesStall = 3
+		opts.NumMemtables = 2
 		opts.NumCompactors = 2
 		opts.TableLoadingMode = options.FileIO
-		//opts.MaxTableSize = 64 << 15
-		//opts.ValueLogFileSize = 1 << 25
+		//opts.MaxTableSize = 64 << 12
+		//opts.ValueLogFileSize = 1 << 24
 	}
 	db, err := badger.Open(opts)
 	if err != nil {

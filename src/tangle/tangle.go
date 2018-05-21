@@ -9,6 +9,7 @@ import (
 	"transaction"
 	"logs"
 	"sync"
+	"db"
 )
 
 const (
@@ -45,7 +46,7 @@ var nbWorkers = runtime.NumCPU()
 var tipBytes = convert.TrytesToBytes(strings.Repeat("9", 2673))[:1604]
 var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
 var tipFastTX = transaction.TritsToTX(&tipTrits, tipBytes)
-var fingerprintTTL = time.Duration(1) * time.Minute
+var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 
 var srv *server.Server
 var requestQueues map[string]*RequestQueue

@@ -6,6 +6,7 @@ import (
 	"time"
 	"logs"
 	"github.com/pkg/errors"
+	"bytes"
 )
 const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond
 
@@ -81,6 +82,7 @@ func confirm (key []byte, txn *badger.Txn) error {
 }
 
 func confirmChild (key []byte, txn *badger.Txn) error {
+	if bytes.Equal(key, tipHashKey) { return nil }
 	if db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) { return nil }
 	_, err := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
 	if err == nil {
