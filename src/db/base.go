@@ -48,7 +48,10 @@ const (
 	// OTHER
 	KEY_BALANCE                   = byte(100) // address hash -> int64
 	KEY_SPENT                     = byte(101) // address hash -> bool
-	KEY_SNAPSHOT                  = byte(120) // hash -> hash+int64+hash+int64+...
+	KEY_ADDRESS_BYTES              = byte(105) // address hash -> hash bytes
+	KEY_SNAPSHOT_BALANCE          = byte(120) // hash -> int64
+	KEY_SNAPSHOT_SPENT            = byte(121) // hash -> bool
+	KEY_SNAPSHOT_DATE             = byte(129) // hash -> int64
 	KEY_TEST                      = byte(187) // hash -> bool
 	KEY_OTHER                     = byte(255) // XXXX -> any bytes
 )
@@ -194,6 +197,28 @@ func Remove(key []byte, txn *badger.Txn) error {
 		defer tx.Commit(func(e error) {})
 	}
 	return tx.Delete(key)
+}
+
+func RemoveAll(key byte) error {
+	var keys [][]byte
+	err := DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{key}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			keys = append(keys, it.Item().Key())
+		}
+		return nil
+	})
+	if err != nil { return err }
+	for _, key := range keys {
+		err := Remove(key, nil)
+		if err != nil { return err }
+	}
+	return nil
+
 }
 
 func Count(key byte) int {

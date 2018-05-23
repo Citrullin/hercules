@@ -32,10 +32,10 @@ func main () {
 
 func StartHercules () {
 	logs.Log.Info("Starting Hercules. Please wait...")
-	db.Load(&db.DatabaseConfig{config.GetString("database.path"), 10})
-	srv := server.Create(config.Sub("node"))
-	tangle.Start(srv)
-	api.Start(config.Sub("api"))
+	db.Load(config)
+	srv := server.Create(config)
+	tangle.Start(srv, config)
+	api.Start(config)
 
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, os.Interrupt)

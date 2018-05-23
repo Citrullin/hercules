@@ -76,6 +76,8 @@ func processIncomingTX (incoming *IncomingTX) {
 		removePendingRequest(tx.Hash)
 
 		// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
+		// Also remove, KEY_EVENT_CONFIRMATION_PENDING, and KEY_EVENT_MILESTONE_PAIR_PENDING
+		// Remove the associated KEY_EVENT_MILESTONE_PENDING, if present
 
 		if !db.Has(key, txn) {
 			err := saveTX(tx, incoming.Bytes, txn)
@@ -86,7 +88,6 @@ func processIncomingTX (incoming *IncomingTX) {
 				_checkIncomingError(tx, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			// TODO: discard pending, whose parent has been snapshotted
 			_, err = requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
 			_checkIncomingError(tx, err)
 			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)
@@ -133,11 +134,10 @@ func processIncomingTX (incoming *IncomingTX) {
 		}
 	} else {
 		if pendingKey != nil {
+			nowUnix := time.Now().Unix()
 			db.Put(pendingKey, hash, nil, nil)
-			db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), time.Now().Unix(), nil, nil)
-		}
-		if tx != nil {
-			addPendingRequest(tx.Hash, int(time.Now().Unix()), incoming.Addr)
+			db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
+			addPendingRequest(hash, int(nowUnix), incoming.Addr)
 		}
 	}
 }

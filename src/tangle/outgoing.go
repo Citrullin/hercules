@@ -30,6 +30,7 @@ func pendingOnLoad () {
 }
 
 func loadPendingRequests() {
+	// TODO: if pending is pending for too long, remove it from the loop
 	logs.Log.Info("Loading pending requests")
 
 	db.Locker.Lock()
@@ -130,6 +131,8 @@ func outgoingRunner() {
 }
 
 func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
+	// TODO: discard pending, whose parent has been snapshotted
+	// Use KEY_EDGE
 	tx := txn
 	has = true
 	if bytes.Equal(hash, tipFastTX.Hash) {
@@ -251,27 +254,39 @@ func (pendingRequest PendingRequest) request(addr string) {
 }
 
 func addPendingRequest (hash []byte, timestamp int, addr string) *PendingRequest {
-	pendingRequest := &PendingRequest{hash, timestamp,time.Now(), addr}
 	pendingRequestLocker.Lock()
+	defer pendingRequestLocker.Unlock()
+
+	var which = findPendingRequest(hash)
+	if which >= 0 { return nil } // Avoid double-add
+
+	pendingRequest := &PendingRequest{hash, timestamp,time.Now(), addr}
 	pendingRequests = append(pendingRequests, pendingRequest)
-	pendingRequestLocker.Unlock()
 	return pendingRequest
 }
 
 func removePendingRequest (hash []byte) bool {
-	var which = -1
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
-	for i, pendingRequest := range pendingRequests {
-		if bytes.Equal(hash, pendingRequest.Hash) {
-			which = i
-		}
-	}
+	var which = findPendingRequest(hash)
 	if which > -1 {
-		pendingRequests = append(pendingRequests[0:which], pendingRequests[which+1:]...)
+		if which >= len(pendingRequests) - 1 {
+			pendingRequests = pendingRequests[0:which]
+		} else {
+			pendingRequests = append(pendingRequests[0:which], pendingRequests[which+1:]...)
+		}
 		return true
 	}
 	return false
+}
+
+func findPendingRequest (hash []byte) int {
+	for i, pendingRequest := range pendingRequests {
+		if bytes.Equal(hash, pendingRequest.Hash) {
+			return i
+		}
+	}
+	return -1
 }
 
 func getOldPending () *PendingRequest{

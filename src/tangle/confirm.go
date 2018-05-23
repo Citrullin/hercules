@@ -37,6 +37,9 @@ func startConfirmThread() {
 }
 
 func confirm (key []byte, txn *badger.Txn) error {
+	_, confirmedError := txn.Get(db.AsKey(key, db.KEY_CONFIRMED))
+	if confirmedError == nil { return nil }
+
 	timestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 	value, err2 := db.GetInt64(db.AsKey(key, db.KEY_VALUE), txn)
 	address, err3 := db.GetBytes(db.AsKey(key, db.KEY_ADDRESS_HASH), txn)
@@ -49,6 +52,7 @@ func confirm (key []byte, txn *badger.Txn) error {
 	}
 	err = db.Put(db.AsKey(key, db.KEY_CONFIRMED), timestamp, nil, txn)
 	err2 = db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
+	addressHash := db.GetByteKey(address, db.KEY_BALANCE)
 
 	if err != nil || err2 != nil {
 		logs.Log.Errorf("Could not save confirmation status!")
@@ -57,19 +61,20 @@ func confirm (key []byte, txn *badger.Txn) error {
 	}
 
 	if value != 0 {
-		_, err := db.IncrBy(db.AsKey(address, db.KEY_BALANCE), value, false, txn)
+		_, err := db.IncrBy(addressHash, value, false, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not update account balance: %v", err)
 			return errors.New("Could not update account balance!")
 		}
 		if value < 0 {
-			err := db.Put(db.AsKey(address, db.KEY_SPENT), true, nil, txn)
+			err := db.Put(db.AsKey(addressHash, db.KEY_SPENT), true, nil, txn)
 			if err != nil {
 				logs.Log.Errorf("Could not update account spent status: %v", err)
 				return errors.New("Could not update account spent status!")
 			}
 		}
 	}
+
 	err = confirmChild(relation[:16], txn)
 	if err != nil {
 		return err
@@ -77,6 +82,15 @@ func confirm (key []byte, txn *badger.Txn) error {
 	err2 = confirmChild(relation[16:], txn)
 	if err2 != nil {
 		return err2
+	}
+	if err := db.Remove(db.AsKey(key, db.KEY_VALUE), txn); err != nil {
+		return err
+	}
+	if err := db.Remove(db.AsKey(key, db.KEY_ADDRESS_HASH), txn); err != nil {
+		return err
+	}
+	if err := db.Remove(db.AsKey(key, db.KEY_RELATION), txn); err != nil {
+		return err
 	}
 	return nil
 }

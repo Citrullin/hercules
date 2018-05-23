@@ -6,6 +6,8 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"time"
 	"logs"
+	"github.com/spf13/viper"
+	"os"
 )
 
 const (
@@ -17,30 +19,31 @@ const (
 // TODO: (OPT) periodic snapshots
 // TODO: (OPT) write tests
 
-type DatabaseConfig struct {
-	Path       string
-	SavePeriod int
-}
-
 var DB *badger.DB
+var config *viper.Viper
 var Locker = &sync.Mutex{}
 
-func Load(config *DatabaseConfig) {
+func Load(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")
+
+	config = cfg
+	logs.Log.Debug("Ensuring TX path: ", config.GetString("database.txpath"))
+	os.MkdirAll(config.GetString("database.txpath"), os.ModePerm)
+
 	opts := badger.DefaultOptions
-	opts.Dir = config.Path
-	opts.ValueDir = config.Path
+	opts.Dir = config.GetString("database.path")
+	opts.ValueDir = opts.Dir
 	// TODO: only for small devices? Compare performance, add as configurable
 	// Source: https://github.com/dgraph-io/badger#memory-usage
 	if true {
 		opts.ValueLogLoadingMode = options.FileIO
-		opts.NumLevelZeroTables = 2
-		opts.NumLevelZeroTablesStall = 3
-		opts.NumMemtables = 2
-		opts.NumCompactors = 2
 		opts.TableLoadingMode = options.FileIO
-		//opts.MaxTableSize = 64 << 12
-		//opts.ValueLogFileSize = 1 << 24
+		opts.NumMemtables = 1
+		opts.NumLevelZeroTables = 1
+		opts.NumLevelZeroTablesStall = 2
+		opts.NumCompactors = 1
+		//opts.MaxTableSize = 64 << 10
+		opts.ValueLogFileSize = 1 << 27
 	}
 	db, err := badger.Open(opts)
 	if err != nil {

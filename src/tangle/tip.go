@@ -58,7 +58,7 @@ func loadTips() {
 func startTipRemover () {
 	flushTicker := time.NewTicker(tipRemoverInterval)
 	for range flushTicker.C {
-		logs.Log.Warning("Tips remover starting...")
+		logs.Log.Warning("Tips remover starting... Total tips:", len(tips))
 		var toRemove []*Tip
 		TipsLocker.Lock()
 		for _, tip := range tips {
@@ -83,19 +83,32 @@ func startTipRemover () {
 func addTip (hash []byte, value int) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
+	if findTip(hash) >= 0 { return }
+
 	tips = append(tips, &Tip{hash, value})
 }
 
 func removeTip (hash []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
-	b := tips[:0]
-	for _, x := range tips {
-		if !bytes.Equal(x.Hash, hash) {
-			b = append(b, x)
+
+	var which = findTip(hash)
+	if which > -1 {
+		if which >= len(tips) - 1 {
+			tips = tips[0:which]
+		} else {
+			tips = append(tips[0:which], tips[which+1:]...)
 		}
 	}
-	tips = b
+}
+
+func findTip (hash []byte) int {
+	for i, tip := range tips {
+		if bytes.Equal(hash, tip.Hash) {
+			return i
+		}
+	}
+	return -1
 }
 
 func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error {
@@ -112,11 +125,11 @@ func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error 
 
 	err := db.Remove(db.GetByteKey(tx.TrunkTransaction, db.KEY_TIP), txn)
 	if err == nil {
-		removeTip(tx.Hash)
+		removeTip(tx.TrunkTransaction)
 	}
 	err = db.Remove(db.GetByteKey(tx.BranchTransaction, db.KEY_TIP), txn)
 	if err == nil {
-		removeTip(tx.Hash)
+		removeTip(tx.BranchTransaction)
 	}
 	return nil
 }

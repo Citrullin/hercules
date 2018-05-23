@@ -20,7 +20,7 @@ var config *viper.Viper
 
 func Start (apiConfig *viper.Viper) {
 	config = apiConfig
-	if !config.GetBool("debug") {
+	if !config.GetBool("api.debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	// TODO: allow password protection for remote access
@@ -53,7 +53,7 @@ func Start (apiConfig *viper.Viper) {
 		}
 	})
 	srv = &http.Server{
-		Addr:    ":" + config.GetString("port"),
+		Addr:    ":" + config.GetString("api.port"),
 		Handler: api,
 	}
 	go func() {

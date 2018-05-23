@@ -82,11 +82,12 @@ func Create (serverConfig *viper.Viper) *Server {
 		Outgoing: make(messageQueue, maxQueueSize)}
 
 	Neighbors = make(map[string]*Neighbor)
-	for _, v := range config.GetStringSlice("neighbors") {
+	logs.Log.Debug("Initial neighbors", config.GetStringSlice("node.neighbors"))
+	for _, v := range config.GetStringSlice("node.neighbors") {
 		AddNeighbor(v)
 	}
 
-	c, err := net.ListenPacket("udp", ":" + config.GetString("port"))
+	c, err := net.ListenPacket("udp", ":" + config.GetString("node.port"))
 	if err != nil {
 		panic(err)
 	}

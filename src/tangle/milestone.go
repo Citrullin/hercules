@@ -117,6 +117,8 @@ func addPendingMilestoneToQueue (pendingMilestone *PendingMilestone) {
 Runs checking of pending milestones. If the
  */
 func startMilestoneChecker() {
+	// TODO: if milestone is pending  for too long, remove it from the loop
+	// TODO: also remove the events for milestone pairs
 	total := 0
 	db.Locker.Lock()
 	db.Locker.Unlock()

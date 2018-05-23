@@ -40,14 +40,13 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 # Pending
 
-1. TIPs not removed before restart. Why?
+## TODO:
 
-3. Why in the end there are still +400 unknown/pending TXs?
-    - WRONG Fingerprinting
-
-3. How to mark as synchronized?
-    - No pending milestones + unknown confirmed < 20
- 
+1. Load snapshots
+2. Remove post-confirmation data (smaller DB)
+4. API
+5. Auto-snapshots
+6. PoW - attachToTangle
 
 ## Cleanup
 
@@ -55,12 +54,3 @@ This makes sure we have all milestones and confirmed TXs in the database.
 5. Cleanup declarations from tangle to specific files.
 6. Write comments and descriptions.
 7. Check variable names for clean code.
-
-## TODO:
-
-3. Better configuration (config file): https://github.com/spf13/viper
-1. Load/save IRI-compatible snapshots
-2. Remove post-confirmation data (smaller DB)
-4. API
-5. Auto-snapshots
-6. PoW - attachToTangle

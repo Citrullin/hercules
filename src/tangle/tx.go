@@ -32,10 +32,8 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	_checkSaveError(tx, err)
 	err = db.Put(db.AsKey(key, db.KEY_BYTES), (*raw)[:1604], nil, txn)
 	_checkSaveError(tx, err)
-	// TODO: delete after confirmation?:
 	err = db.Put(db.AsKey(key, db.KEY_VALUE), tx.Value, nil, txn)
 	_checkSaveError(tx, err)
-	// TODO: delete after confirmation?:
 	err = db.Put(db.AsKey(key, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(
@@ -56,7 +54,6 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 			db.AsKey(key, db.KEY_HASH)...),
 		tx.Value, nil, txn)
 	_checkSaveError(tx, err)
-	// TODO: delete after confirmation?:
 	err = db.Put(
 		db.AsKey(key, db.KEY_RELATION),
 		append(trunkKey, branchKey...),
