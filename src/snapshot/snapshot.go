@@ -35,12 +35,16 @@ func Start(cfg *viper.Viper) {
     go trimTXRunner()
 
     // TODO: remove this:
+    /*
     logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
         db.Count(db.KEY_CONFIRMED),
         db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
         db.Count(db.KEY_PENDING_CONFIRMED))
-    //err := MakeSnapshot(1527310000)
-    //logs.Log.Debug("saveSnapshot result:", err)
+    err := MakeSnapshot(1527210000)
+    if err != nil {
+        logs.Log.Fatalf("SNAPSHOT PANIC:", err)
+    }
+    */
 
     checkPendingSnapshot()
 
@@ -48,21 +52,12 @@ func Start(cfg *viper.Viper) {
     if len(snapshotToLoad) > 0 {
         LoadSnapshot(snapshotToLoad)
     }
+    // TODO: possibility to download the snapshot from a public node
+    // TODO: possibility to load an IRI snapshot.
 
     if !checkDatabaseSnapshot() {
         logs.Log.Fatalf("Database is in an inconsistent state. Try deleting it and loading a snapshot.")
     }
-
-    //now := time.Now()
-    //weekAgo := now.Add(-time.Duration(24*7) * time.Hour)
-    //logs.Log.Warningf("One week ago (%v): %v", weekAgo, weekAgo.Unix())
-    //err := MakeSnapshot(1526711179)
-    //logs.Log.Warning("saveSnapshot result:", err)
-
-    //loadIRISnapshot("snapshotMainnet.txt","previousEpochsSpentAddresses.txt", 1525017600)
-    // err := SaveSnapshot(config.GetString("snapshots.path"))
-    //err := LoadSnapshot("snapshots/1525017600.snap")
-    //logs.Log.Warning("saveSnapshot result:", err)
 }
 
 /*

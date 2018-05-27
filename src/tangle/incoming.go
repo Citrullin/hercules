@@ -78,8 +78,11 @@ func processIncomingTX (incoming *IncomingTX) {
 
 		snapTime := snapshot.GetSnapshotTimestamp(txn)
 		if tx.Timestamp != 0 && snapTime >= tx.Timestamp  {
-			logs.Log.Warningf("Got old TX %v vs %v, %v", tx.Timestamp, snapTime, tx.Value)
-			if tx.Value == 0 {
+			logs.Log.Warningf("Got old TX older than snapshot: %v vs %v, Value: %v",
+				tx.Timestamp, snapTime, tx.Value)
+			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
+			if tx.Value == 0 && db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
+				logs.Log.Warning("Since the value is zero and there is no corresponding bundle, skipping this TX.")
 				db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 				db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 				db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
@@ -90,6 +93,9 @@ func processIncomingTX (incoming *IncomingTX) {
 				return nil
 			} else {
 				logs.Log.Errorf("Got old TX not accounted for %v vs %v, %v", tx.Timestamp, snapTime, convert.BytesToTrytes(tx.Hash))
+				logs.Log.Errorf("Maybe you are snapshotting too early?")
+				logs.Log.Panicf("This is critical as DB consistency is compromised. Value %v, TX: %v",
+					tx.Value, tx.Hash)
 			}
 		}
 

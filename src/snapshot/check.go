@@ -177,9 +177,9 @@ func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 /*
 Returns whether the current tangle is synchronized
  */
- // TODO: unknown pending == 0?
 func IsSynchronized () bool {
-	return db.Count(db.KEY_HASH) > 1000 &&
+	return db.Count(db.KEY_HASH) > 10000 &&
+		db.Count(db.KEY_PENDING_CONFIRMED) == 0 &&
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) == 0 &&
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING) == 0
 }
