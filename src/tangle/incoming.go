@@ -11,6 +11,7 @@ import (
 	"logs"
 	"utils"
 	"time"
+	"snapshot"
 )
 
 const P_TIP_REPLY = 20
@@ -75,9 +76,21 @@ func processIncomingTX (incoming *IncomingTX) {
 		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
 		removePendingRequest(tx.Hash)
 
-		// TODO: check if the TX is recent (younger than snapshot). Otherwise drop.
-		// Also remove, KEY_EVENT_CONFIRMATION_PENDING, and KEY_EVENT_MILESTONE_PAIR_PENDING
-		// Remove the associated KEY_EVENT_MILESTONE_PENDING, if present
+		snapTime := snapshot.GetSnapshotTimestamp(txn)
+		if tx.Timestamp != 0 && snapTime >= tx.Timestamp  {
+			logs.Log.Warningf("Got old TX %v vs %v, %v", tx.Timestamp, snapTime, tx.Value)
+			if tx.Value == 0 {
+				db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
+				db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
+				db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+				parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+				if err == nil {
+					db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
+				}
+			} else {
+				logs.Log.Errorf("Got old TX not accounted for %v vs %v, %v", tx.Timestamp, snapTime, convert.BytesToTrytes(tx.Hash))
+			}
+		}
 
 		if !db.Has(key, txn) {
 			err := saveTX(tx, incoming.Bytes, txn)

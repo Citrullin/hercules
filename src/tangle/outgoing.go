@@ -131,8 +131,6 @@ func outgoingRunner() {
 }
 
 func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
-	// TODO: discard pending, whose parent has been snapshotted
-	// Use KEY_EDGE
 	tx := txn
 	has = true
 	if bytes.Equal(hash, tipFastTX.Hash) {
@@ -292,10 +290,12 @@ func findPendingRequest (hash []byte) int {
 func getOldPending () *PendingRequest{
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
-	for _, pendingRequest := range pendingRequests {
+	for i, pendingRequest := range pendingRequests {
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
+		// TODO: OK to put this limit? Make it less for low-end devices
+		if i >= 2000 { return nil }
 	}
 	return nil
 }

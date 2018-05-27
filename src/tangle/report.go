@@ -41,6 +41,8 @@ func report () {
 			db.Count(db.KEY_EVENT_MILESTONE_PENDING),
 			len(pendingMilestoneQueue))
 		logs.Log.Debugf("TIPS:          %v\n", db.Count(db.KEY_TIP))
+		logs.Log.Debugf("PENDING TRIMS: %v,",
+			db.Count(db.KEY_EVENT_TRIM_PENDING))
 	}
 }
 

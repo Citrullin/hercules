@@ -13,6 +13,7 @@ import (
 	"logs"
 	"github.com/spf13/viper"
 	"encoding/json"
+	"snapshot"
 )
 
 var config *viper.Viper
@@ -34,7 +35,10 @@ func StartHercules () {
 	logs.Log.Info("Starting Hercules. Please wait...")
 	db.Load(config)
 	srv := server.Create(config)
+
+	snapshot.Start(config)
 	tangle.Start(srv, config)
+	server.Start()
 	api.Start(config)
 
 	ch := make(chan os.Signal, 10)

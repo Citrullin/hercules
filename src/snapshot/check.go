@@ -51,7 +51,8 @@ func checkDatabaseSnapshot () bool {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true
 	} else {
-		logs.Log.Info("Database snapshot integrity check failed")
+		logs.Log.Errorf("Database snapshot integrity check failed: %v should be %v", total, TOTAL_IOTAS)
+		logs.Log.Fatal("The database is in an inconsistent state now :(. Dying...")
 		return false
 	}
 }
@@ -132,4 +133,52 @@ func checkSnapshotFileIntegrity (path string) error {
 	}
 
 	return nil
+}
+
+/*
+Checks if there is a snapshot lock present.
+Yes:
+If lock file is present, run LoadSnapshot.
+Otherwise run MakeSnapshot.
+ */
+func checkPendingSnapshot () {
+	timestamp, filename := IsLocked(nil)
+	if timestamp >= 0 {
+		if len(filename) > 0 {
+			newFilename := config.GetString("snapshots.loadFile")
+			if len(newFilename) > 0 {
+				filename = newFilename
+			}
+			logs.Log.Info("Found pending snapshot lock. Trying to continue... ", filename)
+			LoadSnapshot(filename)
+		} else {
+			logs.Log.Info("Found pending snapshot lock. Trying to continue... ", timestamp)
+			MakeSnapshot(timestamp)
+		}
+	}
+}
+
+/*
+Returns if the given timestamp is more recent than the current database snapshot.
+ */
+func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
+	current := GetSnapshotTimestamp(txn)
+	return timestamp > current
+}
+
+/*
+Returns if the given timestamp is more recent than the current database snapshot.
+ */
+func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
+	current := GetSnapshotTimestamp(txn)
+	return timestamp >= current
+}
+
+/*
+Returns whether the current tangle is synchronized
+ */
+func IsSynchronized () bool {
+	return db.Count(db.KEY_HASH) > 1000 &&
+		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
+		db.Count(db.KEY_EVENT_MILESTONE_PENDING) == 0
 }

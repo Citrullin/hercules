@@ -17,19 +17,17 @@ func trimTXRunner () {
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
 		defer it.Close()
-		prefix := []byte{db.KEY_EDGE}
+		prefix := []byte{db.KEY_EVENT_TRIM_PENDING}
 		total := 0
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			total++
 			hashKey := db.AsKey(it.Item().Key(), db.KEY_HASH)
-			logs.Log.Debug("LOADING", total, hashKey)
 			edgeTransactions <- &hashKey
 		}
 		return nil
 	})
 	logs.Log.Debug("Loaded trimmable TXs", len(edgeTransactions))
 	for hashKey := range edgeTransactions {
-		logs.Log.Debug("TRIMMING", hashKey, len(edgeTransactions))
 		trimTX(*hashKey)
 	}
 }
@@ -38,12 +36,17 @@ func trimTXRunner () {
 Removes all data from the database that is before a given timestamp
  */
 func trimData (timestamp int64) error {
-	return db.DB.Update(func(txn *badger.Txn) error {
+	var txs [][]byte
+	var total = 0
+	var found = 0
+
+	err := db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_TIMESTAMP}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			total++
 			item := it.Item()
 			k := item.Key()
 			v, err := item.Value()
@@ -54,9 +57,11 @@ func trimData (timestamp int64) error {
 				err := dec.Decode(&txTimestamp)
 				if err == nil {
 					if int64(txTimestamp) <= timestamp {
-						err := db.Put(db.AsKey(k, db.KEY_EDGE), true, nil, nil)
-						hashKey := db.AsKey(k, db.KEY_HASH)
-						edgeTransactions <- &hashKey
+						key := db.AsKey(k, db.KEY_EVENT_TRIM_PENDING)
+						if !db.Has(key, txn) {
+							txs = append(txs, key)
+							found++
+						}
 						if err != nil {
 							logs.Log.Error("Could not save pending edge transaction!")
 							return err
@@ -73,6 +78,28 @@ func trimData (timestamp int64) error {
 		}
 		return nil
 	})
+	if err != nil { return err }
+
+	logs.Log.Infof("Scheduling to trim %v transactions", found)
+	txn := db.DB.NewTransaction(true)
+	for _, k := range txs {
+		err := db.Put(k, true, nil, txn)
+		if err != nil {
+			if err == badger.ErrTxnTooBig {
+				_ = txn.Commit(func(e error) {})
+				txn = db.DB.NewTransaction(true)
+				err := db.Put(k, true, nil, txn)
+				if err != nil { return err }
+			} else {
+				return err
+			}
+		}
+		hashKey := db.AsKey(k, db.KEY_HASH)
+		edgeTransactions <- &hashKey
+	}
+	_ = txn.Commit(func(e error) {})
+
+	return nil
 }
 
 func trimTX (hashKey []byte) error {
@@ -85,7 +112,7 @@ func trimTX (hashKey []byte) error {
 	}
 	return db.DB.Update(func(txn *badger.Txn) error {
 		db.Remove(hashKey, txn)
-		db.Remove(db.AsKey(hashKey, db.KEY_EDGE), txn)
+		db.Remove(db.AsKey(hashKey, db.KEY_EVENT_TRIM_PENDING), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_TIMESTAMP), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_BYTES), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_VALUE), txn)

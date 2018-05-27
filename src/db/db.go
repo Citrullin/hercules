@@ -7,7 +7,6 @@ import (
 	"time"
 	"logs"
 	"github.com/spf13/viper"
-	"os"
 )
 
 const (
@@ -27,8 +26,6 @@ func Load(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")
 
 	config = cfg
-	logs.Log.Debug("Ensuring TX path: ", config.GetString("database.txpath"))
-	os.MkdirAll(config.GetString("database.txpath"), os.ModePerm)
 
 	opts := badger.DefaultOptions
 	opts.Dir = config.GetString("database.path")
@@ -74,10 +71,5 @@ func cleanupDB() {
 	DB.RunValueLogGC(0.5)
 	Locker.Unlock()
 	logs.Log.Info("Cleanup database finished")
-}
-
-func Snapshot () {
-	Locker.Lock()
-	Locker.Unlock()
 }
 

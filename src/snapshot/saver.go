@@ -54,6 +54,9 @@ func SaveSnapshot (snapshotDir string) error {
 				dec := gob.NewDecoder(buf)
 				err := dec.Decode(&value)
 				if err == nil {
+					// Do not save zero-value addresses
+					if value == 0 { continue }
+
 					item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
 					if err != nil {
 						logs.Log.Error("Could not get an address hash value from database!", err)

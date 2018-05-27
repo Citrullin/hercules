@@ -73,34 +73,18 @@ func Start (s *server.Server, cfg *viper.Viper) {
 	replyQueues = make(map[string]*RequestQueue)
 	txQueue = make(TXQueue, maxQueueSize)
 
-	//loadIRISnapshot("snapshotMainnet.txt","previousEpochsSpentAddresses.txt", 1525017600)
-	//err := snapshot.SaveSnapshot(config.GetString("snapshots.path"))
-	//snapshot.OnSnapshotsLoad()
-	//err := snapshot.LoadSnapshot("snapshots/1525017600.snap")
-	//logs.Log.Fatal("saveSnapshot result:", err)
-	/*
-	for {
-		time.Sleep(time.Second)
-	}
-	return
-	*/
-
 	tipOnLoad()
 	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
-
-	// TODO: without snapshot: load a snapshot from file into DB. Snapshot file loader needed.
 
 	for i := 0; i < nbWorkers; i++ {
 		go incomingRunner()
 	}
 
 	go report()
-	logs.Log.Info("Tangle started!")
-	server.Start()
-
 	go runner()
+	logs.Log.Info("Tangle started!")
 }
 
 func runner () {

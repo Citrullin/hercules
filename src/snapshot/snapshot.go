@@ -3,6 +3,9 @@ package snapshot
 import (
     "time"
     "logs"
+    "github.com/spf13/viper"
+    "db"
+    "github.com/dgraph-io/badger"
 )
 
 const (
@@ -14,11 +17,115 @@ const (
     MIN_SPENT_ADDRESSES = 521970
 )
 
+var keySnapshotDate = []byte{db.KEY_SNAPSHOT_DATE}
+var keySnapshotLock = []byte{db.KEY_SNAPSHOT_LOCK}
+var keySnapshotFile = []byte{db.KEY_SNAPSHOT_FILE}
+
 var edgeTransactions chan *[]byte
+var config *viper.Viper
+var CurrentTimestamp = 0
 
-
-func OnSnapshotsLoad () {
+func Start(cfg *viper.Viper) {
+    config = cfg
     logs.Log.Debug("Loading snapshots module")
-    edgeTransactions = make(chan *[]byte)
+    edgeTransactions = make(chan *[]byte, 10000000)
+
+    CurrentTimestamp = GetSnapshotTimestamp(nil)
+
+    // TODO: fail if no snapshot present. Require IRI or Hercules snapshot loaded
+    // TODO: remove or check on each start?
+    //checkDatabaseSnapshot()
+
     go trimTXRunner()
+
+    // TODO: remove this:
+    //err := MakeSnapshot(1526711179)
+    //logs.Log.Fatal("saveSnapshot result:", err)
+
+    checkPendingSnapshot()
+
+    snapshotToLoad := config.GetString("snapshots.loadFile")
+    if len(snapshotToLoad) > 0 {
+        LoadSnapshot(snapshotToLoad)
+    }
+
+    //now := time.Now()
+    //weekAgo := now.Add(-time.Duration(24*7) * time.Hour)
+    //logs.Log.Warningf("One week ago (%v): %v", weekAgo, weekAgo.Unix())
+    //err := MakeSnapshot(1526711179)
+    //logs.Log.Warning("saveSnapshot result:", err)
+
+    //loadIRISnapshot("snapshotMainnet.txt","previousEpochsSpentAddresses.txt", 1525017600)
+    // err := SaveSnapshot(config.GetString("snapshots.path"))
+    //err := LoadSnapshot("snapshots/1525017600.snap")
+    //logs.Log.Warning("saveSnapshot result:", err)
+}
+
+/*
+Sets the current snapshot date in the database
+*/
+func SetSnapshotTimestamp(timestamp int, txn *badger.Txn) error {
+    err := db.Put(keySnapshotDate, timestamp, nil, txn)
+    if err == nil {
+        CurrentTimestamp = timestamp
+    }
+    return err
+}
+
+
+/*
+Returns timestamp if snapshot lock is present. Otherwise negative number.
+If this is a file lock (snapshot being loaded from a file)
+ */
+func IsLocked (txn *badger.Txn) (timestamp int, filename string) {
+    return GetSnapshotLock(txn), GetSnapshotFileLock(txn)
+}
+
+/*
+Creates a snapshot lock in the database
+*/
+func Lock(timestamp int, filename string, txn *badger.Txn) error {
+    err := db.Put(keySnapshotLock, timestamp, nil, txn)
+    if err != nil { return err }
+    return db.Put(keySnapshotFile, filename, nil, txn)
+}
+
+/*
+Removes a snapshot lock in the database
+*/
+func Unlock(txn *badger.Txn) error {
+    err := db.Remove(keySnapshotLock, txn)
+    if err != nil { return err }
+    return db.Remove(keySnapshotFile, txn)
+}
+
+/*
+Returns the date unix timestamp of the last snapshot
+ */
+func GetSnapshotLock (txn *badger.Txn) int {
+    timestamp, err := db.GetInt(keySnapshotLock, txn)
+    if err != nil { return -1 }
+    return timestamp
+}
+
+/*
+Returns the date unix timestamp of the last snapshot
+ */
+func GetSnapshotTimestamp(txn *badger.Txn) int {
+    if CurrentTimestamp > 0 {
+        return CurrentTimestamp
+    }
+
+    timestamp, err := db.GetInt(keySnapshotDate, txn)
+    if err != nil { return -1 }
+    return timestamp
+}
+
+/*
+Returns the date unix timestamp of the last snapshot
+ */
+func GetSnapshotFileLock (txn *badger.Txn) string {
+    filename, err := db.GetString(keySnapshotFile, txn)
+    if err != nil { return "" }
+    return filename
 }

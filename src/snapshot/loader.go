@@ -6,29 +6,49 @@ import (
 	"logs"
 	"github.com/pkg/errors"
 	"time"
+	"bufio"
+	"io"
+	"strings"
+	"strconv"
+	"convert"
+	"os"
 )
 
 func LoadSnapshot (path string) error {
-	// TODO: write lock to the database. If this lock is present at load, the database is inconsistent!
-	logs.Log.Debug("Loading snapshot", path)
+	logs.Log.Info("Loading snapshot from", path)
 	timestamp, err := checkSnapshotFile(path)
 	if err != nil { return err }
 	logs.Log.Debug("Timestamp:", timestamp)
+
+	if !IsNewerThanSnapshot(int(timestamp), nil) {
+		logs.Log.Infof("The given snapshot (%v) timestamp is older than the current one. Skipping", path)
+		return nil
+	}
+	Lock(int(timestamp), path, nil)
+
 	db.Locker.Lock()
 	defer db.Locker.Unlock()
 
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)
 
-	logs.Log.Debug("Saving edge TXs")
+	logs.Log.Debug("Saving edge TXs...")
 	err = trimData(timestamp)
 	logs.Log.Debug("Saved edge TXs", len(edgeTransactions))
 	if err != nil { return err }
 
-	// TODO: 4. Load snapshot data
+	err = doLoadSnapshot(path)
+	if err != nil { return err }
 
 	if checkDatabaseSnapshot() {
-		return nil
+		return db.DB.Update(func(txn *badger.Txn) error {
+			err:= SetSnapshotTimestamp(int(timestamp), txn)
+			if err != nil { return err }
+
+			err = Unlock(txn)
+			if err != nil { return err }
+			return nil
+		})
 	} else {
 		return errors.New("failed database snapshot integrity check")
 	}
@@ -58,4 +78,58 @@ func loadSpentSnapshot(address []byte) error {
 		if err != nil { return err }
 		return nil
 	})
+}
+
+func doLoadSnapshot (path string) error{
+	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		logs.Log.Fatalf("open file error: %v", err)
+		return err
+	}
+	defer f.Close()
+
+	err = db.RemoveAll(db.KEY_BALANCE)
+	err = db.RemoveAll(db.KEY_SNAPSHOT_BALANCE)
+	if err != nil {
+		return err
+	}
+
+	values := true
+	rd := bufio.NewReader(f)
+	var total int64 = 0
+	var totalSpent int64 = 0
+	for {
+		line, err := rd.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			logs.Log.Fatalf("read file line error: %v", err)
+			return err
+		}
+		if line == SNAPSHOT_SEPARATOR {
+			values = false
+			continue
+		}
+		if values {
+			tokens := strings.Split(line, ";")
+			address := convert.TrytesToBytes(tokens[0])[:49]
+			value, err := strconv.ParseInt(tokens[1], 10, 64)
+			if err != nil { return err }
+			total += value
+			loadValueSnapshot(address, value)
+		} else {
+			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49])
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	logs.Log.Debugf("Snapshot total value: %v", total)
+	logs.Log.Debugf("Snapshot total spent addresses: %v", totalSpent)
+
+	return nil
 }
