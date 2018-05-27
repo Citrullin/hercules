@@ -218,7 +218,6 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 			tx := transaction.TritsToFastTX(&trits, txBytes)
 
 			trits2 := convert.BytesToTrits(tx2Bytes)[:8019]
-			// TODO: improvement: theoretically we do not need hash of tx2 - lighter version of obj?
 			tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
 
 			if checkMilestone(txBytesKey, tx, tx2, trits2, txn) {

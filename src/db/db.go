@@ -13,9 +13,6 @@ const (
 	dbCleanupInterval = time.Duration(5) * time.Minute
 )
 
-// TODO: load snapshot
-// TODO: import snapshot data from IRI
-// TODO: (OPT) periodic snapshots
 // TODO: (OPT) write tests
 
 var DB *badger.DB

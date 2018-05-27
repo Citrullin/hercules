@@ -59,7 +59,6 @@ var replyLocker = &sync.RWMutex{}
 
 var txQueue TXQueue
 
-// TODO: get rid of these?
 var incoming = 0
 var incomingProcessed = 0
 var saved = 0

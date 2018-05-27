@@ -32,7 +32,7 @@ func Report () {
 		logs.Log.Debugf("PEER O QUEUE:  %v - %v \n", i, len(*queue))
 	}
 	replyLocker.RUnlock()
-	// TODO: have, in-memory counters instead of using db.Count
+	// TODO: (OPT) have, in-memory counters instead of using db.Count
 	logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v (%v) \n",
 		db.Count(db.KEY_HASH),
 		db.Count(db.KEY_PENDING_HASH), len(pendingRequests))

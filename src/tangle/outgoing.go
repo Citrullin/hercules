@@ -41,7 +41,7 @@ func loadPendingRequests() {
 	total := 0
 	added := 0
 
-	_ = db.DB.View(func(txn *badger.Txn) error {
+	_ = db.DB.Update(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
@@ -75,6 +75,7 @@ func loadPendingRequests() {
 			}
 			total++
 		}
+		// TODO: check unknown pending with the DB and remove/schedule confirmation if hash has been found?
 		return nil
 	})
 
@@ -294,7 +295,7 @@ func getOldPending () *PendingRequest{
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
-		// TODO: OK to put this limit? Make it less for low-end devices
+		// TODO: (OPT) Make it less for low-end devices?
 		if i >= 2000 { return nil }
 	}
 	return nil

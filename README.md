@@ -42,11 +42,18 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 ## TODO:
 
-1. Load snapshots
-2. Remove post-confirmation data (smaller DB)
-4. API
-5. Auto-snapshots
+1. Regular auto-snapshots while running the tangle?
+    - No. Since if there is no internet connection, there is no way to know when there were no TXs.
+    - Alternatively one has to keep track of the incoming TXs.
+    - Let it be a problem for the snapshotters
+
+4. API: including the snapshots API, password protection, duration, checks, etc.
+5. Check snapshot integrity: script to compare local api address values vs remote.
+
 6. PoW - attachToTangle
+7. Server: hostname support
+
+8. Small devices support: config settings
 
 ## Cleanup
 
