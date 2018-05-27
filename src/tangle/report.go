@@ -41,7 +41,7 @@ func Report () {
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
 		db.Count(db.KEY_PENDING_CONFIRMED))
 	logs.Log.Debugf("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
-		milestones[db.KEY_MILESTONE].Index,
+		LatestMilestone.Index,
 		db.Count(db.KEY_MILESTONE),
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING),
 		len(pendingMilestoneQueue))

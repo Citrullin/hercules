@@ -10,8 +10,9 @@ import (
 )
 
 type Request struct {
-	Command string
-	Uris    []string
+	Command      string
+	Uris         []string
+	Addresses    []string
 }
 
 var api *gin.Engine
@@ -36,6 +37,8 @@ func Start (apiConfig *viper.Viper) {
 				removeNeighbors(request, c)
 			} else if request.Command == "getNeighbors" {
 				getNeighbors(request, c)
+			} else if request.Command == "getBalances" {
+				getBalances(request, c)
 			} else if request.Command == "getNodeInfo" {
 				// TODO: add missing fields to getInfo API
 				c.JSON(http.StatusOK, gin.H{

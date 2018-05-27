@@ -26,10 +26,65 @@ var lastTip = time.Now()
 var pendingRequests []*PendingRequest
 
 func pendingOnLoad () {
+	//checkPendingTXs()
 	loadPendingRequests()
 }
 
+func checkPendingTXs () {
+	db.Locker.Lock()
+	defer db.Locker.Unlock()
+
+	total := 0
+	missing := 0
+	var seen [][]byte
+
+	var hasSeen = func (key []byte) bool {
+		if seen == nil { return false }
+		for _, k := range seen {
+			if bytes.Equal(k, key) { return true }
+		}
+		return false
+	}
+
+	_ = db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_RELATION}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			total++
+			item := it.Item()
+			v, _ := item.Value()
+			var relation []byte
+			buf := bytes.NewBuffer(v)
+			dec := gob.NewDecoder(buf)
+			err := dec.Decode(&relation)
+			if err == nil {
+				trunkKey := db.AsKey(relation[:16], db.KEY_HASH)
+				branchKey := db.AsKey(relation[16:], db.KEY_HASH)
+				_, errTrunk := db.GetBytes(trunkKey, txn)
+				_, errBranch := db.GetBytes(branchKey, txn)
+				if errTrunk != nil {
+					missing ++
+				}
+				if errBranch != nil {
+					missing ++
+				}
+				if !hasSeen(trunkKey) {
+					seen = append(seen, trunkKey)
+				}
+				if !hasSeen(branchKey) {
+					seen = append(seen, branchKey)
+				}
+			}
+		}
+		return nil
+	})
+	logs.Log.Errorf("MISSING %v / %v, SEEN %v", missing, total, seen)
+}
+
 func loadPendingRequests() {
+	// TODO: if pending confirmed is pending for too long, remove it from the loop
 	// TODO: if pending is pending for too long, remove it from the loop
 	logs.Log.Info("Loading pending requests")
 
@@ -189,8 +244,8 @@ func getMessage (resp []byte, req []byte, tip bool, addr string, txn *badger.Txn
 	}
 	// Try getting latest milestone
 	if resp == nil {
-		milestone, ok := milestones[db.KEY_MILESTONE]
-		if ok && milestone.TX != nil {
+		milestone := LatestMilestone
+		if milestone.TX != nil && milestone.TX != tipFastTX {
 			resp = milestone.TX.Bytes
 			if req == nil {
 				hash = milestone.TX.Hash

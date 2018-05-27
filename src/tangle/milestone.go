@@ -35,30 +35,28 @@ var COO_ADDRESS_BYTES = convert.TrytesToBytes(COO_ADDRESS)[:49]
 var COO_ADDRESS2_BYTES = convert.TrytesToBytes(COO_ADDRESS2)[:49]
 var pendingMilestoneQueue PendingMilestoneQueue
 
-var milestones map[byte]*Milestone
+var LatestMilestone Milestone
 var MilestoneLocker = &sync.Mutex{}
 
 func milestoneOnLoad() {
 	logs.Log.Info("Loading milestones")
-	// TODO: milestone from snapshot?
-	milestones = make(map[byte]*Milestone)
 	pendingMilestoneQueue = make(PendingMilestoneQueue, maxQueueSize)
 
-	loadLatestMilestone(db.KEY_MILESTONE)
+	loadLatestMilestone()
 
 	//go startSolidMilestoneChecker()
 	go startMilestoneChecker()
 }
 
-func loadLatestMilestone (dbKey byte) {
-	logs.Log.Infof("Loading latest %v...", milestoneType(dbKey))
+func loadLatestMilestone () {
+	logs.Log.Infof("Loading latest milestone...")
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		latest := 0
-		milestones[dbKey] = &Milestone{nil,latest}
+		LatestMilestone = Milestone{tipFastTX,latest}
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
-		prefix := []byte{dbKey}
+		prefix := []byte{db.KEY_MILESTONE}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			key := item.Key()
@@ -74,7 +72,7 @@ func loadLatestMilestone (dbKey byte) {
 					trits := convert.BytesToTrits(txBytes)[:8019]
 					tx := transaction.TritsToTX(&trits, txBytes)
 					MilestoneLocker.Lock()
-					milestones[dbKey] = &Milestone{tx,ms}
+					LatestMilestone = Milestone{tx,ms}
 					MilestoneLocker.Unlock()
 					latest = ms
 				}
@@ -82,25 +80,25 @@ func loadLatestMilestone (dbKey byte) {
 		}
 		return nil
 	})
-	logs.Log.Infof("Loaded latest %v: %v", milestoneType(dbKey), milestones[dbKey].Index)
+	logs.Log.Infof("Loaded latest milestone: %v",  LatestMilestone.Index)
 }
 
-func getLatestMilestone(dbKey byte) *Milestone {
+func getLatestMilestone() *Milestone {
 	MilestoneLocker.Lock()
 	defer MilestoneLocker.Unlock()
-	return milestones[dbKey]
+	return &LatestMilestone
 }
 
-func checkIsLatestMilestone (index int, tx *transaction.FastTX, dbKey byte) bool {
-	milestone := getLatestMilestone(dbKey)
+func checkIsLatestMilestone (index int, tx *transaction.FastTX) bool {
+	milestone := getLatestMilestone()
 	if milestone.Index < index {
 		MilestoneLocker.Lock()
 		defer MilestoneLocker.Unlock()
 		// Add milestone hash:
 		trits := convert.BytesToTrits(tx.Bytes)[:8019]
 		tx = transaction.TritsToTX(&trits, tx.Bytes)
-		milestones[dbKey] = &Milestone{tx,index}
-		logs.Log.Infof("Latest %v changed to: %v", milestoneType(dbKey), index)
+		LatestMilestone = Milestone{tx,index}
+		logs.Log.Infof("Latest milestone changed to: %v", index)
 		return true
 	}
 	return false
@@ -281,7 +279,7 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 		logs.Log.Errorf("Could not save milestone: %v", err)
 		panic(err)
 	}
-	checkIsLatestMilestone(milestoneIndex, tx, db.KEY_MILESTONE)
+	checkIsLatestMilestone(milestoneIndex, tx)
 
 	// Trigger confirmations
 	err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
@@ -319,14 +317,4 @@ func getMilestoneIndex (tx *transaction.FastTX, trits []int) int {
 
 func isMaybeMilestone(tx *transaction.FastTX) bool {
 	return bytes.Equal(tx.Address, COO_ADDRESS_BYTES)
-}
-
-func milestoneType (dbKey byte) string {
-	if dbKey == db.KEY_SOLID_MILESTONE {
-		return "solid milestone"
-	} else if dbKey == db.KEY_MILESTONE {
-		return "milestone"
-	} else {
-		return "Unknown"
-	}
 }
