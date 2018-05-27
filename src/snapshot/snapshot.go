@@ -32,21 +32,25 @@ func Start(cfg *viper.Viper) {
 
     CurrentTimestamp = GetSnapshotTimestamp(nil)
 
-    // TODO: fail if no snapshot present. Require IRI or Hercules snapshot loaded
-    // TODO: remove or check on each start?
-    //checkDatabaseSnapshot()
-
     go trimTXRunner()
 
     // TODO: remove this:
-    //err := MakeSnapshot(1526711179)
-    //logs.Log.Fatal("saveSnapshot result:", err)
+    logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
+        db.Count(db.KEY_CONFIRMED),
+        db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
+        db.Count(db.KEY_PENDING_CONFIRMED))
+    //err := MakeSnapshot(1527310000)
+    //logs.Log.Debug("saveSnapshot result:", err)
 
     checkPendingSnapshot()
 
     snapshotToLoad := config.GetString("snapshots.loadFile")
     if len(snapshotToLoad) > 0 {
         LoadSnapshot(snapshotToLoad)
+    }
+
+    if !checkDatabaseSnapshot() {
+        logs.Log.Fatalf("Database is in an inconsistent state. Try deleting it and loading a snapshot.")
     }
 
     //now := time.Now()

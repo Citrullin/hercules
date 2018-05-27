@@ -13,6 +13,7 @@ import (
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
+	// TODO: fail if the database already exists.
 	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer")
 	db.Locker.Lock()
 	defer db.Locker.Unlock()

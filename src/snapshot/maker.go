@@ -54,7 +54,7 @@ func MakeSnapshot (timestamp int) error {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_TIMESTAMP}
-		logs.Log.Debug("Collecting all bundles before the snapshot horizon...")
+		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
@@ -89,9 +89,9 @@ func MakeSnapshot (timestamp int) error {
 				return err
 			}
 		}
-		logs.Log.Debugf("Found %v bundles. Colleting corresponsing transactions...", len(bundles))
+		logs.Log.Debugf("Found %v value bundles. Collecting corresponding transactions...", len(bundles))
 		for _, bundleHash := range bundles {
-			bundleTxs, err := loadAllFromBundle(bundleHash, txn)
+			bundleTxs, err := loadAllFromBundle(bundleHash, timestamp, txn)
 			if err != nil { return err }
 			txs = append(txs, bundleTxs...)
 		}
@@ -99,15 +99,14 @@ func MakeSnapshot (timestamp int) error {
 	})
 	if err != nil { return err }
 
-	// TODO: change to debug
-	logs.Log.Fatalf("Found %v transactions. Applying to snapshot...", len(txs))
+	logs.Log.Debugf("Found %v value transactions. Applying to previous snapshot...", len(txs))
 	for _, kv := range txs {
 		var trimKey []byte
 		err := db.DB.Update(func(txn *badger.Txn) error {
 			// First: update snapshot balances
 			address, err := db.GetBytes(db.AsKey(kv.key, db.KEY_ADDRESS_HASH), txn)
-
 			if err != nil { return err }
+
 			addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_BALANCE)
 
 			_, err = db.IncrBy(addressKey, kv.value, false, txn)
@@ -137,7 +136,7 @@ func MakeSnapshot (timestamp int) error {
 			err = Unlock(txn)
 			if err != nil { return err }
 			path := config.GetString("snapshots.path")
-			err = SaveSnapshot(path)
+			err = SaveSnapshot(path, timestamp)
 			if err != nil { return err }
 			logs.Log.Info("Snapshot finished and saved in", path)
 			return nil
@@ -147,7 +146,7 @@ func MakeSnapshot (timestamp int) error {
 	}
 }
 
-func loadAllFromBundle (bundleHash []byte, txn *badger.Txn) ([]KeyValue, error) {
+func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]KeyValue, error) {
 	var totalValue int64 = 0
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
@@ -159,6 +158,15 @@ func loadAllFromBundle (bundleHash []byte, txn *badger.Txn) ([]KeyValue, error) 
 		k := it.Item().Key()
 		key := make([]byte, 16)
 		copy(key, k[16:])
+		txTimestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
+		if err != nil {
+			return nil, err
+		}
+		// Some of the TXs from the bundle are in the future! Do not use.
+		if txTimestamp > timestamp {
+			logs.Log.Debugf("One of the TXs is younger than snapshot: %v. Skipping this bundle", txTimestamp)
+			return nil, nil
+		}
 		valueKey := db.AsKey(key, db.KEY_VALUE)
 		value, err := db.GetInt64(valueKey, txn)
 		if err == nil {
@@ -171,32 +179,9 @@ func loadAllFromBundle (bundleHash []byte, txn *badger.Txn) ([]KeyValue, error) 
 			return nil, err
 		}
 	}
+	// Bundle not yet complete, do not use!
 	if totalValue != 0 {
-		logs.Log.Warningf(convert.BytesToTrytes(bundleHash), totalValue)
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := db.GetByteKey(bundleHash, db.KEY_BUNDLE)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			var index int64
-			k := it.Item().Key()
-			v, _ := it.Item().Value()
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&index)
-
-			key := make([]byte, 16)
-			copy(key, k[16:])
-			valueKey := db.AsKey(key, db.KEY_VALUE)
-			value, err := db.GetInt64(valueKey, txn)
-			if err == nil {
-				if value != 0 && db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn){
-					hash,_ := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
-					logs.Log.Warningf("   -> %v: %v -> %v", index, convert.BytesToTrytes(hash)[:81], value)
-				}
-			}
-		}
+		logs.Log.Debugf("A bundle is incomplete (non-zero sum). Skipping...")
 		return nil, nil
 	}
 	return txs, nil

@@ -57,7 +57,7 @@ func confirm (key []byte, txn *badger.Txn) error {
 	relation, err4 := db.GetBytes(db.AsKey(key, db.KEY_RELATION), txn)
 	if err != nil || err2 != nil || err3 != nil || err4 != nil {
 		// Imminent database inconsistency: Warn!
-		logs.Log.Errorf("Value-TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!")
+		logs.Log.Error("TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!", key)
 		return errors.New("TX parts missing for confirmation!")
 	}
 

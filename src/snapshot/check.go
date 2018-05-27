@@ -179,6 +179,6 @@ Returns whether the current tangle is synchronized
  */
 func IsSynchronized () bool {
 	return db.Count(db.KEY_HASH) > 1000 &&
-		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
+		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) == 0 &&
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING) == 0
 }

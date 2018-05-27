@@ -110,9 +110,11 @@ func trimTX (hashKey []byte) error {
 		trits := convert.BytesToTrits(txBytes)[:8019]
 		tx = transaction.TritsToTX(&trits, txBytes)
 	}
+	//logs.Log.Debug("TRIMMING", hashKey)
 	return db.DB.Update(func(txn *badger.Txn) error {
 		db.Remove(hashKey, txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_EVENT_TRIM_PENDING), txn)
+		db.Remove(db.AsKey(hashKey, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_TIMESTAMP), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_BYTES), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_VALUE), txn)

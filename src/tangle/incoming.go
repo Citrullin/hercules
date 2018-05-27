@@ -87,6 +87,7 @@ func processIncomingTX (incoming *IncomingTX) {
 				if err == nil {
 					db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
 				}
+				return nil
 			} else {
 				logs.Log.Errorf("Got old TX not accounted for %v vs %v, %v", tx.Timestamp, snapTime, convert.BytesToTrytes(tx.Hash))
 			}

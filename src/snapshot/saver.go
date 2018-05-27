@@ -15,18 +15,11 @@ import (
 	"utils"
 )
 
-func SaveSnapshot (snapshotDir string) error {
-	logs.Log.Notice("Saving snapshot...")
+func SaveSnapshot (snapshotDir string, timestamp int) error {
+	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
 	db.Locker.Lock()
 	defer db.Locker.Unlock()
 	utils.CreateDirectory(snapshotDir)
-
-	timestamp, err := db.GetInt([]byte{db.KEY_SNAPSHOT_DATE}, nil)
-	if err != nil {
-		logs.Log.Notice("It seems that there is no snapshot available to be saved, yet!")
-		return err
-	}
-	logs.Log.Noticef("Snapshot timestamp: %v", timestamp)
 
 	pth := path.Join(snapshotDir, strconv.FormatInt(int64(timestamp), 10) + ".snap")
 	file, err := os.Create(pth)
@@ -44,6 +37,7 @@ func SaveSnapshot (snapshotDir string) error {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_SNAPSHOT_BALANCE}
+		// TODO: order by address
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			key := item.Key()
@@ -59,7 +53,7 @@ func SaveSnapshot (snapshotDir string) error {
 
 					item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
 					if err != nil {
-						logs.Log.Error("Could not get an address hash value from database!", err)
+						logs.Log.Error("Could not get an address hash value from database!", err, key)
 						return err
 					}
 					addressHash, err := item.Value()

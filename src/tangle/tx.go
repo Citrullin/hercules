@@ -36,6 +36,9 @@ func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	_checkSaveError(tx, err)
 	err = db.Put(db.AsKey(key, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
 	_checkSaveError(tx, err)
+	// TODO: (opt) Use {key byte}+whole address in spents and balances to save even more space?
+	err = db.Put(db.GetByteKey(tx.Address, db.KEY_ADDRESS_BYTES), tx.Address, nil, txn)
+	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
 			db.GetByteKey(tx.Bundle, db.KEY_BUNDLE),
