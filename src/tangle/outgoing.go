@@ -238,7 +238,6 @@ func sendReply (msg *Message) {
 
 func getMessage (resp []byte, req []byte, tip bool, addr string, txn *badger.Txn) *Message {
 	var hash []byte
-	// Try getting a weighted random tip (those with more value are preferred)
 	if resp == nil {
 		hash, resp = getRandomTip()
 	}
@@ -345,12 +344,10 @@ func findPendingRequest (hash []byte) int {
 func getOldPending () *PendingRequest{
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
-	for i, pendingRequest := range pendingRequests {
+	for _, pendingRequest := range pendingRequests {
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
-		// TODO: OK to put this limit? Make it less for low-end devices
-		if i >= 2000 { return nil }
 	}
 	return nil
 }

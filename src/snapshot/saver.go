@@ -74,6 +74,7 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 		}
 		return nil
 	})
+
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
 	err = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -94,6 +95,27 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 				return err
 			}
 			line := convert.BytesToTrytes(addressHash)[:81]
+			fmt.Fprintln(w, line)
+		}
+		return nil
+	})
+	if err != nil { return err }
+
+
+	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
+	err = db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_PENDING_BUNDLE}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			key := it.Item().Key()
+			if err != nil {
+				logs.Log.Error("Could not get ignore TX timestamp from the database!", err)
+				return err
+			}
+			line := convert.BytesToTrytes(key)
 			fmt.Fprintln(w, line)
 		}
 		return nil

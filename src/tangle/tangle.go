@@ -65,6 +65,7 @@ var saved = 0
 var discarded = 0
 var outgoing = 0
 
+// TODO: create a watcher to check when completely in sync: no pending milestones, confrmations or confirmed requests
 func Start (s *server.Server, cfg *viper.Viper) {
 	config = cfg
 	srv = s

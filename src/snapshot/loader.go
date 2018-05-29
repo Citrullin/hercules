@@ -81,6 +81,10 @@ func loadSpentSnapshot(address []byte) error {
 	})
 }
 
+func loadPendingBundleSnapshot(key []byte) error {
+	return db.Put(key, true, nil, nil)
+}
+
 func doLoadSnapshot (path string) error{
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -96,6 +100,7 @@ func doLoadSnapshot (path string) error{
 	}
 
 	values := true
+	keepBundles := false
 	rd := bufio.NewReader(f)
 	var total int64 = 0
 	var totalSpent int64 = 0
@@ -111,7 +116,11 @@ func doLoadSnapshot (path string) error{
 			return err
 		}
 		if line == SNAPSHOT_SEPARATOR {
-			values = false
+			if values {
+				values = false
+			} else {
+				keepBundles = true
+			}
 			continue
 		}
 		if values {
@@ -120,9 +129,19 @@ func doLoadSnapshot (path string) error{
 			value, err := strconv.ParseInt(tokens[1], 10, 64)
 			if err != nil { return err }
 			total += value
-			loadValueSnapshot(address, value)
-		} else {
+			err = loadValueSnapshot(address, value)
+			if err != nil {
+				return err
+			}
+		} else if !keepBundles {
+			totalSpent++
 			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49])
+			if err != nil {
+				return err
+			}
+		} else {
+			key := convert.TrytesToBytes(line)[:16]
+			err = loadPendingBundleSnapshot(key)
 			if err != nil {
 				return err
 			}

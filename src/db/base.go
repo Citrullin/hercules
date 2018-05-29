@@ -37,6 +37,7 @@ const (
 	KEY_PENDING_TIMESTAMP = byte(30) // hash -> parent time
 	KEY_PENDING_HASH      = byte(31) // hash -> hash
 	KEY_PENDING_CONFIRMED = byte(35) // hash -> parent time
+	KEY_PENDING_BUNDLE    = byte(39) // hash -> timestamp
 
 	// PERSISTENT EVENTS
 	KEY_EVENT_MILESTONE_PENDING        = byte(50)  // trunk hash (999 address) -> tx hash

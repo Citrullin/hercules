@@ -24,6 +24,7 @@ func MakeSnapshot (timestamp int) error {
 
 	var bundles [][]byte
 	var txs []KeyValue
+	var toKeepBundle [][]byte
 
 	contains := func(key []byte) bool {
 		if bundles == nil { return false }
@@ -33,7 +34,7 @@ func MakeSnapshot (timestamp int) error {
 		return false
 	}
 
-	err := db.DB.View(func(txn *badger.Txn) error {
+	err := db.DB.Update(func(txn *badger.Txn) error {
 		if !IsEqualOrNewerThanSnapshot(int(timestamp), nil) {
 			logs.Log.Infof("The given snapshot (%v) timestamp is older than the current one. Skipping", timestamp)
 			return errors.New("given snapshot is older than current one")
@@ -91,9 +92,13 @@ func MakeSnapshot (timestamp int) error {
 		}
 		logs.Log.Debugf("Found %v value bundles. Collecting corresponding transactions...", len(bundles))
 		for _, bundleHash := range bundles {
-			bundleTxs, err := loadAllFromBundle(bundleHash, timestamp, txn)
+			bundleTxs, bundleKeep, err := loadAllFromBundle(bundleHash, timestamp, txn)
 			if err != nil { return err }
 			txs = append(txs, bundleTxs...)
+			if bundleKeep != nil && len(bundleKeep) == 16 {
+				logs.Log.Debug("Keeping bundle...", bundleKeep)
+				toKeepBundle = append(toKeepBundle, bundleKeep)
+			}
 		}
 		return nil
 	})
@@ -126,6 +131,18 @@ func MakeSnapshot (timestamp int) error {
 		edgeTransactions <- &trimKey
 	}
 
+	err = db.RemoveAll(db.KEY_PENDING_BUNDLE)
+	if err != nil {
+		return err
+	}
+
+	for _, key := range toKeepBundle {
+		err := db.Put(key, true, nil, nil)
+		if err != nil {
+			return err
+		}
+	}
+
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")
 		trimData(int64(timestamp))
@@ -146,7 +163,7 @@ func MakeSnapshot (timestamp int) error {
 	}
 }
 
-func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]KeyValue, error) {
+func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]KeyValue, []byte, error) {
 	var totalValue int64 = 0
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
@@ -154,18 +171,19 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 	defer it.Close()
 	prefix := db.GetByteKey(bundleHash, db.KEY_BUNDLE)
 	var txs []KeyValue
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		k := it.Item().Key()
 		key := make([]byte, 16)
 		copy(key, k[16:])
 		txTimestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// Some of the TXs from the bundle are in the future! Do not use.
 		if txTimestamp > timestamp {
 			logs.Log.Debugf("One of the TXs is younger than snapshot: %v. Skipping this bundle", txTimestamp)
-			return nil, nil
+			return nil, db.AsKey(k[:16], db.KEY_PENDING_BUNDLE), nil
 		}
 		valueKey := db.AsKey(key, db.KEY_VALUE)
 		value, err := db.GetInt64(valueKey, txn)
@@ -176,13 +194,13 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 			}
 		} else {
 			logs.Log.Errorf("Error reading value for %v", valueKey)
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	// Bundle not yet complete, do not use!
 	if totalValue != 0 {
-		logs.Log.Debugf("A bundle is incomplete (non-zero sum). Skipping...")
-		return nil, nil
+		logs.Log.Errorf("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
+		return nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
 	}
-	return txs, nil
+	return txs, nil, nil
 }
