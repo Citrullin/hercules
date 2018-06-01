@@ -120,3 +120,5 @@ func confirmChild (key []byte, txn *badger.Txn) error {
 	}
 	return nil
 }
+
+// TODO: add rescanner!

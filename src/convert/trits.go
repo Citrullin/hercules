@@ -54,4 +54,25 @@ func TritsToInt(trits []int) int64 {
 	return returnValue
 }
 
-//func IntToTrits
+func IntToTrits(value int64, padding int) []int {
+	result := intToTritsPositive(value)
+	for i := len(result); i < padding; i++ {
+		result = append(result, 0)
+	}
+	return result
+}
+
+func intToTritsPositive(v int64) []int {
+	var trits []int
+	for v != 0 {
+		var r = int(v % 3)
+		v = int64(math.Floor(float64(v/3)))
+		if r > 1 {
+			trits = append(trits, -1)
+			v++
+		} else {
+			trits = append(trits, r)
+		}
+	}
+	return trits
+}

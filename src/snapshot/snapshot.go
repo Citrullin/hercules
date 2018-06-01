@@ -40,7 +40,7 @@ func Start(cfg *viper.Viper) {
         db.Count(db.KEY_CONFIRMED),
         db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
         db.Count(db.KEY_PENDING_CONFIRMED))
-    err := MakeSnapshot(1527100000)
+    err := MakeSnapshot(1527400000)
     if err != nil {
         logs.Log.Fatalf("SNAPSHOT PANIC: %v", err)
     }

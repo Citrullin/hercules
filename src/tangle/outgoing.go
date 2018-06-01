@@ -84,8 +84,7 @@ func checkPendingTXs () {
 }
 
 func loadPendingRequests() {
-	// TODO: if pending confirmed is pending for too long, remove it from the loop
-	// TODO: if pending is pending for too long, remove it from the loop
+	// TODO: if pending is pending for too long, remove it from the loop?
 	logs.Log.Info("Loading pending requests")
 
 	db.Locker.Lock()
@@ -137,6 +136,7 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
+	if len(txQueue) > 100 { return }
 	var pendingRequest *PendingRequest
 	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
 
@@ -344,10 +344,12 @@ func findPendingRequest (hash []byte) int {
 func getOldPending () *PendingRequest{
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
-	for _, pendingRequest := range pendingRequests {
+	for i, pendingRequest := range pendingRequests {
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
+		// TODO: OK to put this limit? Make it less for low-end devices
+		if i >= 5000 { return nil }
 	}
 	return nil
 }

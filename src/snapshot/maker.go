@@ -182,7 +182,7 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 		}
 		// Some of the TXs from the bundle are in the future! Do not use.
 		if txTimestamp > timestamp {
-			logs.Log.Debugf("One of the TXs is younger than snapshot: %v. Skipping this bundle", txTimestamp)
+			logs.Log.Debugf("One of the TXs is younger than snapshot: %v. Skipping this bundle: %v", txTimestamp, convert.BytesToTrytes(bundleHash))
 			return nil, db.AsKey(k[:16], db.KEY_PENDING_BUNDLE), nil
 		}
 		valueKey := db.AsKey(key, db.KEY_VALUE)
@@ -199,7 +199,8 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 	}
 	// Bundle not yet complete, do not use!
 	if totalValue != 0 {
-		logs.Log.Errorf("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
+		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +
+			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash))
 		return nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
 	}
 	return txs, nil, nil

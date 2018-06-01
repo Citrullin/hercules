@@ -61,6 +61,9 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 						logs.Log.Error("Could not parse an address hash value from database!", err)
 						return err
 					}
+					if len(addressHash) < 49 {
+						logs.Log.Errorf("Wrong address length! value %v, (%v) => %v, key: %v", value, convert.BytesToTrytes(addressHash), addressHash, key)
+					}
 					line := convert.BytesToTrytes(addressHash)[:81] + ";" + strconv.FormatInt(int64(value), 10)
 					fmt.Fprintln(w, line)
 				} else {

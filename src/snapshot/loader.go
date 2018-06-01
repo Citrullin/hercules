@@ -33,9 +33,9 @@ func LoadSnapshot (path string) error {
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)
 
-	logs.Log.Debug("Saving edge TXs...")
+	logs.Log.Debug("Saving trimmable TXs flags...")
 	err = trimData(timestamp)
-	logs.Log.Debug("Saved edge TXs", len(edgeTransactions))
+	logs.Log.Debug("Saved trimmable TXs flags:", len(edgeTransactions))
 	if err != nil { return err }
 
 	err = doLoadSnapshot(path)

@@ -57,7 +57,7 @@ func incomingRunner () {
 		})
 		if err == nil && !isTipRequest && tx != nil {
 			incomingProcessed++
-			processIncomingTX(&IncomingTX{tx, raw.Addr, msg.Bytes})
+			txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
 		}
 	}
 }
@@ -68,6 +68,7 @@ func processIncomingTX (incoming *IncomingTX) {
 	var hash []byte
 	var pendingKey []byte
 	err := db.DB.Update(func(txn *badger.Txn) (e error) {
+		// TODO: catch error defer here
 		var key = db.GetByteKey(tx.Hash, db.KEY_HASH)
 		hash = tx.Hash
 
@@ -78,10 +79,10 @@ func processIncomingTX (incoming *IncomingTX) {
 
 		snapTime := snapshot.GetSnapshotTimestamp(txn)
 		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn)  {
-			logs.Log.Warningf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
-				tx.Timestamp, snapTime, tx.Value)
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
+				logs.Log.Warningf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
+					tx.Timestamp, snapTime, tx.Value)
 				logs.Log.Warning("Skipping this TX:", convert.BytesToTrytes(tx.Hash))
 				db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 				db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
@@ -153,6 +154,9 @@ func processIncomingTX (incoming *IncomingTX) {
 			db.Put(pendingKey, hash, nil, nil)
 			db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
 			addPendingRequest(hash, int(nowUnix), incoming.Addr)
+		}
+		if err == badger.ErrConflict {
+			processIncomingTX(incoming)
 		}
 	}
 }
