@@ -12,7 +12,10 @@ func getBalances (request Request, c *gin.Context) {
 	if request.Addresses != nil {
 		var balances []int64
 		for _, address := range request.Addresses {
-			// TODO: check trytes?
+			if !convert.IsTrytes(address, 81) {
+				ReplyError("Wrong trytes", c)
+				return
+			}
 			addressBytes := convert.TrytesToBytes(address)
 			if addressBytes == nil {
 				balances = append(balances, 0)

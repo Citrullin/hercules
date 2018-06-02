@@ -24,6 +24,7 @@ type PendingRequest struct {
 
 var lastTip = time.Now()
 var pendingRequests []*PendingRequest
+var rotatePending = 0
 
 func pendingOnLoad () {
 	//checkPendingTXs()
@@ -350,6 +351,11 @@ func getOldPending () *PendingRequest{
 		}
 		// TODO: OK to put this limit? Make it less for low-end devices
 		if i >= 5000 { return nil }
+	}
+	rotatePending++
+	if rotatePending > 1000 && len(pendingRequests) > 5000 {
+		pendingRequests = append(pendingRequests[5000:], pendingRequests[:5000]...)
+		rotatePending = 0
 	}
 	return nil
 }

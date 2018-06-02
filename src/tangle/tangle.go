@@ -127,14 +127,14 @@ func loadMissing() error {
 			return err
 		}
 		hash := convert.TrytesToBytes(line)[:49]
-		key := db.GetByteKey(hash, db.KEY_HASH)
+		//key := db.GetByteKey(hash, db.KEY_HASH)
 		has, err := requestIfMissing(hash, "", nil)
 		if err == nil {
 			if !has {
 				logs.Log.Warning("MISSING", line)
 				total++
 			} else {
-				confirmed := db.Has(db.AsKey(key, db.KEY_CONFIRMED), nil)
+				/*confirmed := db.Has(db.AsKey(key, db.KEY_CONFIRMED), nil)
 				txBytes, err := db.GetBytes(db.AsKey(key, db.KEY_BYTES), nil)
 				if err != nil {
 					logs.Log.Error("!!! BYTES NOT FOUND", line)
@@ -143,7 +143,7 @@ func loadMissing() error {
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				tx := transaction.TritsToFastTX(&trits, txBytes)
 				logs.Log.Warning("HAS", line, confirmed, tx.Value, convert.BytesToTrytes(tx.Bundle)[:81])
-				dwellDeeper(line)
+				dwellDeeper(line) */
 			}
 		} else {
 			logs.Log.Error("ERR", err)

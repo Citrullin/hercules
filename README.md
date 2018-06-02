@@ -47,10 +47,10 @@ This makes sure we have all milestones and confirmed TXs in the database.
     - Alternatively one has to keep track of the incoming TXs.
     - Let it be a problem for the snapshotters
 
+2. Bundle Validator
+3. PoW
 4. API: including the snapshots API, password protection, duration, checks, etc.
-5. Check snapshot integrity: script to compare local api address values vs remote.
 
-6. PoW - attachToTangle
 7. Server: hostname support
 
 8. Small devices support: config settings

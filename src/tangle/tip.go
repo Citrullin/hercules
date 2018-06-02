@@ -17,7 +17,7 @@ type Tip struct {
 	Timestamp int
 }
 
-var tips []*Tip
+var Tips []*Tip
 var TipsLocker = &sync.Mutex{}
 
 func tipOnLoad() {
@@ -45,23 +45,23 @@ func loadTips() {
 				hash, err := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
 				if err == nil {
 					TipsLocker.Lock()
-					tips = append(tips, &Tip{hash, timestamp})
+					Tips = append(Tips, &Tip{hash, timestamp})
 					TipsLocker.Unlock()
 				}
 			}
 		}
 		return nil
 	})
-	logs.Log.Infof("Loaded tips: %v\n", len(tips))
+	logs.Log.Infof("Loaded tips: %v\n", len(Tips))
 }
 
 func startTipRemover () {
 	flushTicker := time.NewTicker(tipRemoverInterval)
 	for range flushTicker.C {
-		logs.Log.Warning("Tips remover starting... Total tips:", len(tips))
+		logs.Log.Warning("Tips remover starting... Total tips:", len(Tips))
 		var toRemove []*Tip
 		TipsLocker.Lock()
-		for _, tip := range tips {
+		for _, tip := range Tips {
 			tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
 			tipAgeOK := tipAge < maxTipAge
 			origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
@@ -85,7 +85,7 @@ func addTip (hash []byte, value int) {
 	defer TipsLocker.Unlock()
 	if findTip(hash) >= 0 { return }
 
-	tips = append(tips, &Tip{hash, value})
+	Tips = append(Tips, &Tip{hash, value})
 }
 
 func removeTip (hash []byte) {
@@ -94,16 +94,16 @@ func removeTip (hash []byte) {
 
 	var which = findTip(hash)
 	if which > -1 {
-		if which >= len(tips) - 1 {
-			tips = tips[0:which]
+		if which >= len(Tips) - 1 {
+			Tips = Tips[0:which]
 		} else {
-			tips = append(tips[0:which], tips[which+1:]...)
+			Tips = append(Tips[0:which], Tips[which+1:]...)
 		}
 	}
 }
 
 func findTip (hash []byte) int {
-	for i, tip := range tips {
+	for i, tip := range Tips {
 		if bytes.Equal(hash, tip.Hash) {
 			return i
 		}
@@ -138,12 +138,24 @@ func getRandomTip () (hash []byte, txBytes []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 
-	if len(tips) < 1 {
+	if len(Tips) < 1 {
 		return nil, nil
 	}
 
-	hash = tips[utils.Random(0, len(tips))].Hash
+	hash = Tips[utils.Random(0, len(Tips))].Hash
 	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_BYTES), nil)
 	if err != nil { return nil, nil }
 	return hash, txBytes
+}
+
+func GetRandomTip () (hash []byte) {
+	TipsLocker.Lock()
+	defer TipsLocker.Unlock()
+
+	if len(Tips) < 1 {
+		return nil
+	}
+
+	hash = Tips[utils.Random(0, len(Tips))].Hash
+	return hash
 }

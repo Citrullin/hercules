@@ -34,6 +34,8 @@ func Start(cfg *viper.Viper) {
 
     go trimTXRunner()
 
+    // TODO: regular snapshot runner
+
     // TODO: remove this:
     /*
     logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",

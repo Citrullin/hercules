@@ -11,14 +11,20 @@ import (
 
 type Request struct {
 	Command      string
+	Hashes       []string
 	Uris         []string
 	Addresses    []string
+	Bundles      []string
+	Tags         []string
+	Approvees    []string
+	Transactions []string
 }
 
 var api *gin.Engine
 var srv *http.Server
 var config *viper.Viper
 
+// TODO: limit requests
 func Start (apiConfig *viper.Viper) {
 	config = apiConfig
 	if !config.GetBool("api.debug") {
@@ -27,6 +33,10 @@ func Start (apiConfig *viper.Viper) {
 	// TODO: allow password protection for remote access
 	// TODO: allow certain command to be accessed locally only
 	api = gin.Default()
+	// TODO: Add attach/interrupt attaching api
+	// TODO: Add broadcast api
+	// TODO: Add store api
+	// TODO: Add snapshot api
 	// TODO: make duration work on API
 	api.POST("/", func(c *gin.Context) {
 		var request Request
@@ -39,6 +49,18 @@ func Start (apiConfig *viper.Viper) {
 				getNeighbors(request, c)
 			} else if request.Command == "getBalances" {
 				getBalances(request, c)
+			} else if request.Command == "findTransactions" {
+				findTransactions(request, c)
+			} else if request.Command == "getTrytes" {
+				getTrytes(request, c)
+			} else if request.Command == "getTips" {
+				getTips(request, c)
+			} else if request.Command == "getTransactionsToApprove" {
+				getTransactionsToApprove(request, c)
+			} else if request.Command == "getInclusionStates" {
+				getInclusionStates(request, c)
+			} else if request.Command == "wereAddressesSpentFrom" {
+				wereAddressesSpentFrom(request, c)
 			} else if request.Command == "getNodeInfo" {
 				// TODO: add missing fields to getInfo API
 				c.JSON(http.StatusOK, gin.H{
@@ -46,13 +68,13 @@ func Start (apiConfig *viper.Viper) {
 					"appVersion": "0.0.1",
 					"duration": 0,
 				})
+			} else {
+				logs.Log.Error("Unknown command", request.Command)
+				ReplyError("No known command provided", c)
 			}
-			// TODO: Add missing APIs
-			// TODO: catch-all for unknown commands
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "No command provided",
-			})
+			logs.Log.Error("ERROR request", err)
+			ReplyError("Wrongly formed JSON", c)
 		}
 	})
 	srv = &http.Server{
@@ -76,4 +98,10 @@ func End () {
 		}
 		logs.Log.Info("API Server exiting...")
 	}
+}
+
+func ReplyError (message string, c *gin.Context) {
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error": message,
+	})
 }

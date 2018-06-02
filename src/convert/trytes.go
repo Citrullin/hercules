@@ -1,7 +1,9 @@
 package convert
 
 import "unicode/utf8"
-import "math"
+import (
+	"math"
+)
 
 var TRYTES = "NOPQRSTUVWXYZ9ABCDEFGHIJKLM"
 var TRYTES_TO_TRITS = []int{
@@ -55,11 +57,17 @@ func TritsToTrytes(trits []int) string {
 	return trytes
 }
 
-func TrytesToTrits(trytes string) []int {
+func TrytesToTrits(trytes string) (trits []int) {
+	defer func() {
+		if r := recover(); r != nil {
+			trits = nil
+		}
+	}()
+
 	var k int
 
 	size := utf8.RuneCountInString(trytes)
-	trits := make([]int, size*3)
+	trits = make([]int, size*3)
 
 	for i, j := 0, 0; i < size; i, j = i+1, j+3 {
 		char := int(CharCodeAt(trytes, i))
@@ -94,4 +102,12 @@ func CharCodeAt(s string, n int) rune {
 		i++
 	}
 	return 0
+}
+
+
+func IsTrytes (trytes string, length int) bool {
+	if len(trytes) != length || TrytesToTrits(trytes) == nil {
+		return false
+	}
+	return true
 }
