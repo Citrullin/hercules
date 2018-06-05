@@ -5,6 +5,11 @@ import (
 	"convert"
 )
 
+const (
+	ESSENCE_START = 6561
+	ESSENCE_SIZE = 486 // => 7047
+)
+
 type TX struct {
 	Hash                          string
 	SignatureMessageFragment      string
@@ -110,10 +115,14 @@ func TrytesToObject(trytes string) *TX {
 	}
 }
 
+func GetEssenceTrits (trits *[]int) []int{
+	return (*trits)[ESSENCE_START:ESSENCE_START+ESSENCE_SIZE]
+}
+
 func value(trits []int) int {
 	return int(value64(trits))
 }
 
 func value64(trits []int) int64 {
-	return convert.TritsToInt(trits)
+	return convert.TritsToInt(trits).Int64()
 }

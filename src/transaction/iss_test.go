@@ -14,12 +14,12 @@ const milestone = 435502
 func TestGetMerkleRoot(t *testing.T) {
 	t0 := TrytesToObject(trytes0)
 	//t1 := TrytesToObject(trytes1)
-	milestoneIndex := int(convert.TritsToInt(convert.TrytesToTrits(t0.ObsoleteTag[:5])))
+	milestoneIndex := int(convert.TritsToInt(convert.TrytesToTrits(t0.ObsoleteTag[:5])).Uint64())
 	trunkTransactionTrits := convert.TrytesToTrits(t0.TrunkTransaction)
 	signatureFragmentTrits := convert.TrytesToTrits(t0.SignatureMessageFragment)
 	t1Trits := convert.TrytesToTrits(trytes1)
 	normalized := NormalizedBundle(trunkTransactionTrits)[:NUMBER_OF_FRAGMENT_CHUNKS]
-	digests := Digest(normalized, signatureFragmentTrits)
+	digests := Digest(normalized, signatureFragmentTrits, 0, 0,false)
 	address := Address(digests)
 	merkleRoot := GetMerkleRoot(
 		address,

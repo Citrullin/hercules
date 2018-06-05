@@ -26,7 +26,7 @@ func TestBytesToTrits(t *testing.T) {
 func TestTritsToInt(t *testing.T) {
 	trits := TrytesToTrits("HELLOWORLD")
 	expected := int64(33792688625192)
-	result := TritsToInt(trits)
+	result := TritsToInt(trits).Int64()
 	if !reflect.DeepEqual(expected, result) {
 		t.Error("Trits int converion wrong!", expected, result)
 	}

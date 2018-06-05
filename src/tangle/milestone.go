@@ -295,10 +295,10 @@ Returns Milestone index if the milestone verification has been correct. Otherwis
 Params: tx + trits of the seconds transaction in the milestone bundle.
  */
 func getMilestoneIndex (tx *transaction.FastTX, trits []int) int {
-	milestoneIndex := int(convert.TritsToInt(convert.BytesToTrits(tx.ObsoleteTag[:5])))
+	milestoneIndex := int(convert.TritsToInt(convert.BytesToTrits(tx.ObsoleteTag[:5])).Uint64())
 	trunkTransactionTrits := convert.BytesToTrits(tx.TrunkTransaction)[:243]
 	normalized := transaction.NormalizedBundle(trunkTransactionTrits)[:transaction.NUMBER_OF_FRAGMENT_CHUNKS]
-	digests := transaction.Digest(normalized, tx.SignatureMessageFragment)
+	digests := transaction.Digest(normalized, tx.SignatureMessageFragment, 0, 0,false)
 	address := transaction.Address(digests)
 	merkleRoot := transaction.GetMerkleRoot(
 		address,

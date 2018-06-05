@@ -9,7 +9,16 @@ const NUMBER_OF_ROUNDSP81 = 81
 const HASH_LENGTH = 243
 const STATE_LENGTH = 3 * HASH_LENGTH
 
+type Hash interface {
+	Initialize()
+	InitializeCurl(trits []int, length int, rounds int)
+	Reset()
+	Absorb(trits []int, offset int, length int)
+	Squeeze(resp []int, offset int, length int) []int
+}
+
 type Curl struct {
+	Hash
 	state []int
 	rounds int
 }
@@ -17,7 +26,11 @@ type Curl struct {
 var truthTable = []int{1, 0, -1, 2, 1, -1, 0, 2, -1, 1, 0}
 
 
-func (curl *Curl) Initialize(trits []int, length int, rounds int) {
+func (curl *Curl) Initialize() {
+	curl.InitializeCurl(nil,0, curl.rounds)
+}
+
+func (curl *Curl) InitializeCurl(trits []int, length int, rounds int) {
 	curl.rounds = rounds
 	if trits != nil {
 		curl.state = trits
@@ -27,7 +40,7 @@ func (curl *Curl) Initialize(trits []int, length int, rounds int) {
 }
 
 func (curl *Curl) Reset() {
-	curl.Initialize(nil,0, curl.rounds)
+	curl.InitializeCurl(nil,0, curl.rounds)
 }
 
 func (curl *Curl) Absorb(trits []int, offset int, length int) {
@@ -75,7 +88,7 @@ func RunHashCurl(trits []int) []int {
 	var curl = new(Curl)
 	var resp = make([]int, HASH_LENGTH)
 
-	curl.Initialize(nil, 0, NUMBER_OF_ROUNDSP81)
+	curl.InitializeCurl(nil, 0, NUMBER_OF_ROUNDSP81)
 	curl.Absorb(trits, 0, len(trits))
 	curl.Squeeze(resp, 0, HASH_LENGTH)
 

@@ -25,36 +25,42 @@ func Address(digests []int) []int {
 	}
 	address := make([]int, HASH_LENGTH)
 	hash := new(crypt.Curl)
-	hash.Initialize(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
+	hash.InitializeCurl(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
 	hash.Absorb(digests, 0, len(digests))
 	hash.Squeeze(address, 0, len(address))
 	return address
 }
 
-func Digest(normalizedBundleFragment []int, signatureFragment []int) []int {
-	if len(normalizedBundleFragment) != NORMALIZED_FRAGMENT_LENGTH {
+func Digest(normalizedBundleFragment []int, signatureFragment []int, nbOffset int, sfOffset int, asKerl bool) []int {
+	if len(normalizedBundleFragment) % NORMALIZED_FRAGMENT_LENGTH != 0 {
 		panic("Invalid normalized bundleValidator fragment length!")
 	}
 	if len(signatureFragment) != FRAGMENT_LENGTH {
-		panic("Invalid signature fragment length!")
+		//panic("Invalid signature fragment length!")
 	}
 	digest := make([]int, HASH_LENGTH)
 	buffer := make([]int, FRAGMENT_LENGTH)
-	copy(buffer, signatureFragment)
-	hash := new(crypt.Curl)
-	hash.Initialize(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
+	copy(buffer, signatureFragment[sfOffset:sfOffset+FRAGMENT_LENGTH])
+	var hsh crypt.Hash
+	if asKerl {
+		hsh = new(crypt.Kerl)
+		hsh.Initialize()
+	} else {
+		hsh = new(crypt.Curl)
+		hsh.InitializeCurl(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
+	}
 
 	for j := 0; j < NUMBER_OF_FRAGMENT_CHUNKS; j++ {
-		for k := normalizedBundleFragment[j] - MIN_TRYTE_VALUE - 1; k >= 0; k-- {
-			hash.Reset()
-			hash.Absorb(buffer, j * HASH_LENGTH, HASH_LENGTH)
-			hash.Squeeze(buffer, j * HASH_LENGTH, HASH_LENGTH)
+		for k := normalizedBundleFragment[nbOffset + j] - MIN_TRYTE_VALUE; k > 0; k-- {
+			hsh.Reset()
+			hsh.Absorb(buffer, j * HASH_LENGTH, HASH_LENGTH)
+			hsh.Squeeze(buffer, j * HASH_LENGTH, HASH_LENGTH)
 		}
 	}
 
-	hash.Reset()
-	hash.Absorb(buffer, 0, len(buffer))
-	hash.Squeeze(digest, 0, len(digest))
+	hsh.Reset()
+	hsh.Absorb(buffer, 0, FRAGMENT_LENGTH)
+	hsh.Squeeze(digest, 0, HASH_LENGTH)
 
 	return digest
 }
@@ -99,7 +105,7 @@ func NormalizedBundle (bundle []int) []int {
 func GetMerkleRoot (hash []int, trits []int, offset int, indexIn int, size int) []int {
 	index := uint32(indexIn)
 	curl := new(crypt.Curl)
-	curl.Initialize(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
+	curl.InitializeCurl(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
 	for i := 0; i < size; i++ {
 		curl.Reset()
 		if index & 1 == 0 {
