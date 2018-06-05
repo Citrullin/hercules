@@ -37,7 +37,7 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		prefix := []byte{db.KEY_SNAPSHOT_BALANCE}
-		// TODO: order by address
+		// TODO: sort data so that consistent MD5 fingerprints can be created?
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			key := item.Key()

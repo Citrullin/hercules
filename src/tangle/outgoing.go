@@ -57,12 +57,12 @@ func loadPendingRequests() {
 			if err == nil {
 				timestamp, err := db.GetInt(db.AsKey(item.Key(), db.KEY_PENDING_TIMESTAMP), txn)
 				if err == nil {
-					for addr := range server.Neighbors {
-						queue, ok := requestQueues[addr]
+					for identifier := range server.Neighbors {
+						queue, ok := requestQueues[identifier]
 						if !ok {
 							q := make(RequestQueue, maxQueueSize)
 							queue = &q
-							requestQueues[addr] = queue
+							requestQueues[identifier] = queue
 						}
 						*queue <- &Request{hash, false}
 					}
@@ -87,12 +87,12 @@ func outgoingRunner() {
 	var pendingRequest *PendingRequest
 	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
 
-	for neighbor := range server.Neighbors {
+	for identifier, neighbor := range server.Neighbors {
 		requestLocker.RLock()
-		requestQueue, requestOk := requestQueues[neighbor]
+		requestQueue, requestOk := requestQueues[identifier]
 		requestLocker.RUnlock()
 		replyLocker.RLock()
-		replyQueue, replyOk := replyQueues[neighbor]
+		replyQueue, replyOk := replyQueues[identifier]
 		replyLocker.RUnlock()
 		var request []byte
 		var reply []byte
@@ -106,26 +106,26 @@ func outgoingRunner() {
 			pendingRequest = getOldPending()
 			if pendingRequest != nil {
 				pendingRequest.LastTried = time.Now()
-				pendingRequest.LastNeighborAddr = neighbor
+				pendingRequest.LastNeighborAddr = identifier
 				request = pendingRequest.Hash
 			}
 		}
 		if request != nil || reply != nil {
-			msg := getMessage(reply, request, request == nil, neighbor, nil)
-			msg.Addr = neighbor
+			msg := getMessage(reply, request, request == nil, identifier, nil)
+			msg.Addr = identifier
 			sendReply(msg)
 		} else if len(srv.Incoming) < 50 {
 			pendingRequest = getOldPending()
-			if pendingRequest != nil && pendingRequest.LastNeighborAddr != neighbor {
+			if pendingRequest != nil && pendingRequest.LastNeighborAddr != neighbor.Addr {
 				pendingRequest.LastTried = time.Now()
-				pendingRequest.LastNeighborAddr = neighbor
-				msg := getMessage(nil, pendingRequest.Hash, false, neighbor, nil)
-				msg.Addr = neighbor
+				pendingRequest.LastNeighborAddr = identifier
+				msg := getMessage(nil, pendingRequest.Hash, false, identifier, nil)
+				msg.Addr = neighbor.Addr
 				sendReply(msg)
 			} else if shouldRequestTip {
 				lastTip = time.Now()
-				msg := getMessage(nil, nil, true, neighbor,nil)
-				msg.Addr = neighbor
+				msg := getMessage(nil, nil, true, identifier,nil)
+				msg.Addr = neighbor.Addr
 				sendReply(msg)
 			}
 		}
@@ -161,11 +161,12 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 		}
 
 		requestLocker.Lock()
-		queue, ok := requestQueues[addr]
+		identifier, _ := server.GetNeighborByAddress(addr)
+		queue, ok := requestQueues[identifier]
 		if !ok {
 			q := make(RequestQueue, maxQueueSize)
 			queue = &q
-			requestQueues[addr] = queue
+			requestQueues[identifier] = queue
 		}
 		requestLocker.Unlock()
 		*queue <- &Request{hash, false}
@@ -242,11 +243,12 @@ func getMessage (resp []byte, req []byte, tip bool, addr string, txn *badger.Txn
 }
 
 func (pendingRequest PendingRequest) request(addr string) {
-	queue, ok := requestQueues[addr]
+	identifier, _ := server.GetNeighborByAddress(addr)
+	queue, ok := requestQueues[identifier]
 	if !ok {
 		q := make(RequestQueue, maxQueueSize)
 		queue = &q
-		requestQueues[addr] = queue
+		requestQueues[identifier] = queue
 	}
 	*queue <- &Request{pendingRequest.Hash, false}
 	pendingRequest.LastTried = time.Now()

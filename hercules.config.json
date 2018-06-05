@@ -24,6 +24,9 @@
   },
   "snapshots" : {
     "path": "snapshots",
-    "loadFile": ""
+    "loadFile": "",
+    "interval": 1,
+    "period": 168,
+    "enableapi": true
   }
 }

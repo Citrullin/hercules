@@ -12,6 +12,7 @@ import (
 
 const (
 	flushInterval = time.Duration(1) * time.Second
+	hostnameRefreshInterval = time.Duration(300) * time.Second
 	maxQueueSize  = 1000000
 	UDPPacketSize = 1650
 )
@@ -20,9 +21,11 @@ var ops uint64 = 0
 var Speed uint64 = 1
 var total uint64 = 0
 var flushTicker *time.Ticker
+var hostnameTicker *time.Ticker
 var nbWorkers = runtime.NumCPU()
 
 type Neighbor struct {
+	Hostname string
 	Addr string
 	UDPAddr *net.UDPAddr
 	Incoming int
@@ -70,10 +73,6 @@ var connection net.PacketConn
 var ended = false
 
 func Create (serverConfig *viper.Viper) *Server {
-	// TODO: add Hostname support
-	// TODO: allow hostname Neighbors, periodically check for changed IP
-	//ip, err := net.LookupIP("192.168.1.1")
-
 	config = serverConfig
 	mq = make(messageQueue, maxQueueSize)
 	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
@@ -84,7 +83,10 @@ func Create (serverConfig *viper.Viper) *Server {
 	Neighbors = make(map[string]*Neighbor)
 	logs.Log.Debug("Initial neighbors", config.GetStringSlice("node.neighbors"))
 	for _, v := range config.GetStringSlice("node.neighbors") {
-		AddNeighbor(v)
+		err := AddNeighbor(v)
+		if err != nil {
+			logs.Log.Warning("Error adding neighbor:", err)
+		}
 	}
 
 	c, err := net.ListenPacket("udp", ":" + config.GetString("node.port"))
@@ -109,13 +111,21 @@ func Start () {
 		}
 	}()
 
+	hostnameTicker = time.NewTicker(hostnameRefreshInterval)
+	go func() {
+		for range hostnameTicker.C {
+			if ended { break }
+			UpdateHostnameAddresses()
+		}
+	}()
+
 	go listenNeighborTracker()
 	go func() {
 		for msg := range server.Outgoing {
 			if ended { break }
 			if len(msg.Addr) > 0 {
 				NeighborsLock.RLock()
-				neighbor := Neighbors[msg.Addr]
+				_, neighbor := getNeighborByAddress(msg.Addr)
 				NeighborsLock.RUnlock()
 				if neighbor != nil {
 					neighbor.Write(msg)
@@ -133,63 +143,6 @@ func End () {
 	connection.Close()
 	atomic.AddUint64(&total, ops)
 	logs.Log.Debugf("Total iTXs %d\n", total)
-}
-
-func AddNeighbor (address string) int {
-	if len(address) < 4 {
-		return 0
-	}
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
-	_, ok := Neighbors[address]
-	if !ok {
-		Neighbors[address] = createNeighbor(address)
-		return 1
-	}
-	return 0
-}
-
-func RemoveNeighbor (address string) int {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
-	_, ok := Neighbors[address]
-	if ok {
-		delete(Neighbors, address)
-		return 1
-	}
-	return 0
-}
-
-func createNeighbor (address string) *Neighbor {
-	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
- 	neighbor := Neighbor{
- 		Addr: address,
-		UDPAddr: UDPAddr,
-		Incoming: 0,
-		New: 0,
-		Invalid: 0,
-	}
- 	return &neighbor
-}
-
-func TrackNeighbor (msg *NeighborTrackingMessage) {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
-	neighbor, ok := Neighbors[msg.Addr]
-	if ok && neighbor != nil {
-		neighbor.Incoming += msg.Incoming
-		neighbor.New += msg.New
-		neighbor.Invalid += msg.Invalid
-	}
-}
-
-func listenNeighborTracker () {
-	for msg := range NeighborTrackingQueue {
-		TrackNeighbor(msg)
-	}
 }
 
 func (neighbor Neighbor) Write(msg *Message) {
@@ -229,7 +182,7 @@ func (server Server) receive() {
 		}
 		address := addr.String()
 		NeighborsLock.RLock()
-		neighbor := Neighbors[address]
+		_, neighbor := getNeighborByAddress(address)
 		NeighborsLock.RUnlock()
 		if neighbor != nil {
 			mq.enqueue(&Message{address, msg})

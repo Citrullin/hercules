@@ -44,11 +44,12 @@ func incomingRunner () {
 				req := make([]byte, 49)
 				copy(req, *msg.Requested)
 				replyLocker.Lock()
-				queue, ok := replyQueues[msg.Addr]
+				identifier, _ := server.GetNeighborByAddress(msg.Addr)
+				queue, ok := replyQueues[identifier]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
 					queue = &q
-					replyQueues[msg.Addr] = queue
+					replyQueues[identifier] = queue
 				}
 				replyLocker.Unlock()
 				*queue <- &Request{req, tipRequest}

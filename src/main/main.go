@@ -88,6 +88,10 @@ func loadConfig() *viper.Viper {
 	flag.String("database.path", "data", "Path to the database directory")
 
 	flag.String("snapshots.path", "data", "Path to the snapshots directory")
+	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots")
+	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
+	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: " +
+		"listSnapshots, downloadSnapshot, makeSnapshot, getSnapshotInfo")
 
 	flag.IntP("node.port", "u", 13600, "UDP Node port")
 	flag.StringSliceP("node.neighbors","n", nil, "Initial Node neighbors")
@@ -110,6 +114,13 @@ func loadConfig() *viper.Viper {
 		if err != nil {
 			logs.Log.Fatalf("Config could not be loaded from: %s", configPath)
 		}
+	}
+
+	// 4. Check config for validity
+	snapshotPeriod := config.GetInt("snapshot.period")
+	if config.GetInt("snapshot.interval") > 0 && snapshotPeriod < 6 {
+		logs.Log.Fatalf("The given snapshot period of %v hours is too short! " +
+			"At least 6 hours currently required to be kept.", snapshotPeriod)
 	}
 
 	return config

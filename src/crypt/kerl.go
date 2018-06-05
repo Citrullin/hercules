@@ -54,7 +54,6 @@ func (kerl *Kerl) Squeeze(trits []int, offset int, length int) []int {
 
 		i := len(kerl.byte_state) - 1
 		for i >= 0 {
-			// TODO: correct?
 			kerl.byte_state[i] = kerl.byte_state[i] ^ 0xFF
 			i--
 		}

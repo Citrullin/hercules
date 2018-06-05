@@ -54,7 +54,6 @@ func Start(cfg *viper.Viper) {
     if len(snapshotToLoad) > 0 {
         LoadSnapshot(snapshotToLoad)
     }
-    // TODO: possibility to download the snapshot from a public node
     // TODO: possibility to load an IRI snapshot.
 
     if !checkDatabaseSnapshot() {

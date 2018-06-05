@@ -15,7 +15,7 @@ import (
 )
 
 func LoadSnapshot (path string) error {
-	// TODO: fail if the database already exists.
+	// TODO: fail if the database already exists?
 	logs.Log.Info("Loading snapshot from", path)
 	timestamp, err := checkSnapshotFile(path)
 	if err != nil { return err }

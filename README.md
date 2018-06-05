@@ -49,8 +49,6 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 2. Snapshot API
 
-3. Server: hostname support
-
 8. Small devices support: config settings
 9. PoW
 
