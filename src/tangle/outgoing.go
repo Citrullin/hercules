@@ -27,61 +27,7 @@ var pendingRequests []*PendingRequest
 var rotatePending = 0
 
 func pendingOnLoad () {
-	//checkPendingTXs()
 	loadPendingRequests()
-}
-
-func checkPendingTXs () {
-	db.Locker.Lock()
-	defer db.Locker.Unlock()
-
-	total := 0
-	missing := 0
-	var seen [][]byte
-
-	var hasSeen = func (key []byte) bool {
-		if seen == nil { return false }
-		for _, k := range seen {
-			if bytes.Equal(k, key) { return true }
-		}
-		return false
-	}
-
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_RELATION}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			total++
-			item := it.Item()
-			v, _ := item.Value()
-			var relation []byte
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&relation)
-			if err == nil {
-				trunkKey := db.AsKey(relation[:16], db.KEY_HASH)
-				branchKey := db.AsKey(relation[16:], db.KEY_HASH)
-				_, errTrunk := db.GetBytes(trunkKey, txn)
-				_, errBranch := db.GetBytes(branchKey, txn)
-				if errTrunk != nil {
-					missing ++
-				}
-				if errBranch != nil {
-					missing ++
-				}
-				if !hasSeen(trunkKey) {
-					seen = append(seen, trunkKey)
-				}
-				if !hasSeen(branchKey) {
-					seen = append(seen, branchKey)
-				}
-			}
-		}
-		return nil
-	})
-	logs.Log.Errorf("MISSING %v / %v, SEEN %v", missing, total, seen)
 }
 
 func loadPendingRequests() {
@@ -358,4 +304,17 @@ func getOldPending () *PendingRequest{
 		rotatePending = 0
 	}
 	return nil
+}
+
+func Broadcast(hash []byte) int {
+	queued := 0
+	replyLocker.RLock()
+	for _, queue := range replyQueues {
+		if len(*queue) < 1000 {
+			*queue <- &Request{hash, false}
+			queued++
+		}
+	}
+	replyLocker.RUnlock()
+	return queued
 }

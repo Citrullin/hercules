@@ -96,7 +96,7 @@ func processIncomingTX (incoming *IncomingTX) {
 		}
 
 		if !db.Has(key, txn) {
-			err := saveTX(tx, incoming.Bytes, txn)
+			err := SaveTX(tx, incoming.Bytes, txn)
 			_checkIncomingError(tx, err)
 			if isMaybeMilestone(tx) {
 				trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
@@ -127,13 +127,7 @@ func processIncomingTX (incoming *IncomingTX) {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if utils.Random(0, 100) < 5 {
-				replyLocker.RLock()
-				for addr, queue := range replyQueues {
-					if addr != incoming.Addr && len(*queue) < 1000 {
-						*queue <- &Request{tx.Hash, false}
-					}
-				}
-				replyLocker.RUnlock()
+				Broadcast(tx.Hash)
 			}
 
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: 1}

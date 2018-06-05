@@ -5,9 +5,10 @@ import (
 	"convert"
 	"net/http"
 	"tangle"
+	"time"
 )
 
-func getTips (request Request, c *gin.Context) {
+func getTips (request Request, c *gin.Context, t time.Time) {
 	var tips []string
 	for _, tip := range tangle.Tips {
 		//if i >= 25 { break }
@@ -15,11 +16,11 @@ func getTips (request Request, c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes": tips,
-		"duration": 0,
+		"duration": getDuration(t),
 	})
 }
 
-func getTransactionsToApprove (request Request, c *gin.Context) {
+func getTransactionsToApprove (request Request, c *gin.Context, t time.Time) {
 	var trunk string
 	var branch string
 	trunkBytes := tangle.GetRandomTip()
@@ -33,6 +34,6 @@ func getTransactionsToApprove (request Request, c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"trunkTransaction": trunk,
 		"branchTransaction": branch,
-		"duration": 0,
+		"duration": getDuration(t),
 	})
 }

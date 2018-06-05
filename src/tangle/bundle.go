@@ -17,6 +17,9 @@ func IsValidBundle(trytes []string) bool {
 	var trits = make(map[int][]int)
 	for _, t := range trytes {
 		t := convert.TrytesToTrits(t)
+		if t == nil {
+			return false
+		}
 		tx := transaction.TritsToTX(&t, nil)
 		txs = append(txs, tx)
 		trits[tx.CurrentIndex] = t

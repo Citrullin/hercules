@@ -47,13 +47,12 @@ This makes sure we have all milestones and confirmed TXs in the database.
     - Alternatively one has to keep track of the incoming TXs.
     - Let it be a problem for the snapshotters
 
-2. Bundle Validator
-3. PoW
-4. API: including the snapshots API, password protection, duration, checks, etc.
+2. Snapshot API
 
-7. Server: hostname support
+3. Server: hostname support
 
 8. Small devices support: config settings
+9. PoW
 
 ## Cleanup
 
@@ -61,3 +60,4 @@ This makes sure we have all milestones and confirmed TXs in the database.
 5. Cleanup declarations from tangle to specific files.
 6. Write comments and descriptions.
 7. Check variable names for clean code.
+8. Best way to include dependencies?

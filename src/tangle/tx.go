@@ -16,7 +16,7 @@ func _checkSaveError(tx *transaction.FastTX, err error) {
 	}
 }
 
-func saveTX (tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
+func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	defer func() {
 		if err := recover(); err != nil {
 			e = errors.New("Failed saving TX!")

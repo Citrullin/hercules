@@ -6,9 +6,10 @@ import (
 	"server"
 	"strings"
 	"log"
+	"time"
 )
 
-func addNeighbors (request Request, c *gin.Context) {
+func addNeighbors (request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		added := 0
 		for _, address := range request.Uris {
@@ -17,12 +18,12 @@ func addNeighbors (request Request, c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"addedNeighbors": added,
-			"duration": 0,
+			"duration": getDuration(t),
 		})
 	}
 }
 
-func removeNeighbors (request Request, c *gin.Context) {
+func removeNeighbors (request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		removed := 0
 		for _, address := range request.Uris {
@@ -31,12 +32,12 @@ func removeNeighbors (request Request, c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,
-			"duration":       0,
+			"duration": getDuration(t),
 		})
 	}
 }
 
-func getNeighbors (request Request, c *gin.Context) {
+func getNeighbors (request Request, c *gin.Context, t time.Time) {
 	server.NeighborsLock.RLock()
 	defer server.NeighborsLock.RUnlock()
 
@@ -55,6 +56,6 @@ func getNeighbors (request Request, c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"neighbors": neighbors,
-		"duration":       0,
+		"duration":  getDuration(t),
 	})
 }

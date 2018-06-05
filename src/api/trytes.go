@@ -6,9 +6,10 @@ import (
 	"convert"
 	"db"
 	"github.com/dgraph-io/badger"
+	"time"
 )
 
-func getTrytes (request Request, c *gin.Context) {
+func getTrytes (request Request, c *gin.Context, t time.Time) {
 	var trytes []string
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Hashes {
@@ -27,6 +28,6 @@ func getTrytes (request Request, c *gin.Context) {
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"trytes": trytes,
-		"duration": 0,
+		"duration": getDuration(t),
 	})
 }

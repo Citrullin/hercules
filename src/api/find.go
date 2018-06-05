@@ -6,9 +6,10 @@ import (
 	"convert"
 	"db"
 	"github.com/dgraph-io/badger"
+	"time"
 )
 
-func findTransactions (request Request, c *gin.Context) {
+func findTransactions (request Request, c *gin.Context, t time.Time) {
 	var hashes []string
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
@@ -40,7 +41,7 @@ func findTransactions (request Request, c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes": hashes,
-		"duration": 0,
+		"duration": getDuration(t),
 	})
 }
 

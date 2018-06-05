@@ -6,9 +6,10 @@ import (
 	"convert"
 	"db"
 	"tangle"
+	"time"
 )
 
-func getBalances (request Request, c *gin.Context) {
+func getBalances (request Request, c *gin.Context, t time.Time) {
 	if request.Addresses != nil {
 		var balances []int64
 		for _, address := range request.Addresses {
@@ -30,7 +31,7 @@ func getBalances (request Request, c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"balances": balances,
-			"duration": 0,
+			"duration": getDuration(t),
 			"milestone": convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
 			"milestoneIndex": tangle.LatestMilestone.Index,
 		})

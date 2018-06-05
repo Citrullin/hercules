@@ -18,56 +18,70 @@ type Request struct {
 	Tags         []string
 	Approvees    []string
 	Transactions []string
+	Trytes       []string
 }
 
 var api *gin.Engine
 var srv *http.Server
 var config *viper.Viper
+var limitAccess []string
+var authEnabled = false
 
+// TODO: Add snapshot api
+// TODO: Add attach/interrupt attaching api
 // TODO: limit requests
 func Start (apiConfig *viper.Viper) {
 	config = apiConfig
 	if !config.GetBool("api.debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	// TODO: allow password protection for remote access
-	// TODO: allow certain command to be accessed locally only
+	limitAccess = config.GetStringSlice("api.limitRemoteAccess")
+	logs.Log.Debug("Limited remote access to:", limitAccess)
+
 	api = gin.Default()
-	// TODO: Add attach/interrupt attaching api
-	// TODO: Add broadcast api
-	// TODO: Add store api
-	// TODO: Add snapshot api
-	// TODO: make duration work on API
+
+	username := config.GetString("api.auth.username")
+	password := config.GetString("api.auth.password")
+	if len(username) > 0 && len(password) > 0 {
+		api.Use(gin.BasicAuth(gin.Accounts{ username: password }))
+	}
+
 	api.POST("/", func(c *gin.Context) {
+		t := time.Now()
 		var request Request
 		if err := c.ShouldBindJSON(&request); err == nil {
+			if triesToAccessLimited(request.Command, c) {
+				logs.Log.Warningf("Denying limited command request %v from remote %v",
+					request.Command, c.Request.RemoteAddr)
+				ReplyError("Limited remote command access", c)
+				return
+			}
 			if request.Command == "addNeighbors" {
-				addNeighbors(request, c)
+				addNeighbors(request, c, t)
 			} else if request.Command == "removeNeighbors" {
-				removeNeighbors(request, c)
+				removeNeighbors(request, c, t)
 			} else if request.Command == "getNeighbors" {
-				getNeighbors(request, c)
+				getNeighbors(request, c, t)
 			} else if request.Command == "getBalances" {
-				getBalances(request, c)
+				getBalances(request, c, t)
 			} else if request.Command == "findTransactions" {
-				findTransactions(request, c)
+				findTransactions(request, c, t)
 			} else if request.Command == "getTrytes" {
-				getTrytes(request, c)
+				getTrytes(request, c, t)
 			} else if request.Command == "getTips" {
-				getTips(request, c)
+				getTips(request, c, t)
 			} else if request.Command == "getTransactionsToApprove" {
-				getTransactionsToApprove(request, c)
+				getTransactionsToApprove(request, c, t)
 			} else if request.Command == "getInclusionStates" {
-				getInclusionStates(request, c)
+				getInclusionStates(request, c, t)
 			} else if request.Command == "wereAddressesSpentFrom" {
-				wereAddressesSpentFrom(request, c)
+				wereAddressesSpentFrom(request, c, t)
+			} else if request.Command == "storeTransactions" {
+				storeTransactions(request, c, false, t)
+			} else if request.Command == "broadcastTransactions" {
+				storeTransactions(request, c, true, t)
 			} else if request.Command == "getNodeInfo" {
-				// TODO: add missing fields to getInfo API
-				c.JSON(http.StatusOK, gin.H{
-					"appName": "CarrIOTA Nelson Go",
-					"appVersion": "0.0.1",
-					"duration": 0,
-				})
+				getNodeInfo(request, c, t)
 			} else {
 				logs.Log.Error("Unknown command", request.Command)
 				ReplyError("No known command provided", c)
@@ -77,6 +91,7 @@ func Start (apiConfig *viper.Viper) {
 			ReplyError("Wrongly formed JSON", c)
 		}
 	})
+
 	srv = &http.Server{
 		Addr:    ":" + config.GetString("api.port"),
 		Handler: api,
@@ -104,4 +119,20 @@ func ReplyError (message string, c *gin.Context) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error": message,
 	})
+}
+
+func getDuration(t time.Time) float64 {
+	return time.Now().Sub(t).Seconds()
+}
+
+func triesToAccessLimited (command string, c *gin.Context) bool {
+	if c.Request.RemoteAddr[:9] == "127.0.0.1" {
+		return false
+	}
+	for _, l := range limitAccess {
+		if l == command {
+			return true
+		}
+	}
+	return false
 }
