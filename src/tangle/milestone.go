@@ -11,6 +11,9 @@ import (
 	"sync"
 	"logs"
 	"time"
+	"os"
+	"bufio"
+	"io"
 )
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
@@ -37,6 +40,59 @@ var pendingMilestoneQueue PendingMilestoneQueue
 
 var LatestMilestone Milestone
 var MilestoneLocker = &sync.Mutex{}
+
+// TODO: remove this? Or add an API interface?
+func LoadMissingMilestonesFromFile(path string) error {
+	logs.Log.Info("Loading missing...")
+	total := 0
+	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		logs.Log.Fatalf("open file error: %v", err)
+		return err
+	}
+	defer f.Close()
+
+	rd := bufio.NewReader(f)
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logs.Log.Fatalf("read file line error: %v", err)
+			return err
+		}
+		hash := convert.TrytesToBytes(line)[:49]
+		has, err := requestIfMissing(hash, "", nil)
+		if err == nil {
+			if !has {
+				//logs.Log.Warning("MISSING", line)
+				total++
+			} else {
+				key := db.GetByteKey(hash, db.KEY_MILESTONE)
+				if !db.Has(key, nil) {
+					bits, err := db.GetBytes(db.AsKey(key, db.KEY_BYTES), nil)
+					if err != nil {
+						logs.Log.Error("Couldn't get milestonetx bytes", err)
+						continue
+					}
+					trits := convert.BytesToTrits(bits)[:8019]
+					tx := transaction.TritsToTX(&trits, bits)
+					trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
+					err = db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil, nil)
+					pendingMilestone := &PendingMilestone{key, trunkBytesKey}
+					logs.Log.Debugf("Added missing milestone: %v", convert.BytesToTrytes(tx.Hash)[:81])
+					addPendingMilestoneToQueue(pendingMilestone)
+				}
+			}
+		} else {
+			logs.Log.Error("ERR", err)
+		}
+	}
+	logs.Log.Info("Loaded missing", total)
+
+	return nil
+}
 
 func milestoneOnLoad() {
 	logs.Log.Info("Loading milestones")
@@ -242,7 +298,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
 	key = db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING)
 	discardMilestone := func () {
-		logs.Log.Error("Discarding", key)
+		logs.Log.Error("Discarding", convert.BytesToTrytes(tx.Bundle)[:81])
 		err := db.Remove(key, nil)
 		if err != nil {
 			logs.Log.Errorf("Could not remove pending milestone: %v", err)
@@ -255,7 +311,7 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 	if !bytes.Equal(tx2.Address, COO_ADDRESS2_BYTES) ||
 		!bytes.Equal(tx2.TrunkTransaction, tx.BranchTransaction) ||
 		!bytes.Equal(tx2.Bundle, tx.Bundle) {
-		logs.Log.Warning("Milestone bundle verification failed for:\n ", key)
+		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}
@@ -263,7 +319,7 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 	// Verify milestone signature and get the index:
 	milestoneIndex := getMilestoneIndex(tx, trits)
 	if milestoneIndex < 0 {
-		logs.Log.Warning("Milestone signature verification failed for: ", key)
+		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}

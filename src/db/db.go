@@ -27,18 +27,19 @@ func Load(cfg *viper.Viper) {
 	opts := badger.DefaultOptions
 	opts.Dir = config.GetString("database.path")
 	opts.ValueDir = opts.Dir
-	// TODO: only for small devices? Compare performance, add as configurable
+
 	// Source: https://github.com/dgraph-io/badger#memory-usage
-	if true {
+	if config.GetBool("light") {
 		opts.ValueLogLoadingMode = options.FileIO
 		opts.TableLoadingMode = options.FileIO
-		opts.NumMemtables = 1
-		opts.NumLevelZeroTables = 1
-		opts.NumLevelZeroTablesStall = 2
-		opts.NumCompactors = 1
-		//opts.MaxTableSize = 64 << 10
-		opts.ValueLogFileSize = 1 << 27
 	}
+	opts.NumMemtables = 1
+	opts.NumLevelZeroTables = 1
+	opts.NumLevelZeroTablesStall = 2
+	opts.NumCompactors = 1
+	//opts.MaxTableSize = 64 << 10
+	opts.ValueLogFileSize = 1 << 27
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		logs.Log.Fatal(err)

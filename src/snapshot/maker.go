@@ -152,6 +152,7 @@ func MakeSnapshot (timestamp int) error {
 
 			err = Unlock(txn)
 			if err != nil { return err }
+			db.RemoveAll(db.KEY_EDGE)
 			path := config.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp)
 			if err != nil { return err }

@@ -35,6 +35,8 @@ func trimTXRunner () {
 /*
 Removes all data from the database that is before a given timestamp
  */
+ // TODO: decrease transactions counter? What about confirmed? Not first priority now.
+ // The counter can be treated as incremental counter of all TXs known plus received since start of the node.
 func trimData (timestamp int64) error {
 	var txs [][]byte
 	var total = 0

@@ -5,6 +5,7 @@
       "username": null
     },
     "debug": false,
+    "host": "0.0.0.0",
     "limitRemoteAccess": [
       "getNeighbors",
       "addNeighbors",
@@ -15,6 +16,7 @@
   "database": {
     "path": "data"
   },
+  "light": false,
   "log": {
     "level": "INFO"
   },
@@ -25,7 +27,7 @@
   "snapshots" : {
     "path": "snapshots",
     "loadFile": "",
-    "interval": 1,
+    "interval": 0,
     "period": 168,
     "enableapi": true
   }

@@ -36,8 +36,7 @@ func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	_checkSaveError(tx, err)
 	err = db.Put(db.AsKey(key, db.KEY_ADDRESS_HASH), tx.Address, nil, txn)
 	_checkSaveError(tx, err)
-	// TODO: (OPT) Use {key byte}+whole address in spends and balances to save even more space?
-	err = db.PutBytes(db.GetByteKey(tx.Address, db.KEY_ADDRESS_BYTES), tx.Address, nil, txn)
+	err = SaveAddressBytes(tx.Address, txn, "NORM")
 	_checkSaveError(tx, err)
 	err = db.Put(
 		append(
@@ -78,4 +77,11 @@ func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	err = updateTipsOnNewTransaction(tx, txn)
 	_checkSaveError(tx, err)
 	return nil
+}
+
+func SaveAddressBytes(hash []byte, txn *badger.Txn, appendum string) error {
+	// TODO: (OPT) Use {key byte}+whole address in spends and balances to save even more space?
+	key := db.GetByteKey(hash, db.KEY_ADDRESS_BYTES)
+	if db.Has(key, txn) { return nil }
+	return db.PutBytes(key, hash, nil, txn)
 }

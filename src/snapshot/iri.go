@@ -13,8 +13,11 @@ import (
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
-	// TODO: fail if the database already exists?
-	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer")
+	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer", valuesPath)
+	if CurrentTimestamp > 0 {
+		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
+		return nil
+	}
 	db.Locker.Lock()
 	defer db.Locker.Unlock()
 
@@ -102,10 +105,48 @@ func loadIRISnapshotValues(valuesPath string) error {
 		value, err := strconv.ParseInt(strings.TrimSpace(tokens[1]), 10, 64)
 		if err != nil { return err }
 		total += value
-		loadValueSnapshot(address, value)
+		err = loadValueSnapshot(address, value)
+		if err != nil { return err }
 	}
 
 	logs.Log.Debugf("Snapshot total value: %v", total)
+
+	return nil
+}
+
+/*
+Deprecated. Used to load missing address hash bytes from IRI snapshot.
+ */
+func LoadAddressBytes(valuesPath string) error {
+	logs.Log.Debugf("Verifying byte addresses")
+	f, err := os.OpenFile(valuesPath, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		logs.Log.Fatalf("open file error: %v", err)
+		return err
+	}
+	defer f.Close()
+
+	if err != nil {
+		return err
+	}
+
+	rd := bufio.NewReader(f)
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			logs.Log.Fatalf("read file line error: %v", err)
+			return err
+		}
+		tokens := strings.Split(line, ";")
+		address := convert.TrytesToBytes(tokens[0])[:49]
+		addressKey := db.GetByteKey(address, db.KEY_ADDRESS_BYTES)
+		err = db.PutBytes(addressKey, address, nil, nil)
+		if err != nil { return err }
+	}
 
 	return nil
 }

@@ -17,7 +17,7 @@ func getBalances (request Request, c *gin.Context, t time.Time) {
 				ReplyError("Wrong trytes", c)
 				return
 			}
-			addressBytes := convert.TrytesToBytes(address)
+			addressBytes := convert.TrytesToBytes(address)[:49]
 			if addressBytes == nil {
 				balances = append(balances, 0)
 				continue

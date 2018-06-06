@@ -116,7 +116,8 @@ func outgoingRunner() {
 			sendReply(msg)
 		} else if len(srv.Incoming) < 50 {
 			pendingRequest = getOldPending()
-			if pendingRequest != nil && pendingRequest.LastNeighborAddr != neighbor.Addr {
+			if pendingRequest != nil && (len(server.Neighbors) <2 ||
+					pendingRequest.LastNeighborAddr != neighbor.Addr) {
 				pendingRequest.LastTried = time.Now()
 				pendingRequest.LastNeighborAddr = identifier
 				msg := getMessage(nil, pendingRequest.Hash, false, identifier, nil)
@@ -293,16 +294,19 @@ func findPendingRequest (hash []byte) int {
 func getOldPending () *PendingRequest{
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
+	sortRange := 5000
+	if lowEndDevice {
+		sortRange = 1000
+	}
 	for i, pendingRequest := range pendingRequests {
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
-		// TODO: OK to put this limit? Make it less for low-end devices
-		if i >= 5000 { return nil }
+		if i >= sortRange { return nil }
 	}
 	rotatePending++
-	if rotatePending > 1000 && len(pendingRequests) > 5000 {
-		pendingRequests = append(pendingRequests[5000:], pendingRequests[:5000]...)
+	if rotatePending > 1000 && len(pendingRequests) > sortRange {
+		pendingRequests = append(pendingRequests[sortRange:], pendingRequests[:sortRange]...)
 		rotatePending = 0
 	}
 	return nil

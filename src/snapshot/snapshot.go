@@ -24,31 +24,35 @@ var keySnapshotFile = []byte{db.KEY_SNAPSHOT_FILE}
 var edgeTransactions chan *[]byte
 var config *viper.Viper
 var CurrentTimestamp = 0
+var InProgress = false
+var lowEndDevice = false
 
 func Start(cfg *viper.Viper) {
     config = cfg
     logs.Log.Debug("Loading snapshots module")
     edgeTransactions = make(chan *[]byte, 10000000)
 
+    //lowEndDevice = config.GetBool("light")
     CurrentTimestamp = GetSnapshotTimestamp(nil)
 
     go trimTXRunner()
 
-    // TODO: regular snapshot runner
-
     // TODO: remove this:
+    //LoadIRISnapshot("snapshotMainnet.txt","previousEpochsSpentAddresses.txt",1525017600)
+    //SaveSnapshot("snapshots", 1527600000)
     /*
     logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
         db.Count(db.KEY_CONFIRMED),
         db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
         db.Count(db.KEY_PENDING_CONFIRMED))
-    err := MakeSnapshot(1527400000)
+    err := MakeSnapshot(1528000000)
     if err != nil {
         logs.Log.Fatalf("SNAPSHOT PANIC: %v", err)
     }
     */
 
     checkPendingSnapshot()
+    go startAutosnapshots()
 
     snapshotToLoad := config.GetString("snapshots.loadFile")
     if len(snapshotToLoad) > 0 {
@@ -72,7 +76,6 @@ func SetSnapshotTimestamp(timestamp int, txn *badger.Txn) error {
     return err
 }
 
-
 /*
 Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
@@ -85,6 +88,7 @@ func IsLocked (txn *badger.Txn) (timestamp int, filename string) {
 Creates a snapshot lock in the database
 */
 func Lock(timestamp int, filename string, txn *badger.Txn) error {
+    InProgress = true
     err := db.Put(keySnapshotLock, timestamp, nil, txn)
     if err != nil { return err }
     return db.Put(keySnapshotFile, filename, nil, txn)
@@ -94,6 +98,7 @@ func Lock(timestamp int, filename string, txn *badger.Txn) error {
 Removes a snapshot lock in the database
 */
 func Unlock(txn *badger.Txn) error {
+    InProgress = false
     err := db.Remove(keySnapshotLock, txn)
     if err != nil { return err }
     return db.Remove(keySnapshotFile, txn)
@@ -128,4 +133,28 @@ func GetSnapshotFileLock (txn *badger.Txn) string {
     filename, err := db.GetString(keySnapshotFile, txn)
     if err != nil { return "" }
     return filename
+}
+
+/*
+Starts a periodic snapshot runner
+ */
+func startAutosnapshots () {
+    snapshotPeriod := config.GetInt("snapshots.period")
+    snapshotInterval := config.GetInt("snapshots.interval")
+    if snapshotInterval == 0 {
+        return
+    }
+    logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.",
+        snapshotInterval, snapshotPeriod)
+    ticker := time.NewTicker(time.Duration(60 * snapshotInterval) * time.Minute)
+    for range ticker.C {
+        logs.Log.Info("Starting automatic snapshot...")
+        if !InProgress {
+            timestamp := int(time.Now().Unix()) - (snapshotPeriod * 3600)
+            MakeSnapshot(timestamp)
+        } else {
+            logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
+        }
+    }
+
 }

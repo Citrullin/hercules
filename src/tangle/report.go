@@ -7,6 +7,7 @@ import (
 )
 
 func report () {
+	Report()
 	flushTicker := time.NewTicker(reportInterval)
 	for range flushTicker.C {
 		Report()
@@ -32,22 +33,18 @@ func Report () {
 		logs.Log.Debugf("PEER O QUEUE:  %v - %v \n", i, len(*queue))
 	}
 	replyLocker.RUnlock()
-	// TODO: (OPT) have, in-memory counters instead of using db.Count
-	logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v (%v) \n",
-		db.Count(db.KEY_HASH),
-		db.Count(db.KEY_PENDING_HASH), len(pendingRequests))
-	logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
-		db.Count(db.KEY_CONFIRMED),
+	logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
+	logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
+		totalConfirmations,
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
 		db.Count(db.KEY_PENDING_CONFIRMED))
+	logs.Log.Debugf("PENDING TRIMS: %v", db.Count(db.KEY_EVENT_TRIM_PENDING))
 	logs.Log.Debugf("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
 		LatestMilestone.Index,
 		db.Count(db.KEY_MILESTONE),
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING),
 		len(pendingMilestoneQueue))
 	logs.Log.Debugf("TIPS:          %v\n", db.Count(db.KEY_TIP))
-	logs.Log.Debugf("PENDING TRIMS: %v,",
-		db.Count(db.KEY_EVENT_TRIM_PENDING))
 }
 
 var pendingPairs [][]byte

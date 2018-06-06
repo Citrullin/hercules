@@ -11,9 +11,6 @@ import (
 	"sync"
 	"db"
 	"github.com/spf13/viper"
-	"os"
-	"bufio"
-	"io"
 )
 
 const (
@@ -62,6 +59,9 @@ var replyLocker = &sync.RWMutex{}
 
 var txQueue TXQueue
 
+var lowEndDevice = false
+var totalTransactions int64 = 0
+var totalConfirmations int64 = 0
 var incoming = 0
 var incomingProcessed = 0
 var saved = 0
@@ -76,10 +76,19 @@ func Start (s *server.Server, cfg *viper.Viper) {
 	replyQueues = make(map[string]*RequestQueue)
 	txQueue = make(TXQueue, maxQueueSize)
 
+	lowEndDevice = config.GetBool("light")
+
+	totalTransactions = int64(db.Count(db.KEY_HASH))
+	totalConfirmations = int64(db.Count(db.KEY_CONFIRMED))
+
 	tipOnLoad()
 	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
+
+	// This had to be done due to the tangle split in May 2018.
+	// Might need this in the future for whatever reason?
+	// LoadMissingMilestonesFromFile("milestones.txt")
 
 	for i := 0; i < nbWorkers; i++ {
 		go incomingRunner()
@@ -100,42 +109,4 @@ func runner () {
 		outgoingRunner()
 		time.Sleep(time.Duration(len(srv.Incoming) * 10000))
 	}
-}
-
-// TODO: remove this? Or add an API interface?
-func LoadMissingMilestones() error {
-	logs.Log.Info("Loading missing...")
-	total := 0
-	f, err := os.OpenFile("milestones.txt", os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		logs.Log.Fatalf("open file error: %v", err)
-		return err
-	}
-	defer f.Close()
-
-	rd := bufio.NewReader(f)
-	for {
-		line, err := rd.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			logs.Log.Fatalf("read file line error: %v", err)
-			return err
-		}
-		hash := convert.TrytesToBytes(line)[:49]
-		//key := db.GetByteKey(hash, db.KEY_HASH)
-		has, err := requestIfMissing(hash, "", nil)
-		if err == nil {
-			if !has {
-				logs.Log.Warning("MISSING", line)
-				total++
-			}
-		} else {
-			logs.Log.Error("ERR", err)
-		}
-	}
-	logs.Log.Info("Loaded missing", total)
-
-	return nil
 }

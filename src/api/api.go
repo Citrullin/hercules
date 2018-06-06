@@ -27,9 +27,10 @@ var config *viper.Viper
 var limitAccess []string
 var authEnabled = false
 
+// TODO: Add accounts api - list all accounts
 // TODO: Add snapshot api
 // TODO: Add attach/interrupt attaching api
-// TODO: limit requests
+// TODO: limit requests, lists, etc.
 func Start (apiConfig *viper.Viper) {
 	config = apiConfig
 	if !config.GetBool("api.debug") {
@@ -93,7 +94,7 @@ func Start (apiConfig *viper.Viper) {
 	})
 
 	srv = &http.Server{
-		Addr:    ":" + config.GetString("api.port"),
+		Addr:   config.GetString("api.host") + ":" + config.GetString("api.port"),
 		Handler: api,
 	}
 	go func() {

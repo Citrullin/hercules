@@ -15,8 +15,11 @@ import (
 )
 
 func LoadSnapshot (path string) error {
-	// TODO: fail if the database already exists?
 	logs.Log.Info("Loading snapshot from", path)
+	if CurrentTimestamp > 0 {
+		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
+		return nil
+	}
 	timestamp, err := checkSnapshotFile(path)
 	if err != nil { return err }
 	logs.Log.Debug("Timestamp:", timestamp)
@@ -57,28 +60,24 @@ func LoadSnapshot (path string) error {
 
 func loadValueSnapshot(address []byte, value int64) error {
 	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_BALANCE)
-	return db.DB.Update(func(txn *badger.Txn) error {
-		err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
-		if err != nil { return err }
-		err = db.Put(addressKey, value, nil, nil)
-		if err != nil { return err }
-		err = db.Put(db.AsKey(addressKey, db.KEY_BALANCE), value, nil, nil)
-		if err != nil { return err }
-		return nil
-	})
+	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
+	if err != nil { return err }
+	err = db.Put(addressKey, value, nil, nil)
+	if err != nil { return err }
+	err = db.Put(db.AsKey(addressKey, db.KEY_BALANCE), value, nil, nil)
+	if err != nil { return err }
+	return nil
 }
 
 func loadSpentSnapshot(address []byte) error {
 	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_SPENT)
-	return db.DB.Update(func(txn *badger.Txn) error {
-		err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
-		if err != nil { return err }
-		err = db.Put(addressKey, true, nil, nil)
-		if err != nil { return err }
-		err = db.Put(db.AsKey(addressKey, db.KEY_SPENT), true, nil, nil)
-		if err != nil { return err }
-		return nil
-	})
+	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
+	if err != nil { return err }
+	err = db.Put(addressKey, true, nil, nil)
+	if err != nil { return err }
+	err = db.Put(db.AsKey(addressKey, db.KEY_SPENT), true, nil, nil)
+	if err != nil { return err }
+	return nil
 }
 
 func loadPendingBundleSnapshot(key []byte) error {

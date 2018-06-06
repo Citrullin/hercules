@@ -77,7 +77,11 @@ func loadConfig() *viper.Viper {
 	// 2. Get command line arguments
 	flag.StringP("config", "c", "", "Config path")
 
+	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. " +
+		"Try to optimize accordingly.")
+
 	flag.IntP("api.port", "p", 14265, "API Port")
+	flag.StringP("api.host", "h","0.0.0.0", "API Host")
 	flag.String("api.auth.username", "", "API Access Username")
 	flag.String("api.auth.password", "", "API Access Password")
 	flag.Bool("api.debug", false, "Whether to log api access")
@@ -88,7 +92,7 @@ func loadConfig() *viper.Viper {
 	flag.String("database.path", "data", "Path to the database directory")
 
 	flag.String("snapshots.path", "data", "Path to the snapshots directory")
-	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots")
+	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. Minimum 3.")
 	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: " +
 		"listSnapshots, downloadSnapshot, makeSnapshot, getSnapshotInfo")
@@ -117,10 +121,15 @@ func loadConfig() *viper.Viper {
 	}
 
 	// 4. Check config for validity
-	snapshotPeriod := config.GetInt("snapshot.period")
-	if config.GetInt("snapshot.interval") > 0 && snapshotPeriod < 6 {
+	snapshotPeriod := config.GetInt("snapshots.period")
+	snapshotInterval := config.GetInt("snapshots.interval")
+	if snapshotInterval > 0 && snapshotPeriod < 6 {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! " +
 			"At least 6 hours currently required to be kept.", snapshotPeriod)
+	}
+	if snapshotInterval > 0 && snapshotInterval < 3 {
+		logs.Log.Fatalf("The given snapshot interval of %v hours is too short! " +
+			"At least 3 hours currently required to be kept.", snapshotInterval)
 	}
 
 	return config

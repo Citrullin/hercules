@@ -36,7 +36,7 @@ func AddNeighbor (address string) error {
 		identifier = hostname
 	}
 	Neighbors[identifier] = createNeighbor(address, hostname)
-	logs.Log.Debugf("Adding neighbor '%v' with address '%v' and hostname '%v'",
+	logs.Log.Debugf("Adding neighbor '%v' with address/port '%v' and hostname '%v'",
 		identifier, Neighbors[identifier].Addr, Neighbors[identifier].Hostname)
 	return nil
 }

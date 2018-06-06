@@ -12,6 +12,7 @@ import (
 	"utils"
 	"time"
 	"snapshot"
+	"sync/atomic"
 )
 
 const P_TIP_REPLY = 20
@@ -58,7 +59,9 @@ func incomingRunner () {
 		})
 		if err == nil && !isTipRequest && tx != nil {
 			incomingProcessed++
-			txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
+			i := IncomingTX{tx, raw.Addr, msg.Bytes}
+			processIncomingTX(&i)
+			//txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
 		}
 	}
 }
@@ -88,6 +91,8 @@ func processIncomingTX (incoming *IncomingTX) {
 				db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 				db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 				db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+				err := db.Put(db.AsKey(key, db.KEY_EDGE), true, nil, txn)
+				_checkIncomingError(tx, err)
 				parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
 				if err == nil {
 					db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
@@ -133,6 +138,7 @@ func processIncomingTX (incoming *IncomingTX) {
 
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: 1}
 			saved++
+			atomic.AddInt64(&totalTransactions, 1)
 		} else {
 			discarded++
 		}
