@@ -127,10 +127,6 @@ func loadConfig() *viper.Viper {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! " +
 			"At least 6 hours currently required to be kept.", snapshotPeriod)
 	}
-	if snapshotInterval > 0 && snapshotInterval < 3 {
-		logs.Log.Fatalf("The given snapshot interval of %v hours is too short! " +
-			"At least 3 hours currently required to be kept.", snapshotInterval)
-	}
 
 	return config
 }
