@@ -9,7 +9,7 @@ import (
 )
 
 func getTips (request Request, c *gin.Context, t time.Time) {
-	var tips []string
+	var tips = []string{}
 	for _, tip := range tangle.Tips {
 		//if i >= 25 { break }
 		tips = append(tips, convert.BytesToTrytes(tip.Hash)[:81])

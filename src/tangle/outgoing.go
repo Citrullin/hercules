@@ -83,7 +83,7 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
-	if len(txQueue) > 100 { return }
+	if len(txQueue) > 100  || len(srv.Incoming) > 100 { return }
 	var pendingRequest *PendingRequest
 	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
 

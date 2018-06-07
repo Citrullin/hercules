@@ -23,6 +23,8 @@ func getNodeInfo (request Request, c *gin.Context, t time.Time) {
 		"allocatedMemory": stats.Sys,
 		"latestMilestone": convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
 		"latestMilestoneIndex": tangle.LatestMilestone.Index,
+		"latestSolidSubtangleMilestone": convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
+		"latestSolidSubtangleMilestoneIndex": tangle.LatestMilestone.Index,
 		"neighbors": len(server.Neighbors),
 		"currentSnapshotTimestamp": snapshot.CurrentTimestamp,
 		"isSynchronized": snapshot.IsSynchronized(),

@@ -212,23 +212,24 @@ func startMilestoneChecker() {
 }
 
 func checkMilestones () {
-	stop := false
-	for !stop {
-		var pendingMilestone *PendingMilestone
+	for {
+		stop := false
+		for !stop {
+			var pendingMilestone *PendingMilestone
 
-		select {
-		case pendingMilestone = <- pendingMilestoneQueue:
-		default:
-			stop = true
+			select {
+			case pendingMilestone = <- pendingMilestoneQueue:
+			default:
+				stop = true
+			}
+			if stop { break }
+			incomingMilestone(pendingMilestone)
 		}
-		if stop { break }
-		incomingMilestone(pendingMilestone)
-	}
-	time.Sleep(milestoneCheckInterval)
-	if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
-		startMilestoneChecker()
-	} else {
-		checkMilestones()
+		time.Sleep(milestoneCheckInterval)
+		if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
+			go startMilestoneChecker()
+			break
+		}
 	}
 }
 

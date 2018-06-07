@@ -42,7 +42,6 @@ func getBalances (request Request, c *gin.Context, t time.Time) {
 	}
 }
 
-
 func listAllAccounts (request Request, c *gin.Context, t time.Time) {
 	var accounts = make(map[string]interface{})
 	db.DB.View(func(txn *badger.Txn) error {

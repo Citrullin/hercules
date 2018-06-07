@@ -10,7 +10,7 @@ import (
 )
 
 func findTransactions (request Request, c *gin.Context, t time.Time) {
-	var hashes []string
+	var hashes = []string{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
 			ReplyError("Wrong address trytes", c)
@@ -47,7 +47,7 @@ func findTransactions (request Request, c *gin.Context, t time.Time) {
 
 
 func find (trits []byte, prefix byte) []string {
-	var response []string
+	var response = []string{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false

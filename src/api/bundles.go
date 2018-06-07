@@ -46,10 +46,10 @@ func storeTransactions (request Request, c *gin.Context, broadcast bool, t time.
 			ReplyError("Error encountered while saving a transaction", c)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"stored": stored,
-			"broadcasted": broadcasted,
-			"duration": getDuration(t),
-		})
 	}
+	c.JSON(http.StatusOK, gin.H{
+		"stored": stored,
+		"broadcasted": broadcasted,
+		"duration": getDuration(t),
+	})
 }

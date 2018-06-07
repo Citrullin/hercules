@@ -10,7 +10,6 @@ import (
 
 const (
 	SNAPSHOT_SEPARATOR = "==="
-    TOTAL_IOTAS = 2779530283277761
     TIMESTAMP_MIN = 1525017600
     WAIT_SNAPSHOT_DURATION = time.Duration(3) * time.Second
     MAX_SNAPSHOT_TIME = -(time.Duration(1) * time.Hour) // Maximal one hour age of snapshot
@@ -18,6 +17,7 @@ const (
     MAX_LATEST_TRANSACTION_AGE = 300
 )
 
+var TOTAL_IOTAS int64 = 2779530283277761
 var keySnapshotDate = []byte{db.KEY_SNAPSHOT_DATE}
 var keySnapshotLock = []byte{db.KEY_SNAPSHOT_LOCK}
 var keySnapshotFile = []byte{db.KEY_SNAPSHOT_FILE}

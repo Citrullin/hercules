@@ -75,6 +75,10 @@ func getSnapshotsInfo (request Request, c *gin.Context, t time.Time) {
 		}
 	}
 
+	if timestamps == nil {
+		timestamps = make([]map[string]interface{}, 0)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"currentSnapshotTimestamp": snapshot.CurrentTimestamp,
 		"isSynchronized": snapshot.IsSynchronized(),

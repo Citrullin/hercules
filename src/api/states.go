@@ -10,7 +10,7 @@ import (
 )
 
 func getInclusionStates (request Request, c *gin.Context, t time.Time) {
-	var states []bool
+	var states = []bool{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Transactions {
 			if !convert.IsTrytes(hash, 81) {
@@ -28,7 +28,7 @@ func getInclusionStates (request Request, c *gin.Context, t time.Time) {
 }
 
 func wereAddressesSpentFrom (request Request, c *gin.Context, t time.Time) {
-	var states []bool
+	var states = []bool{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Addresses {
 			if !convert.IsTrytes(hash, 81) {

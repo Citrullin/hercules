@@ -63,22 +63,11 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 # Roadmap
 
-1. Start a snapshot Y
-2. Wait for it to finish. Make sure that the tangle is still consistent. Y
-3. Remove database. Load the snapshot. Wait for sync. Y
-4. Make sure the database still consistent. Y
-5. Make sure the snapshot gets saved without missing address hashes Y
-
-Meanwhile:
-1. Add periodic snapshots functionality. Y
-2. Add snapshot program locking. Y
-3. Add API
-
-Later:
 1. Test with very recent snapshot on Raspberry PI and Beaglebone
 2. Eventually, add PoW
 
 To finish:
+0. Co-host dependencies?
 1. Cleanup
 2. Write documentation (README and wiki)
 3. Add License

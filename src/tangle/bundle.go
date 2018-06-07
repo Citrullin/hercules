@@ -7,7 +7,7 @@ import (
 	"bytes"
 )
 
-const TOTAL_IOTAS = 2779530283277761
+var TOTAL_IOTAS int64 = 2779530283277761
 
 func IsValidBundle(trytes []string) bool {
 	// TODO: catch error, return false

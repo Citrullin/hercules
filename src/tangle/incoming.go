@@ -59,9 +59,12 @@ func incomingRunner () {
 		})
 		if err == nil && !isTipRequest && tx != nil {
 			incomingProcessed++
-			i := IncomingTX{tx, raw.Addr, msg.Bytes}
-			processIncomingTX(&i)
-			//txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
+			if lowEndDevice {
+				txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
+			} else {
+				i := IncomingTX{tx, raw.Addr, msg.Bytes}
+				processIncomingTX(&i)
+			}
 		}
 	}
 }
