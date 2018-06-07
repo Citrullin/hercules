@@ -58,24 +58,30 @@ func LoadSnapshot (path string) error {
 	}
 }
 
-func loadValueSnapshot(address []byte, value int64) error {
+func loadValueSnapshot(address []byte, value int64, txn *badger.Txn) error {
 	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_BALANCE)
-	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
-	if err != nil { return err }
-	err = db.Put(addressKey, value, nil, nil)
-	if err != nil { return err }
-	err = db.Put(db.AsKey(addressKey, db.KEY_BALANCE), value, nil, nil)
-	if err != nil { return err }
+	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, txn)
+	if err != nil {
+		return err
+	}
+	err = db.Put(addressKey, value, nil, txn)
+	if err != nil {
+		return err
+	}
+	err = db.Put(db.AsKey(addressKey, db.KEY_BALANCE), value, nil, txn)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func loadSpentSnapshot(address []byte) error {
+func loadSpentSnapshot(address []byte, txn *badger.Txn) error {
 	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_SPENT)
-	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, nil)
+	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, txn)
 	if err != nil { return err }
-	err = db.Put(addressKey, true, nil, nil)
+	err = db.Put(addressKey, true, nil, txn)
 	if err != nil { return err }
-	err = db.Put(db.AsKey(addressKey, db.KEY_SPENT), true, nil, nil)
+	err = db.Put(db.AsKey(addressKey, db.KEY_SPENT), true, nil, txn)
 	if err != nil { return err }
 	return nil
 }
@@ -85,6 +91,7 @@ func loadPendingBundleSnapshot(key []byte) error {
 }
 
 func doLoadSnapshot (path string) error{
+	logs.Log.Infof("Loading values from %v. It can take several minutes. Please hold...", path)
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		logs.Log.Fatalf("open file error: %v", err)
@@ -103,6 +110,8 @@ func doLoadSnapshot (path string) error{
 	rd := bufio.NewReader(f)
 	var total int64 = 0
 	var totalSpent int64 = 0
+	var txn = db.DB.NewTransaction(true)
+
 	for {
 		line, err := rd.ReadString('\n')
 		line = strings.TrimSpace(line)
@@ -128,23 +137,58 @@ func doLoadSnapshot (path string) error{
 			value, err := strconv.ParseInt(tokens[1], 10, 64)
 			if err != nil { return err }
 			total += value
-			err = loadValueSnapshot(address, value)
+			err = loadValueSnapshot(address, value, txn)
 			if err != nil {
-				return err
+				if err == badger.ErrTxnTooBig {
+					err := txn.Commit(func(e error) {})
+					if err != nil {
+						return err
+					}
+					txn = db.DB.NewTransaction(true)
+					err = loadValueSnapshot(address, value, txn)
+					if err != nil { return err }
+				} else {
+					return err
+				}
 			}
 		} else if !keepBundles {
 			totalSpent++
-			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49])
+			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
 			if err != nil {
-				return err
+				if err == badger.ErrTxnTooBig {
+					err := txn.Commit(func(e error) {})
+					if err != nil {
+						return err
+					}
+					txn = db.DB.NewTransaction(true)
+					err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
+					if err != nil { return err }
+				} else {
+					return err
+				}
 			}
 		} else {
 			key := convert.TrytesToBytes(line)[:16]
 			err = loadPendingBundleSnapshot(key)
 			if err != nil {
-				return err
+				if err == badger.ErrTxnTooBig {
+					err := txn.Commit(func(e error) {})
+					if err != nil {
+						return err
+					}
+					txn = db.DB.NewTransaction(true)
+					err = loadPendingBundleSnapshot(key)
+					if err != nil { return err }
+				} else {
+					return err
+				}
 			}
 		}
+	}
+
+	err = txn.Commit(func(e error) {})
+	if err != nil {
+		return err
 	}
 
 	logs.Log.Debugf("Snapshot total value: %v", total)

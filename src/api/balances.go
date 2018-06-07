@@ -7,6 +7,10 @@ import (
 	"db"
 	"tangle"
 	"time"
+	"logs"
+	"github.com/dgraph-io/badger"
+	"bytes"
+	"encoding/gob"
 )
 
 func getBalances (request Request, c *gin.Context, t time.Time) {
@@ -36,4 +40,58 @@ func getBalances (request Request, c *gin.Context, t time.Time) {
 			"milestoneIndex": tangle.LatestMilestone.Index,
 		})
 	}
+}
+
+
+func listAllAccounts (request Request, c *gin.Context, t time.Time) {
+	var accounts = make(map[string]interface{})
+	db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = true
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_BALANCE}
+
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := item.Key()
+			v, err := item.Value()
+			if err == nil {
+				var value int64 = 0
+				buf := bytes.NewBuffer(v)
+				dec := gob.NewDecoder(buf)
+				err := dec.Decode(&value)
+				if err == nil {
+					// Do not save zero-value addresses
+					if value == 0 { continue }
+
+					item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
+					if err != nil {
+						continue
+					}
+					addressHash, err := item.Value()
+					if err != nil {
+						continue
+					}
+					if len(addressHash) < 49 {
+						continue
+					}
+					accounts[convert.BytesToTrytes(addressHash)[:81]] = value
+				} else {
+					logs.Log.Error("Could not parse a snapshot value from database!", err)
+					return err
+				}
+			} else {
+				logs.Log.Error("Could not read a snapshot value from database!", err)
+				return err
+			}
+		}
+		return nil
+	})
+	c.JSON(http.StatusOK, gin.H{
+		"accounts":       accounts,
+		"duration":       getDuration(t),
+		"milestone":      convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
+		"milestoneIndex": tangle.LatestMilestone.Index,
+	})
 }

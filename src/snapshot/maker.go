@@ -201,7 +201,7 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 		}
 	}
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
-	// TODO: investigate
+	// TODO: (OPT) investigate
 	if totalValue != 0 {
 		return nil, nil, nil
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +

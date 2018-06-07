@@ -48,8 +48,9 @@ func confirm (key []byte, txn *badger.Txn) error {
 	value, err2 := db.GetInt64(db.AsKey(key, db.KEY_VALUE), txn)
 	address, err3 := db.GetBytes(db.AsKey(key, db.KEY_ADDRESS_HASH), txn)
 
-	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn){
-		logs.Log.Debug("TX pending for trim, skipping", timestamp, snapshot.GetSnapshotTimestamp(txn), convert.BytesToTrytes(address)[:81])
+	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) && !bytes.Equal(address, COO_ADDRESS_BYTES) {
+		logs.Log.Debug("TX pending for trim, skipping",
+			timestamp, snapshot.GetSnapshotTimestamp(txn), convert.BytesToTrytes(address)[:81])
 		if value != 0 {
 			logs.Log.Errorf("TX with value %v skipped because of a trim - DB inconsistency imminent", value)
 			return errors.New("Value TX confirmation behind snapshot horizon!")

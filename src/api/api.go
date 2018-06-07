@@ -65,6 +65,8 @@ func Start (apiConfig *viper.Viper) {
 				getNeighbors(request, c, t)
 			} else if request.Command == "getBalances" {
 				getBalances(request, c, t)
+			} else if request.Command == "listAllAccounts" {
+				listAllAccounts(request, c, t)
 			} else if request.Command == "findTransactions" {
 				findTransactions(request, c, t)
 			} else if request.Command == "getTrytes" {

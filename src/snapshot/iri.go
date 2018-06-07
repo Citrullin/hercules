@@ -10,6 +10,7 @@ import (
 	"convert"
 	"strings"
 	"strconv"
+	"github.com/dgraph-io/badger"
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
@@ -55,6 +56,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 	defer f.Close()
 
 	rd := bufio.NewReader(f)
+	var txn = db.DB.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -65,13 +67,23 @@ func loadIRISnapshotSpent(spentPath string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
-		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49])
+		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
 		if err != nil {
-			return err
+			if err == badger.ErrTxnTooBig {
+				err := txn.Commit(func(e error) {})
+				if err != nil {
+					return err
+				}
+				txn = db.DB.NewTransaction(true)
+				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
+				if err != nil { return err }
+			} else {
+				return err
+			}
 		}
 	}
 
-	return nil
+	return txn.Commit(func (e error) {})
 }
 
 func loadIRISnapshotValues(valuesPath string) error {
@@ -90,6 +102,7 @@ func loadIRISnapshotValues(valuesPath string) error {
 
 	rd := bufio.NewReader(f)
 	var total int64 = 0
+	var txn = db.DB.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -105,13 +118,25 @@ func loadIRISnapshotValues(valuesPath string) error {
 		value, err := strconv.ParseInt(strings.TrimSpace(tokens[1]), 10, 64)
 		if err != nil { return err }
 		total += value
-		err = loadValueSnapshot(address, value)
-		if err != nil { return err }
+		err = loadValueSnapshot(address, value, txn)
+		if err != nil {
+			if err == badger.ErrTxnTooBig {
+				err := txn.Commit(func(e error) {})
+				if err != nil {
+					return err
+				}
+				txn = db.DB.NewTransaction(true)
+				err = loadValueSnapshot(address, value, txn)
+				if err != nil { return err }
+			} else {
+				return err
+			}
+		}
 	}
 
 	logs.Log.Debugf("Snapshot total value: %v", total)
 
-	return nil
+	return txn.Commit(func (e error) {})
 }
 
 /*

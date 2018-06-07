@@ -10,7 +10,8 @@
       "getNeighbors",
       "addNeighbors",
       "removeNeighbors",
-      "makeSnapshot"
+      "makeSnapshot",
+      "listAllAccounts"
     ],
     "port": 14265
   },

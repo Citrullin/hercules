@@ -38,20 +38,6 @@ func Start(cfg *viper.Viper) {
 
     go trimTXRunner()
 
-    // TODO: remove this:
-    //LoadIRISnapshot("snapshotMainnet.txt","previousEpochsSpentAddresses.txt",1525017600)
-    //SaveSnapshot("snapshots", 1527600000)
-    /*
-    logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v \n",
-        db.Count(db.KEY_CONFIRMED),
-        db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
-        db.Count(db.KEY_PENDING_CONFIRMED))
-    err := MakeSnapshot(1528000000)
-    if err != nil {
-        logs.Log.Fatalf("SNAPSHOT PANIC: %v", err)
-    }
-    */
-
     checkPendingSnapshot()
     go startAutosnapshots()
 
@@ -59,7 +45,7 @@ func Start(cfg *viper.Viper) {
     if len(snapshotToLoad) > 0 {
         LoadSnapshot(snapshotToLoad)
     }
-    // TODO: possibility to load an IRI snapshot.
+    // TODO: (OPT) possibility to load an IRI snapshot.
 
     if !checkDatabaseSnapshot() {
         logs.Log.Fatalf("Database is in an inconsistent state. Try deleting it and loading a snapshot.")
