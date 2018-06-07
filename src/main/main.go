@@ -95,7 +95,7 @@ func loadConfig() *viper.Viper {
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. Minimum 3.")
 	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: " +
-		"listSnapshots, downloadSnapshot, makeSnapshot, getSnapshotInfo")
+		"makeSnapshot, getSnapshotsInfo")
 
 	flag.IntP("node.port", "u", 13600, "UDP Node port")
 	flag.StringSliceP("node.neighbors","n", nil, "Initial Node neighbors")

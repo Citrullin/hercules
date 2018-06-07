@@ -19,6 +19,7 @@ type Request struct {
 	Approvees    []string
 	Transactions []string
 	Trytes       []string
+	Timestamp    int
 }
 
 var api *gin.Engine
@@ -28,7 +29,6 @@ var limitAccess []string
 var authEnabled = false
 
 // TODO: Add accounts api - list all accounts
-// TODO: Add snapshot api
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.
 func Start (apiConfig *viper.Viper) {
@@ -92,6 +92,10 @@ func Start (apiConfig *viper.Viper) {
 			ReplyError("Wrongly formed JSON", c)
 		}
 	})
+
+	if config.GetBool("snapshots.enableapi") {
+		enableSnapshotApi(api)
+	}
 
 	srv = &http.Server{
 		Addr:   config.GetString("api.host") + ":" + config.GetString("api.port"),

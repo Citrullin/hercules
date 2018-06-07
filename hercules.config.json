@@ -9,7 +9,8 @@
     "limitRemoteAccess": [
       "getNeighbors",
       "addNeighbors",
-      "removeNeighbors"
+      "removeNeighbors",
+      "makeSnapshot"
     ],
     "port": 14265
   },

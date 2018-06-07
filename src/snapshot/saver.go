@@ -23,7 +23,8 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 	defer db.Locker.Unlock()
 	utils.CreateDirectory(snapshotDir)
 
-	pth := path.Join(snapshotDir, strconv.FormatInt(int64(timestamp), 10) + ".snap")
+	savepth := path.Join(snapshotDir, strconv.FormatInt(int64(timestamp), 10) + ".snap")
+	pth := savepth + "_"
 	file, err := os.Create(pth)
 	if err != nil {
 		logs.Log.Noticef("Could not create snapshot file: %v", pth)
@@ -150,7 +151,9 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 	})
 	if err != nil { return err }
 	logs.Log.Notice("Snapshot saved, flushing...")
-	return w.Flush()
+	err = w.Flush()
+	if err != nil { return err }
+	return os.Rename(pth, savepth)
 }
 
 func restoreBrokenAddress (key []byte) []byte {

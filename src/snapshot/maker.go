@@ -21,6 +21,8 @@ Creates a snapshot on the current tangle database.
  */
 func MakeSnapshot (timestamp int) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
+	InProgress = true
+	defer func() { InProgress = false }()
 
 	var bundles [][]byte
 	var txs []KeyValue
@@ -198,11 +200,67 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 			return nil, nil, err
 		}
 	}
-	// Bundle not yet complete, do not use!
+	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
+	// TODO: investigate
 	if totalValue != 0 {
+		return nil, nil, nil
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +
 			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash))
 		return nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
 	}
 	return txs, nil, nil
+}
+
+func ReplaceTimestamps () {
+	var keys [][]byte
+	err := db.DB.View(func(txn *badger.Txn) error {
+		x := 0
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_TIMESTAMP}
+		logs.Log.Debug("Collecting all Keys...")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			key := make([]byte, 16)
+			copy(key, k)
+			keys = append(keys, key)
+			if x % 10000 == 0 {
+				logs.Log.Debugf("PROGRESS: ", x)
+			}
+			x++
+		}
+		return nil
+	})
+	if err != nil {
+		logs.Log.Error("WHOOPS1", err)
+		return
+	}
+	logs.Log.Debug("Applying all Keys...")
+	for x, key := range keys {
+		err := db.DB.Update(func(txn *badger.Txn) error {
+			txBytes, err := db.GetBytes(db.AsKey(key, db.KEY_BYTES), txn)
+			if err != nil {
+				return err
+			}
+			trits := convert.BytesToTrits(txBytes)[:8019]
+			tx := transaction.TritsToFastTX(&trits, txBytes)
+			err = db.Put(db.AsKey(key, db.KEY_TIMESTAMP), tx.Timestamp, nil, txn)
+			if err != nil {
+				return err
+			}
+			if x%10000 == 0 {
+				logs.Log.Debugf("PROGRESS: ", x)
+			}
+			return nil
+		})
+		if err != nil {
+			logs.Log.Error("WHOOPS2", err)
+			break
+		}
+	}
+	if err != nil {
+		logs.Log.Error("WHOOPS3", err)
+	}
 }

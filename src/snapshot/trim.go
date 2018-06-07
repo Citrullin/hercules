@@ -28,6 +28,8 @@ func trimTXRunner () {
 	})
 	logs.Log.Debug("Loaded trimmable TXs", len(edgeTransactions))
 	for hashKey := range edgeTransactions {
+		db.Locker.Lock()
+		db.Locker.Unlock()
 		trimTX(*hashKey)
 	}
 }
