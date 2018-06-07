@@ -178,7 +178,8 @@ func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 Returns whether the current tangle is synchronized
  */
 func IsSynchronized () bool {
-	return db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
+	return db.LatestTransactionTimestamp > int(time.Now().Unix() - MAX_LATEST_TRANSACTION_AGE) &&
+		db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 2
 }

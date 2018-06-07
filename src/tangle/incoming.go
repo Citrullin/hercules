@@ -104,6 +104,7 @@ func processIncomingTX (incoming *IncomingTX) {
 		if !db.Has(key, txn) {
 			err := SaveTX(tx, incoming.Bytes, txn)
 			_checkIncomingError(tx, err)
+			db.LatestTransactionTimestamp = tx.Timestamp
 			if isMaybeMilestone(tx) {
 				trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
 				err := db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil, txn)

@@ -18,6 +18,7 @@ const (
 var DB *badger.DB
 var config *viper.Viper
 var Locker = &sync.Mutex{}
+var LatestTransactionTimestamp = 0
 
 func Load(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")

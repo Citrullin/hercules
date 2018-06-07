@@ -15,6 +15,7 @@ const (
     WAIT_SNAPSHOT_DURATION = time.Duration(3) * time.Second
     MAX_SNAPSHOT_TIME = -(time.Duration(1) * time.Hour) // Maximal one hour age of snapshot
     MIN_SPENT_ADDRESSES = 521970
+    MAX_LATEST_TRANSACTION_AGE = 300
 )
 
 var keySnapshotDate = []byte{db.KEY_SNAPSHOT_DATE}
