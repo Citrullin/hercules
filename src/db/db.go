@@ -11,6 +11,7 @@ import (
 
 const (
 	dbCleanupInterval = time.Duration(5) * time.Minute
+	dbCleanupIntervalLight = time.Duration(1) * time.Minute
 )
 
 // TODO: (OPT) write tests
@@ -33,13 +34,16 @@ func Load(cfg *viper.Viper) {
 	if config.GetBool("light") {
 		opts.ValueLogLoadingMode = options.FileIO
 		opts.TableLoadingMode = options.FileIO
+		opts.NumMemtables = 1
+		opts.NumLevelZeroTables = 1
+		opts.NumLevelZeroTablesStall = 2
+		opts.NumCompactors = 1
+		opts.MaxLevels = 7
+		opts.LevelOneSize = 256 << 19
+		opts.MaxTableSize = 64 << 19
+		//opts.ValueLogFileSize = 1 << 31
+		//opts.ValueLogMaxEntries = 10000000
 	}
-	opts.NumMemtables = 1
-	opts.NumLevelZeroTables = 1
-	opts.NumLevelZeroTablesStall = 2
-	opts.NumCompactors = 1
-	//opts.MaxTableSize = 64 << 10
-	opts.ValueLogFileSize = 1 << 27
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -58,8 +62,12 @@ func End() {
 }
 
 func periodicDatabaseCleanup () {
+	var duration = dbCleanupInterval
+	if config.GetBool("light") {
+		duration = dbCleanupIntervalLight
+	}
 	for {
-		time.Sleep(dbCleanupInterval)
+		time.Sleep(duration)
 		cleanupDB()
 	}
 }

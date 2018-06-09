@@ -208,7 +208,7 @@ func startMilestoneChecker() {
 	pairs = nil
 	lastMilestoneCheck = time.Now()
 
-	checkMilestones()
+	go checkMilestones()
 }
 
 func checkMilestones () {
