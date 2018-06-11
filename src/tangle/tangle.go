@@ -72,6 +72,7 @@ var outgoing = 0
 func Start (s *server.Server, cfg *viper.Viper) {
 	config = cfg
 	srv = s
+	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	requestQueues = make(map[string]*RequestQueue)
 	replyQueues = make(map[string]*RequestQueue)
 	txQueue = make(TXQueue, maxQueueSize)

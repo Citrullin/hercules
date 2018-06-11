@@ -114,6 +114,11 @@ func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 		return
 	}
 
+	if !snapshot.CanSnapshot(request.Timestamp) {
+		ReplyError("Pending confirmations behind the snapshot horizon. Cannot snapshot in this state.", c)
+		return
+	}
+
 	go snapshot.MakeSnapshot(request.Timestamp)
 	c.JSON(http.StatusOK, gin.H{
 		"time": time.Now().Unix(),

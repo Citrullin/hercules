@@ -16,6 +16,66 @@ import (
 	"os"
 )
 
+/*
+Returns if the given timestamp is more recent than the current database snapshot.
+ */
+func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
+	current := GetSnapshotTimestamp(txn)
+	return timestamp > current
+}
+
+/*
+Returns if the given timestamp is more recent than the current database snapshot.
+ */
+func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
+	current := GetSnapshotTimestamp(txn)
+	return timestamp >= current
+}
+
+/*
+Returns whether the current tangle is synchronized
+ */
+func IsSynchronized () bool {
+	return db.LatestTransactionTimestamp > int(time.Now().Unix() - MAX_LATEST_TRANSACTION_AGE) &&
+		db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
+		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
+		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 2
+}
+
+/*
+Checks outstanding pending confirmations that node is beyond the snapshot horizon.
+This is just an additional measure to prevent tangle inconsistencies.
+ */
+func CanSnapshot(timestamp int) bool {
+	pendingConfirmationsBehindHorizon := false
+	err := db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = true
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_EVENT_CONFIRMATION_PENDING}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			v, err := it.Item().Value()
+			if err != nil {
+				return err
+			}
+			var ts = 0
+			buf := bytes.NewBuffer(v)
+			dec := gob.NewDecoder(buf)
+			err = dec.Decode(&ts)
+			if err != nil {
+				return err
+			}
+			if ts <= timestamp {
+				pendingConfirmationsBehindHorizon = true
+				break
+			}
+		}
+		return nil
+	})
+	return err == nil && !pendingConfirmationsBehindHorizon
+}
+
 func checkDatabaseSnapshot () bool {
 	logs.Log.Info("Checking database snapshot integrity")
 	var total int64 = 0
@@ -156,30 +216,4 @@ func checkPendingSnapshot () {
 			MakeSnapshot(timestamp)
 		}
 	}
-}
-
-/*
-Returns if the given timestamp is more recent than the current database snapshot.
- */
-func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
-	current := GetSnapshotTimestamp(txn)
-	return timestamp > current
-}
-
-/*
-Returns if the given timestamp is more recent than the current database snapshot.
- */
-func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
-	current := GetSnapshotTimestamp(txn)
-	return timestamp >= current
-}
-
-/*
-Returns whether the current tangle is synchronized
- */
-func IsSynchronized () bool {
-	return db.LatestTransactionTimestamp > int(time.Now().Unix() - MAX_LATEST_TRANSACTION_AGE) &&
-		db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
-		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
-		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 2
 }

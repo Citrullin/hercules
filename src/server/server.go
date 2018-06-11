@@ -2,7 +2,6 @@ package server
 
 import (
 	"net"
-	"runtime"
 	"sync/atomic"
 	"time"
 	"sync"
@@ -16,13 +15,6 @@ const (
 	maxQueueSize  = 1000000
 	UDPPacketSize = 1650
 )
-
-var ops uint64 = 0
-var Speed uint64 = 1
-var total uint64 = 0
-var flushTicker *time.Ticker
-var hostnameTicker *time.Ticker
-var nbWorkers = runtime.NumCPU()
 
 type Neighbor struct {
 	Hostname string
@@ -53,16 +45,13 @@ type Server struct {
 	Outgoing messageQueue
 }
 
-func (mq messageQueue) enqueue(m *Message) {
-	mq <- m
-}
 
-func (mq messageQueue) dequeue() {
-	for m := range mq {
-		handleMessage(m)
-	}
-}
-
+var ops uint64 = 0
+var Speed uint64 = 1
+var total uint64 = 0
+var flushTicker *time.Ticker
+var hostnameTicker *time.Ticker
+//var nbWorkers = runtime.NumCPU()
 var mq messageQueue
 var NeighborTrackingQueue neighborTrackingQueue
 var NeighborsLock sync.RWMutex
@@ -160,6 +149,16 @@ func (server Server) Write(msg *Message) {
 		if neighbor != nil {
 			neighbor.Write(msg)
 		}
+	}
+}
+
+func (mq messageQueue) enqueue(m *Message) {
+	mq <- m
+}
+
+func (mq messageQueue) dequeue() {
+	for m := range mq {
+		handleMessage(m)
 	}
 }
 

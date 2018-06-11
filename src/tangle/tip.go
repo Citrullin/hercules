@@ -20,6 +20,18 @@ type Tip struct {
 var Tips []*Tip
 var TipsLocker = &sync.Mutex{}
 
+func GetRandomTip () (hash []byte) {
+	TipsLocker.Lock()
+	defer TipsLocker.Unlock()
+
+	if len(Tips) < 1 {
+		return nil
+	}
+
+	hash = Tips[utils.Random(0, len(Tips))].Hash
+	return hash
+}
+
 func tipOnLoad() {
 	loadTips()
 	go startTipRemover()
@@ -146,16 +158,4 @@ func getRandomTip () (hash []byte, txBytes []byte) {
 	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_BYTES), nil)
 	if err != nil { return nil, nil }
 	return hash, txBytes
-}
-
-func GetRandomTip () (hash []byte) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
-
-	if len(Tips) < 1 {
-		return nil
-	}
-
-	hash = Tips[utils.Random(0, len(Tips))].Hash
-	return hash
 }

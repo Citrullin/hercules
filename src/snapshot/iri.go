@@ -11,6 +11,7 @@ import (
 	"strings"
 	"strconv"
 	"github.com/dgraph-io/badger"
+	"bytes"
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
@@ -166,8 +167,15 @@ func LoadAddressBytes(valuesPath string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
+		if line[:3] == SNAPSHOT_SEPARATOR {
+			break
+		}
 		tokens := strings.Split(line, ";")
 		address := convert.TrytesToBytes(tokens[0])[:49]
+		target := []byte{105, 0, 0, 61, 232, 23, 226, 201, 36, 132, 235, 184, 178, 153, 43, 42}
+		if bytes.Equal(db.GetByteKey(address, db.KEY_ADDRESS_BYTES), target) {
+			logs.Log.Warning("FOUND!", address)
+		}
 		addressKey := db.GetByteKey(address, db.KEY_ADDRESS_BYTES)
 		err = db.PutBytes(addressKey, address, nil, nil)
 		if err != nil { return err }

@@ -35,7 +35,7 @@ func (kerl *Kerl) Absorb(trits []int, offset int, length int) {
 	for {
 		copy(kerl.trit_state[:HASH_LENGTH], trits[offset:offset+HASH_LENGTH])
 		kerl.trit_state[HASH_LENGTH - 1] = 0
-		IntToBytes(convert.TritsToInt(kerl.trit_state), kerl.byte_state, 0)
+		intToBytes(convert.TritsToInt(kerl.trit_state), kerl.byte_state, 0)
 		kerl.hash.Write(kerl.byte_state)
 		offset += HASH_LENGTH
 		length -= HASH_LENGTH
@@ -47,7 +47,7 @@ func (kerl *Kerl) Squeeze(trits []int, offset int, length int) []int {
 	if length % 243 != 0 { panic("wrong length provided for kerl") }
 	for {
 		kerl.byte_state = kerl.hash.Sum(nil)
-		intValue := BytesToInt(kerl.byte_state, 0 , BYTE_HASH_LENGTH)
+		intValue := bytesToInt(kerl.byte_state, 0 , BYTE_HASH_LENGTH)
 		kerl.trit_state = convert.IntToTrits(intValue, len(kerl.trit_state))
 		kerl.trit_state[HASH_LENGTH - 1] = 0
 		copy(trits[offset: offset + HASH_LENGTH], kerl.trit_state[0:HASH_LENGTH])
@@ -78,7 +78,7 @@ func RunHashKerl(trits []int) []int {
 	return nil
 }
 
-func BytesToInt (input []byte, offset int, size int) *big.Int {
+func bytesToInt(input []byte, offset int, size int) *big.Int {
 	var cp = make([]byte, len(input))
 	copy(cp, input)
 	isPositive := cp[0] >> 7 == 0
@@ -103,7 +103,7 @@ func BytesToInt (input []byte, offset int, size int) *big.Int {
 	return bigInt
 }
 
-func IntToBytes (value *big.Int, destination []byte, offset int) {
+func intToBytes(value *big.Int, destination []byte, offset int) {
 	if len(destination) - offset < BYTE_HASH_LENGTH { panic("Destination array has invalid size for Kerl") }
 	bts := value.Bytes()
 	isPositive := value.Sign() >= 0

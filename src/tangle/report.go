@@ -6,14 +6,6 @@ import (
 	"logs"
 )
 
-func report () {
-	Report()
-	flushTicker := time.NewTicker(reportInterval)
-	for range flushTicker.C {
-		Report()
-	}
-}
-
 func Report () {
 	logs.Log.Debugf("INCOMING:      In: %v, Queued: %v, Pending: %v \n",
 		incoming,
@@ -33,18 +25,24 @@ func Report () {
 		logs.Log.Debugf("PEER O QUEUE:  %v - %v \n", i, len(*queue))
 	}
 	replyLocker.RUnlock()
-	logs.Log.Debugf("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
-	logs.Log.Debugf("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
+	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
+	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
 		totalConfirmations,
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
 		db.Count(db.KEY_PENDING_CONFIRMED))
 	logs.Log.Debugf("PENDING TRIMS: %v", db.Count(db.KEY_EVENT_TRIM_PENDING))
-	logs.Log.Debugf("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
+	logs.Log.Infof("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
 		LatestMilestone.Index,
 		db.Count(db.KEY_MILESTONE),
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING),
 		len(pendingMilestoneQueue))
-	logs.Log.Debugf("TIPS:          %v\n", db.Count(db.KEY_TIP))
+	logs.Log.Infof("TIPS:          %v\n", db.Count(db.KEY_TIP))
 }
 
-var pendingPairs [][]byte
+func report () {
+	Report()
+	flushTicker := time.NewTicker(reportInterval)
+	for range flushTicker.C {
+		Report()
+	}
+}

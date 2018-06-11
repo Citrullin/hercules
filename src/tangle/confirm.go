@@ -104,9 +104,9 @@ func confirm (key []byte, txn *badger.Txn) error {
 func confirmChild (key []byte, txn *badger.Txn) error {
 	if bytes.Equal(key, tipHashKey) { return nil }
 	if db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) { return nil }
-	_, err := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
+	timestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 	if err == nil {
-		err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+		err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp, nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not save child confirm status: %v", err)
 			return errors.New("Could not save child confirm status!")

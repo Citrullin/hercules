@@ -26,6 +26,19 @@ var lastTip = time.Now()
 var pendingRequests []*PendingRequest
 var rotatePending = 0
 
+func Broadcast(hash []byte) int {
+	queued := 0
+	replyLocker.RLock()
+	for _, queue := range replyQueues {
+		if len(*queue) < 1000 {
+			*queue <- &Request{hash, false}
+			queued++
+		}
+	}
+	replyLocker.RUnlock()
+	return queued
+}
+
 func pendingOnLoad () {
 	loadPendingRequests()
 }
@@ -310,17 +323,4 @@ func getOldPending () *PendingRequest{
 		rotatePending = 0
 	}
 	return nil
-}
-
-func Broadcast(hash []byte) int {
-	queued := 0
-	replyLocker.RLock()
-	for _, queue := range replyQueues {
-		if len(*queue) < 1000 {
-			*queue <- &Request{hash, false}
-			queued++
-		}
-	}
-	replyLocker.RUnlock()
-	return queued
 }

@@ -45,6 +45,10 @@ func MakeSnapshot (timestamp int) error {
 			logs.Log.Warning("Tangle not fully synchronized - cannot create snapshot!")
 			return errors.New("tangle not fully synchronized")
 		}
+		if !CanSnapshot(timestamp) {
+			logs.Log.Warning("Pending confirmations behind the snapshot horizon - cannot create snapshot!")
+			return errors.New("tangle not fully synchronized")
+		}
 		lockedTimestamp := GetSnapshotLock(txn)
 		if lockedTimestamp > timestamp {
 			logs.Log.Warningf("There is a snapshot pending (%v), skipping current (%v)!", lockedTimestamp, timestamp)

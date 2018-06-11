@@ -12,7 +12,6 @@ const (
 	SNAPSHOT_SEPARATOR = "==="
     TIMESTAMP_MIN = 1525017600
     WAIT_SNAPSHOT_DURATION = time.Duration(3) * time.Second
-    MAX_SNAPSHOT_TIME = -(time.Duration(1) * time.Hour) // Maximal one hour age of snapshot
     MIN_SPENT_ADDRESSES = 521970
     MAX_LATEST_TRANSACTION_AGE = 300
 )
@@ -33,8 +32,12 @@ func Start(cfg *viper.Viper) {
     logs.Log.Debug("Loading snapshots module")
     edgeTransactions = make(chan *[]byte, 10000000)
 
-    //lowEndDevice = config.GetBool("light")
+    lowEndDevice = config.GetBool("light")
     CurrentTimestamp = GetSnapshotTimestamp(nil)
+    // LoadIRISnapshot("snapshotMainnet.txt", "previousEpochsSpentAddresses.txt", 1525017600)
+    // LoadAddressBytes("snapshotMainnet.txt")
+    // [ERRO] 19:32:32.456910 002390 [snapshot] SaveSnapshot.func3 -> Wrong address length! value 14560000, () => [], key: [120 0 0 61 232 23 226 201 36 132 235 184 178 153 43 42]
+    // [WARN] 19:32:32.457129 002391 [snapshot] restoreBrokenAddress -> Address hash not found for key [105 0 0 61 232 23 226 201 36 132 235 184 178 153 43 42]. Trying to restore...
 
     go trimTXRunner()
 

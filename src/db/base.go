@@ -10,6 +10,7 @@ import (
 	"math"
 )
 
+// TODO: the descriptions are mostly wrong...
 const (
 	KEY_FINGERPRINT = byte(0) // hash -> tx.hash trytes
 

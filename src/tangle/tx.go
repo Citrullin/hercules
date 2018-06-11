@@ -9,13 +9,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func _checkSaveError(tx *transaction.FastTX, err error) {
-	if err != nil {
-		logs.Log.Errorf("Failed saving TX %v", convert.BytesToTrytes(tx.Hash)[:81], err)
-		panic(err)
-	}
-}
-
 func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -84,4 +77,11 @@ func SaveAddressBytes(hash []byte, txn *badger.Txn, appendum string) error {
 	key := db.GetByteKey(hash, db.KEY_ADDRESS_BYTES)
 	if db.Has(key, txn) { return nil }
 	return db.PutBytes(key, hash, nil, txn)
+}
+
+func _checkSaveError(tx *transaction.FastTX, err error) {
+	if err != nil {
+		logs.Log.Errorf("Failed saving TX %v", convert.BytesToTrytes(tx.Hash)[:81], err)
+		panic(err)
+	}
 }

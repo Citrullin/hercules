@@ -36,8 +36,8 @@ type PendingMilestoneQueue chan *PendingMilestone
 
 var COO_ADDRESS_BYTES = convert.TrytesToBytes(COO_ADDRESS)[:49]
 var COO_ADDRESS2_BYTES = convert.TrytesToBytes(COO_ADDRESS2)[:49]
-var pendingMilestoneQueue PendingMilestoneQueue
 
+var pendingMilestoneQueue PendingMilestoneQueue
 var LatestMilestone Milestone
 var MilestoneLocker = &sync.Mutex{}
 
@@ -339,7 +339,7 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 	checkIsLatestMilestone(milestoneIndex, tx)
 
 	// Trigger confirmations
-	err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+	err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
 	if err != nil {
 		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)

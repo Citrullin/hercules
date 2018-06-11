@@ -28,6 +28,8 @@ func init() {
 }
 
 func main () {
+	Hello()
+	time.Sleep(time.Duration(500) * time.Millisecond)
 	StartHercules()
 }
 
@@ -36,6 +38,7 @@ func StartHercules () {
 	db.Load(config)
 	srv := server.Create(config)
 
+	//snapshot.LoadAddressBytes("snapshots/1528630000.snap")
 	snapshot.Start(config)
 	tangle.Start(srv, config)
 	server.Start()
@@ -129,4 +132,13 @@ func loadConfig() *viper.Viper {
 	}
 
 	return config
+}
+
+func Hello() {
+	logs.Log.Info("db   db d88888b d8888b.  .o88b. db    db db      d88888b .d8888.")
+	logs.Log.Info("88   88 88'     88  `8D d8P  Y8 88    88 88      88'     88'  YP")
+	logs.Log.Info("88ooo88 88ooooo 88oobY' 8P      88    88 88      88ooooo `8bo.")
+	logs.Log.Info("88~~~88 88~~~~~ 88`8b   8b      88    88 88      88~~~~~   `Y8b.")
+	logs.Log.Info("88   88 88.     88 `88. Y8b  d8 88b  d88 88booo. 88.     db   8D")
+	logs.Log.Info("YP   YP Y88888P 88   YD  `Y88P' ~Y8888P' Y88888P Y88888P `8888Y'")
 }

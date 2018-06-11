@@ -23,7 +23,7 @@ type Curl struct {
 	rounds int
 }
 
-var truthTable = []int{1, 0, -1, 2, 1, -1, 0, 2, -1, 1, 0}
+var TRUTH_TABLE = []int{1, 0, -1, 2, 1, -1, 0, 2, -1, 1, 0}
 
 
 func (curl *Curl) Initialize() {
@@ -77,12 +77,11 @@ func (curl *Curl) Transform() {
 				incr = -365
 			}
 			index2 := index + incr
-			curl.state[i] = truthTable[stateCopy[index] + (stateCopy[index2] << 2) + 5]
+			curl.state[i] = TRUTH_TABLE[stateCopy[index] + (stateCopy[index2] << 2) + 5]
 			index = index2
 		}
 	}
 }
-
 
 func RunHashCurl(trits []int) []int {
 	var curl = new(Curl)

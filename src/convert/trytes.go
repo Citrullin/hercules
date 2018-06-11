@@ -104,7 +104,6 @@ func CharCodeAt(s string, n int) rune {
 	return 0
 }
 
-
 func IsTrytes (trytes string, length int) bool {
 	if len(trytes) != length || TrytesToTrits(trytes) == nil {
 		return false

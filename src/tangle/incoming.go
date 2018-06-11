@@ -125,7 +125,7 @@ func processIncomingTX (incoming *IncomingTX) {
 			if db.Has(pendingConfirmationKey, txn) {
 				err = db.Remove(pendingConfirmationKey, txn)
 				_checkIncomingError(tx, err)
-				err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), "", nil, txn)
+				err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
 				_checkIncomingError(tx, err)
 			}
 

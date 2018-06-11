@@ -14,13 +14,16 @@ const (
 	dbCleanupIntervalLight = time.Duration(1) * time.Minute
 )
 
-// TODO: (OPT) write tests
+// TODO: (OPT) write tests for the database?
 
 var DB *badger.DB
 var config *viper.Viper
 var Locker = &sync.Mutex{}
 var LatestTransactionTimestamp = 0
 
+/*
+Loads the database and configures according the the config options.
+ */
 func Load(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")
 
@@ -39,8 +42,8 @@ func Load(cfg *viper.Viper) {
 		opts.NumLevelZeroTablesStall = 2
 		opts.NumCompactors = 1
 		opts.MaxLevels = 7
-		opts.LevelOneSize = 256 << 19
-		opts.MaxTableSize = 64 << 19
+		opts.LevelOneSize = 256 << 18
+		opts.MaxTableSize = 64 << 18
 		//opts.ValueLogFileSize = 1 << 31
 		//opts.ValueLogMaxEntries = 10000000
 	}
@@ -55,12 +58,20 @@ func Load(cfg *viper.Viper) {
 	logs.Log.Info("Database loaded")
 }
 
+/*
+Locks the database for five seconds. Should be called before exiting.
+This is useful to allow running database processes to finished, but
+deny locking of new tasks.
+ */
 func End() {
 	Locker.Lock()
 	time.Sleep(time.Duration(5) * time.Second)
 	DB.Close()
 }
 
+/*
+Runner for database garbage collection.
+ */
 func periodicDatabaseCleanup () {
 	var duration = dbCleanupInterval
 	if config.GetBool("light") {
@@ -72,11 +83,14 @@ func periodicDatabaseCleanup () {
 	}
 }
 
+/*
+Garbage-collects debris from the memory.
+ */
 func cleanupDB() {
-	logs.Log.Info("Cleanup database started")
+	logs.Log.Debug("Cleanup database started")
 	Locker.Lock()
 	DB.RunValueLogGC(0.5)
 	Locker.Unlock()
-	logs.Log.Info("Cleanup database finished")
+	logs.Log.Debug("Cleanup database finished")
 }
 
