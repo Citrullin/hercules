@@ -1,12 +1,12 @@
 package tangle
 
 import (
-	"time"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
+	"time"
 )
 
-func Report () {
+func Report() {
 	logs.Log.Debugf("INCOMING:      In: %v, Queued: %v, Pending: %v \n",
 		incoming,
 		incomingProcessed,
@@ -39,7 +39,7 @@ func Report () {
 	logs.Log.Infof("TIPS:          %v\n", db.Count(db.KEY_TIP))
 }
 
-func report () {
+func report() {
 	Report()
 	flushTicker := time.NewTicker(reportInterval)
 	for range flushTicker.C {

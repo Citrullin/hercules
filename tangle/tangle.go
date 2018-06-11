@@ -1,25 +1,25 @@
 package tangle
 
 import (
-	"time"
-	"runtime"
-	"strings"
-	"sync"
 	"github.com/spf13/viper"
+	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
 	"gitlab.com/semkodev/hercules.go/server"
-	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/transaction"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
-	MWM             = 14
-	maxQueueSize    = 1000000
-	reportInterval  = time.Duration(60) * time.Second
-	tipRemoverInterval  = time.Duration(1) * time.Minute
-	maxTipAge           = time.Duration(1) * time.Hour
-	)
+	MWM                = 14
+	maxQueueSize       = 1000000
+	reportInterval     = time.Duration(60) * time.Second
+	tipRemoverInterval = time.Duration(1) * time.Minute
+	maxTipAge          = time.Duration(1) * time.Hour
+)
 
 type Message struct {
 	Bytes     *[]byte
@@ -29,7 +29,7 @@ type Message struct {
 
 type Request struct {
 	Requested []byte
-	Tip bool
+	Tip       bool
 }
 
 type IncomingTX struct {
@@ -68,8 +68,7 @@ var saved = 0
 var discarded = 0
 var outgoing = 0
 
-
-func Start (s *server.Server, cfg *viper.Viper) {
+func Start(s *server.Server, cfg *viper.Viper) {
 	config = cfg
 	srv = s
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
@@ -100,10 +99,10 @@ func Start (s *server.Server, cfg *viper.Viper) {
 	logs.Log.Info("Tangle started!")
 }
 
-func runner () {
+func runner() {
 	for {
 		select {
-		case incomingTX := <- txQueue:
+		case incomingTX := <-txQueue:
 			processIncomingTX(incomingTX)
 		default:
 		}

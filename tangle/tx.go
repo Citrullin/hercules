@@ -1,12 +1,12 @@
 package tangle
 
 import (
-	"github.com/pkg/errors"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/transaction"
+	"github.com/pkg/errors"
+	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"gitlab.com/semkodev/hercules.go/transaction"
 )
 
 func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
@@ -75,7 +75,9 @@ func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 func SaveAddressBytes(hash []byte, txn *badger.Txn, appendum string) error {
 	// TODO: (OPT) Use {key byte}+whole address in spends and balances to save even more space?
 	key := db.GetByteKey(hash, db.KEY_ADDRESS_BYTES)
-	if db.Has(key, txn) { return nil }
+	if db.Has(key, txn) {
+		return nil
+	}
 	return db.PutBytes(key, hash, nil, txn)
 }
 

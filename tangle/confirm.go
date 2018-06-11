@@ -1,15 +1,16 @@
 package tangle
 
 import (
-	"time"
 	"bytes"
-	"github.com/pkg/errors"
 	"github.com/dgraph-io/badger"
+	"github.com/pkg/errors"
+	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
 	"gitlab.com/semkodev/hercules.go/snapshot"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"time"
 )
+
 const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond
 
 func confirmOnLoad() {
@@ -38,11 +39,13 @@ func startConfirmThread() {
 	}
 }
 
-func confirm (key []byte, txn *badger.Txn) error {
+func confirm(key []byte, txn *badger.Txn) error {
 	db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 
 	_, confirmedError := txn.Get(db.AsKey(key, db.KEY_CONFIRMED))
-	if confirmedError == nil { return nil }
+	if confirmedError == nil {
+		return nil
+	}
 
 	timestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 	value, err2 := db.GetInt64(db.AsKey(key, db.KEY_VALUE), txn)
@@ -101,9 +104,13 @@ func confirm (key []byte, txn *badger.Txn) error {
 	return nil
 }
 
-func confirmChild (key []byte, txn *badger.Txn) error {
-	if bytes.Equal(key, tipHashKey) { return nil }
-	if db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) { return nil }
+func confirmChild(key []byte, txn *badger.Txn) error {
+	if bytes.Equal(key, tipHashKey) {
+		return nil
+	}
+	if db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) {
+		return nil
+	}
 	timestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 	if err == nil {
 		err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp, nil, txn)
@@ -111,7 +118,7 @@ func confirmChild (key []byte, txn *badger.Txn) error {
 			logs.Log.Errorf("Could not save child confirm status: %v", err)
 			return errors.New("Could not save child confirm status!")
 		}
-	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn){
+	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) {
 		err = db.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not save child pending confirm status: %v", err)

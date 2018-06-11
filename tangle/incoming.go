@@ -1,27 +1,27 @@
 package tangle
 
 import (
-	"time"
 	"bytes"
-	"sync/atomic"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/db"
-	"gitlab.com/semkodev/hercules.go/server"
 	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/transaction"
 	"gitlab.com/semkodev/hercules.go/crypt"
+	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/utils"
+	"gitlab.com/semkodev/hercules.go/server"
 	"gitlab.com/semkodev/hercules.go/snapshot"
+	"gitlab.com/semkodev/hercules.go/transaction"
+	"gitlab.com/semkodev/hercules.go/utils"
+	"sync/atomic"
+	"time"
 )
 
 const P_TIP_REPLY = 20
 
-func incomingRunner () {
+func incomingRunner() {
 	for raw := range srv.Incoming {
 		data := raw.Msg[:1604]
 		req := raw.Msg[1604:1650]
-		msg := &Message{&data,&req, raw.Addr}
+		msg := &Message{&data, &req, raw.Addr}
 		var tx *transaction.FastTX
 		var isTipRequest = false
 
@@ -69,7 +69,7 @@ func incomingRunner () {
 	}
 }
 
-func processIncomingTX (incoming *IncomingTX) {
+func processIncomingTX(incoming *IncomingTX) {
 	tx := incoming.TX
 	var pendingMilestone *PendingMilestone
 	var hash []byte
@@ -85,7 +85,7 @@ func processIncomingTX (incoming *IncomingTX) {
 		removePendingRequest(tx.Hash)
 
 		snapTime := snapshot.GetSnapshotTimestamp(txn)
-		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn)  {
+		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
 				logs.Log.Warningf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",

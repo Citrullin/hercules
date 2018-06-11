@@ -1,19 +1,19 @@
 package tangle
 
 import (
-	"bytes"
-	"errors"
-	"encoding/gob"
-	"sync"
-	"time"
-	"os"
 	"bufio"
-	"io"
+	"bytes"
+	"encoding/gob"
+	"errors"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/transaction"
 	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules.go/transaction"
+	"io"
+	"os"
+	"sync"
+	"time"
 )
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
@@ -24,7 +24,7 @@ const totalMilestoneCheckInterval = time.Duration(30) * time.Minute
 var lastMilestoneCheck = time.Now()
 
 type Milestone struct {
-	TX *transaction.FastTX
+	TX    *transaction.FastTX
 	Index int
 }
 
@@ -104,11 +104,11 @@ func milestoneOnLoad() {
 	go startMilestoneChecker()
 }
 
-func loadLatestMilestone () {
+func loadLatestMilestone() {
 	logs.Log.Infof("Loading latest milestone...")
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		latest := 0
-		LatestMilestone = Milestone{tipFastTX,latest}
+		LatestMilestone = Milestone{tipFastTX, latest}
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
@@ -128,7 +128,7 @@ func loadLatestMilestone () {
 					trits := convert.BytesToTrits(txBytes)[:8019]
 					tx := transaction.TritsToTX(&trits, txBytes)
 					MilestoneLocker.Lock()
-					LatestMilestone = Milestone{tx,ms}
+					LatestMilestone = Milestone{tx, ms}
 					MilestoneLocker.Unlock()
 					latest = ms
 				}
@@ -136,7 +136,7 @@ func loadLatestMilestone () {
 		}
 		return nil
 	})
-	logs.Log.Infof("Loaded latest milestone: %v",  LatestMilestone.Index)
+	logs.Log.Infof("Loaded latest milestone: %v", LatestMilestone.Index)
 }
 
 func getLatestMilestone() *Milestone {
@@ -145,7 +145,7 @@ func getLatestMilestone() *Milestone {
 	return &LatestMilestone
 }
 
-func checkIsLatestMilestone (index int, tx *transaction.FastTX) bool {
+func checkIsLatestMilestone(index int, tx *transaction.FastTX) bool {
 	milestone := getLatestMilestone()
 	if milestone.Index < index {
 		MilestoneLocker.Lock()
@@ -153,14 +153,14 @@ func checkIsLatestMilestone (index int, tx *transaction.FastTX) bool {
 		// Add milestone hash:
 		trits := convert.BytesToTrits(tx.Bytes)[:8019]
 		tx = transaction.TritsToTX(&trits, tx.Bytes)
-		LatestMilestone = Milestone{tx,index}
+		LatestMilestone = Milestone{tx, index}
 		logs.Log.Infof("Latest milestone changed to: %v", index)
 		return true
 	}
 	return false
 }
 
-func addPendingMilestoneToQueue (pendingMilestone *PendingMilestone) {
+func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 	go func() {
 		time.Sleep(time.Second * time.Duration(2))
 		pendingMilestoneQueue <- pendingMilestone
@@ -169,7 +169,7 @@ func addPendingMilestoneToQueue (pendingMilestone *PendingMilestone) {
 
 /*
 Runs checking of pending milestones. If the
- */
+*/
 func startMilestoneChecker() {
 	// TODO: if milestone is pending  for too long, remove it from the loop
 	// TODO: also remove the events for milestone pairs
@@ -211,18 +211,20 @@ func startMilestoneChecker() {
 	go checkMilestones()
 }
 
-func checkMilestones () {
+func checkMilestones() {
 	for {
 		stop := false
 		for !stop {
 			var pendingMilestone *PendingMilestone
 
 			select {
-			case pendingMilestone = <- pendingMilestoneQueue:
+			case pendingMilestone = <-pendingMilestoneQueue:
 			default:
 				stop = true
 			}
-			if stop { break }
+			if stop {
+				break
+			}
 			incomingMilestone(pendingMilestone)
 		}
 		time.Sleep(milestoneCheckInterval)
@@ -296,9 +298,9 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, txn *badger.Txn) int {
 	return 0
 }
 
-func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
+func checkMilestone(key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, txn *badger.Txn) bool {
 	key = db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING)
-	discardMilestone := func () {
+	discardMilestone := func() {
 		logs.Log.Error("Discarding", convert.BytesToTrytes(tx.Bundle)[:81])
 		err := db.Remove(key, nil)
 		if err != nil {
@@ -350,12 +352,12 @@ func checkMilestone (key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX
 /*
 Returns Milestone index if the milestone verification has been correct. Otherwise -1.
 Params: tx + trits of the seconds transaction in the milestone bundle.
- */
-func getMilestoneIndex (tx *transaction.FastTX, trits []int) int {
+*/
+func getMilestoneIndex(tx *transaction.FastTX, trits []int) int {
 	milestoneIndex := int(convert.TritsToInt(convert.BytesToTrits(tx.ObsoleteTag[:5])).Uint64())
 	trunkTransactionTrits := convert.BytesToTrits(tx.TrunkTransaction)[:243]
 	normalized := transaction.NormalizedBundle(trunkTransactionTrits)[:transaction.NUMBER_OF_FRAGMENT_CHUNKS]
-	digests := transaction.Digest(normalized, tx.SignatureMessageFragment, 0, 0,false)
+	digests := transaction.Digest(normalized, tx.SignatureMessageFragment, 0, 0, false)
 	address := transaction.Address(digests)
 	merkleRoot := transaction.GetMerkleRoot(
 		address,

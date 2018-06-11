@@ -2,14 +2,14 @@ package tangle
 
 import (
 	"bytes"
-	"sync"
-	"time"
 	"encoding/gob"
 	"github.com/dgraph-io/badger"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/utils"
 	"gitlab.com/semkodev/hercules.go/transaction"
+	"gitlab.com/semkodev/hercules.go/utils"
+	"sync"
+	"time"
 )
 
 type Tip struct {
@@ -20,7 +20,7 @@ type Tip struct {
 var Tips []*Tip
 var TipsLocker = &sync.Mutex{}
 
-func GetRandomTip () (hash []byte) {
+func GetRandomTip() (hash []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 
@@ -67,7 +67,7 @@ func loadTips() {
 	logs.Log.Infof("Loaded tips: %v\n", len(Tips))
 }
 
-func startTipRemover () {
+func startTipRemover() {
 	flushTicker := time.NewTicker(tipRemoverInterval)
 	for range flushTicker.C {
 		logs.Log.Warning("Tips remover starting... Total tips:", len(Tips))
@@ -92,21 +92,23 @@ func startTipRemover () {
 	}
 }
 
-func addTip (hash []byte, value int) {
+func addTip(hash []byte, value int) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
-	if findTip(hash) >= 0 { return }
+	if findTip(hash) >= 0 {
+		return
+	}
 
 	Tips = append(Tips, &Tip{hash, value})
 }
 
-func removeTip (hash []byte) {
+func removeTip(hash []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 
 	var which = findTip(hash)
 	if which > -1 {
-		if which >= len(Tips) - 1 {
+		if which >= len(Tips)-1 {
 			Tips = Tips[0:which]
 		} else {
 			Tips = append(Tips[0:which], Tips[which+1:]...)
@@ -114,7 +116,7 @@ func removeTip (hash []byte) {
 	}
 }
 
-func findTip (hash []byte) int {
+func findTip(hash []byte) int {
 	for i, tip := range Tips {
 		if bytes.Equal(hash, tip.Hash) {
 			return i
@@ -123,7 +125,7 @@ func findTip (hash []byte) int {
 	return -1
 }
 
-func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error {
+func updateTipsOnNewTransaction(tx *transaction.FastTX, txn *badger.Txn) error {
 	key := db.GetByteKey(tx.Hash, db.KEY_APPROVEE)
 	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tx.Timestamp), 0)).Nanoseconds())
 
@@ -146,7 +148,7 @@ func updateTipsOnNewTransaction (tx *transaction.FastTX, txn *badger.Txn) error 
 	return nil
 }
 
-func getRandomTip () (hash []byte, txBytes []byte) {
+func getRandomTip() (hash []byte, txBytes []byte) {
 	TipsLocker.Lock()
 	defer TipsLocker.Unlock()
 
@@ -156,6 +158,8 @@ func getRandomTip () (hash []byte, txBytes []byte) {
 
 	hash = Tips[utils.Random(0, len(Tips))].Hash
 	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_BYTES), nil)
-	if err != nil { return nil, nil }
+	if err != nil {
+		return nil, nil
+	}
 	return hash, txBytes
 }

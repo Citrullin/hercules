@@ -56,19 +56,14 @@ This makes sure we have all milestones and confirmed TXs in the database.
 
 4. Adjust log levels. Cleanup.
 5. Cleanup declarations from tangle to specific files.
-6. Write comments and descriptions.
-7. Check variable names for clean code.
 8. Best way to include dependencies?
-
 
 # Roadmap
 
-1. Test with very recent snapshot on Raspberry PI and Beaglebone
 2. Eventually, add PoW
 
 To finish:
 0. Co-host dependencies?
-1. Cleanup
 2. Write documentation (README and wiki)
 3. Add License
 4. Write release article.

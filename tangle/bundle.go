@@ -2,9 +2,9 @@ package tangle
 
 import (
 	"bytes"
-	"gitlab.com/semkodev/hercules.go/transaction"
 	"gitlab.com/semkodev/hercules.go/convert"
 	"gitlab.com/semkodev/hercules.go/crypt"
+	"gitlab.com/semkodev/hercules.go/transaction"
 )
 
 var TOTAL_IOTAS int64 = 2779530283277761
@@ -50,7 +50,9 @@ func IsValidBundle(trytes []string) bool {
 		}
 	}
 	// Fail if order of indexes not correct or bundle value not zero
-	if len(otxs) != len(txs) || value != 0 { return false }
+	if len(otxs) != len(txs) || value != 0 {
+		return false
+	}
 
 	// Create bundle hash from all transaction essences
 	var kerl = new(crypt.Kerl)
@@ -64,7 +66,9 @@ func IsValidBundle(trytes []string) bool {
 	}
 	kerl.Squeeze(bundleHash, 0, crypt.HASH_LENGTH)
 	for _, tx := range otxs {
-		if !bytes.Equal(tx.Bundle, convert.TritsToBytes(bundleHash)) { return false }
+		if !bytes.Equal(tx.Bundle, convert.TritsToBytes(bundleHash)) {
+			return false
+		}
 	}
 
 	normalizedBundleHash := transaction.NormalizedBundle(bundleHash)
@@ -78,15 +82,19 @@ func IsValidBundle(trytes []string) bool {
 			offset := 0
 			offsetNext := 0
 			for bytes.Equal(address, tx.Address) {
-				offsetNext = (offset + transaction.NUMBER_OF_FRAGMENT_CHUNKS - 1) % (crypt.HASH_LENGTH / 3) + 1
+				offsetNext = (offset+transaction.NUMBER_OF_FRAGMENT_CHUNKS-1)%(crypt.HASH_LENGTH/3) + 1
 				t := trits[tx.CurrentIndex]
-				digestTrits := transaction.Digest(normalizedBundleHash, t, offset % 81,0,true)
+				digestTrits := transaction.Digest(normalizedBundleHash, t, offset%81, 0, true)
 
 				kerl.Absorb(digestTrits, 0, crypt.HASH_LENGTH)
 				i++
-				if i == len(otxs) { break }
+				if i == len(otxs) {
+					break
+				}
 				tx = otxs[i]
-				if tx.Value != 0 { break }
+				if tx.Value != 0 {
+					break
+				}
 				offset = offsetNext
 			}
 			// Verify signature

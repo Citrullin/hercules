@@ -1,24 +1,24 @@
 package tangle
 
 import (
-	"time"
 	"bytes"
 	"encoding/gob"
 	"github.com/dgraph-io/badger"
 	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
 	"gitlab.com/semkodev/hercules.go/server"
+	"time"
 )
 
 const (
 	tipRequestInterval = time.Duration(3) * time.Second
-	reRequestInterval = time.Duration(30) * time.Second
+	reRequestInterval  = time.Duration(30) * time.Second
 )
 
 type PendingRequest struct {
-	Hash       []byte
-	Timestamp  int
-	LastTried  time.Time
+	Hash             []byte
+	Timestamp        int
+	LastTried        time.Time
 	LastNeighborAddr string
 }
 
@@ -39,7 +39,7 @@ func Broadcast(hash []byte) int {
 	return queued
 }
 
-func pendingOnLoad () {
+func pendingOnLoad() {
 	loadPendingRequests()
 }
 
@@ -96,7 +96,9 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
-	if len(txQueue) > 100  || len(srv.Incoming) > 100 { return }
+	if len(txQueue) > 100 || len(srv.Incoming) > 100 {
+		return
+	}
 	var pendingRequest *PendingRequest
 	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
 
@@ -129,8 +131,8 @@ func outgoingRunner() {
 			sendReply(msg)
 		} else if len(srv.Incoming) < 50 {
 			pendingRequest = getOldPending()
-			if pendingRequest != nil && (len(server.Neighbors) <2 ||
-					pendingRequest.LastNeighborAddr != neighbor.Addr) {
+			if pendingRequest != nil && (len(server.Neighbors) < 2 ||
+				pendingRequest.LastNeighborAddr != neighbor.Addr) {
 				pendingRequest.LastTried = time.Now()
 				pendingRequest.LastNeighborAddr = identifier
 				msg := getMessage(nil, pendingRequest.Hash, false, identifier, nil)
@@ -138,7 +140,7 @@ func outgoingRunner() {
 				sendReply(msg)
 			} else if shouldRequestTip {
 				lastTip = time.Now()
-				msg := getMessage(nil, nil, true, identifier,nil)
+				msg := getMessage(nil, nil, true, identifier, nil)
 				msg.Addr = neighbor.Addr
 				sendReply(msg)
 			}
@@ -146,7 +148,7 @@ func outgoingRunner() {
 	}
 }
 
-func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
+func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
 	tx := txn
 	has = true
 	if bytes.Equal(hash, tipFastTX.Hash) {
@@ -154,7 +156,7 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 	}
 	if txn == nil {
 		tx = db.DB.NewTransaction(true)
-		defer func () error {
+		defer func() error {
 			return tx.Commit(func(e error) {})
 		}()
 	}
@@ -191,14 +193,16 @@ func requestIfMissing (hash []byte, addr string, txn *badger.Txn) (has bool, err
 	return has, nil
 }
 
-func sendReply (msg *Message) {
-	if msg == nil { return }
+func sendReply(msg *Message) {
+	if msg == nil {
+		return
+	}
 	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
 	srv.Outgoing <- &server.Message{msg.Addr, data}
 	outgoing++
 }
 
-func getMessage (resp []byte, req []byte, tip bool, addr string, txn *badger.Txn) *Message {
+func getMessage(resp []byte, req []byte, tip bool, addr string, txn *badger.Txn) *Message {
 	var hash []byte
 	if resp == nil {
 		hash, resp = getRandomTip()
@@ -268,24 +272,26 @@ func (pendingRequest PendingRequest) request(addr string) {
 	pendingRequest.LastTried = time.Now()
 }
 
-func addPendingRequest (hash []byte, timestamp int, addr string) *PendingRequest {
+func addPendingRequest(hash []byte, timestamp int, addr string) *PendingRequest {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 
 	var which = findPendingRequest(hash)
-	if which >= 0 { return nil } // Avoid double-add
+	if which >= 0 {
+		return nil
+	} // Avoid double-add
 
-	pendingRequest := &PendingRequest{hash, timestamp,time.Now(), addr}
+	pendingRequest := &PendingRequest{hash, timestamp, time.Now(), addr}
 	pendingRequests = append(pendingRequests, pendingRequest)
 	return pendingRequest
 }
 
-func removePendingRequest (hash []byte) bool {
+func removePendingRequest(hash []byte) bool {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 	var which = findPendingRequest(hash)
 	if which > -1 {
-		if which >= len(pendingRequests) - 1 {
+		if which >= len(pendingRequests)-1 {
 			pendingRequests = pendingRequests[0:which]
 		} else {
 			pendingRequests = append(pendingRequests[0:which], pendingRequests[which+1:]...)
@@ -295,7 +301,7 @@ func removePendingRequest (hash []byte) bool {
 	return false
 }
 
-func findPendingRequest (hash []byte) int {
+func findPendingRequest(hash []byte) int {
 	for i, pendingRequest := range pendingRequests {
 		if bytes.Equal(hash, pendingRequest.Hash) {
 			return i
@@ -304,7 +310,7 @@ func findPendingRequest (hash []byte) int {
 	return -1
 }
 
-func getOldPending () *PendingRequest{
+func getOldPending() *PendingRequest {
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
 	sortRange := 5000
@@ -315,7 +321,9 @@ func getOldPending () *PendingRequest{
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
 			return pendingRequest
 		}
-		if i >= sortRange { return nil }
+		if i >= sortRange {
+			return nil
+		}
 	}
 	rotatePending++
 	if rotatePending > 1000 && len(pendingRequests) > sortRange {

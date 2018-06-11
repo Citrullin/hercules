@@ -2,18 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
-	"time"
-	"os"
-	"os/signal"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"gitlab.com/semkodev/hercules.go/tangle"
-	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/api"
+	"gitlab.com/semkodev/hercules.go/db"
 	"gitlab.com/semkodev/hercules.go/logs"
 	"gitlab.com/semkodev/hercules.go/server"
 	"gitlab.com/semkodev/hercules.go/snapshot"
+	"gitlab.com/semkodev/hercules.go/tangle"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
 )
 
 var config *viper.Viper
@@ -27,13 +27,13 @@ func init() {
 	logs.Log.Debugf("Following settings loaded: \n %+v", string(cfg))
 }
 
-func main () {
+func main() {
 	Hello()
 	time.Sleep(time.Duration(500) * time.Millisecond)
 	StartHercules()
 }
 
-func StartHercules () {
+func StartHercules() {
 	logs.Log.Info("Starting Hercules. Please wait...")
 	db.Load(config)
 	srv := server.Create(config)
@@ -50,7 +50,7 @@ func StartHercules () {
 	for range ch {
 		// Clean exit
 		logs.Log.Info("Hercules is shutting down. Please wait...")
-		go func () {
+		go func() {
 			time.Sleep(time.Duration(5000) * time.Millisecond)
 			logs.Log.Info("Bye!")
 			os.Exit(0)
@@ -69,7 +69,7 @@ PRECEDENCE (Higher number overrides the others):
 4. env
 5. flag
 6. explicit call to Set
- */
+*/
 func loadConfig() *viper.Viper {
 	// Setup Viper
 	var config = viper.New()
@@ -80,15 +80,15 @@ func loadConfig() *viper.Viper {
 	// 2. Get command line arguments
 	flag.StringP("config", "c", "", "Config path")
 
-	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. " +
+	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. "+
 		"Try to optimize accordingly.")
 
 	flag.IntP("api.port", "p", 14265, "API Port")
-	flag.StringP("api.host", "h","0.0.0.0", "API Host")
+	flag.StringP("api.host", "h", "0.0.0.0", "API Host")
 	flag.String("api.auth.username", "", "API Access Username")
 	flag.String("api.auth.password", "", "API Access Password")
 	flag.Bool("api.debug", false, "Whether to log api access")
-	flag.StringSlice("api.limitRemoteAccess",nil, "Limit access to these commands from remote")
+	flag.StringSlice("api.limitRemoteAccess", nil, "Limit access to these commands from remote")
 
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 
@@ -97,11 +97,11 @@ func loadConfig() *viper.Viper {
 	flag.String("snapshots.path", "data", "Path to the snapshots directory")
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. Minimum 3.")
 	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
-	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: " +
+	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
 		"makeSnapshot, getSnapshotsInfo")
 
 	flag.IntP("node.port", "u", 13600, "UDP Node port")
-	flag.StringSliceP("node.neighbors","n", nil, "Initial Node neighbors")
+	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
 
 	flag.Parse()
 	config.BindPFlags(flag.CommandLine)
@@ -127,7 +127,7 @@ func loadConfig() *viper.Viper {
 	snapshotPeriod := config.GetInt("snapshots.period")
 	snapshotInterval := config.GetInt("snapshots.interval")
 	if snapshotInterval > 0 && snapshotPeriod < 6 {
-		logs.Log.Fatalf("The given snapshot period of %v hours is too short! " +
+		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
 			"At least 6 hours currently required to be kept.", snapshotPeriod)
 	}
 
