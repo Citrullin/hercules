@@ -182,6 +182,8 @@ YHZIJOENEFSDMZGZA9WOGFTRXOFPVFFCDEYEFHPUGKEUAOTTMVLPSSNZNHRJD99WAVESLFPSGLMTUEIB
 
 ## Authors
 
+Hercules was created and is maintained by [SemkoDev](https://semkodev.com)
+
 * **Roman Semko** - *SemkoDev* - (https://www.twitter.com/romansemko)
 * **Vitaly Semko** - *SemkoDev* - (https://www.twitter.com/dev_wit)
 
