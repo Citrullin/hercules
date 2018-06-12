@@ -182,8 +182,8 @@ YHZIJOENEFSDMZGZA9WOGFTRXOFPVFFCDEYEFHPUGKEUAOTTMVLPSSNZNHRJD99WAVESLFPSGLMTUEIB
 
 ## Authors
 
-* **Roman Semko** - *SemkoDev* - (https://github.com/romansemko)
-* **Vitaly Semko** - *SemkoDev* - (https://github.com/dev_wit)
+* **Roman Semko** - *SemkoDev* - (https://www.twitter.com/romansemko)
+* **Vitaly Semko** - *SemkoDev* - (https://www.twitter.com/dev_wit)
 
 ## License
 
