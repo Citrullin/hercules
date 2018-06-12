@@ -11,7 +11,7 @@ import (
 
 const (
 	dbCleanupInterval = time.Duration(5) * time.Minute
-	dbCleanupIntervalLight = time.Duration(1) * time.Minute
+	dbCleanupIntervalLight = time.Duration(30) * time.Second
 )
 
 // TODO: (OPT) write tests for the database?
@@ -41,11 +41,11 @@ func Load(cfg *viper.Viper) {
 		opts.NumLevelZeroTables = 1
 		opts.NumLevelZeroTablesStall = 2
 		opts.NumCompactors = 1
-		opts.MaxLevels = 7
+		opts.MaxLevels = 5
 		opts.LevelOneSize = 256 << 18
 		opts.MaxTableSize = 64 << 18
-		//opts.ValueLogFileSize = 1 << 31
-		//opts.ValueLogMaxEntries = 10000000
+		opts.ValueLogFileSize = 1 << 25
+		opts.ValueLogMaxEntries = 250000
 	}
 
 	db, err := badger.Open(opts)

@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var LOG_FORMAT = "%{color}[%{level:.4s}] %{time:15:04:05.000000} %{id:06x} [%{longpkg}] %{longfunc} -> %{color:reset}%{message}"
+var LOG_FORMAT = "%{color}[%{level:.4s}] %{time:15:04:05.000000} %{id:06x} [%{shortpkg}] %{longfunc} -> %{color:reset}%{message}"
 var Log = logging.MustGetLogger("hercules")
 
 func Setup() {
