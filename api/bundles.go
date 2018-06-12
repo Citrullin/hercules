@@ -5,11 +5,11 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/db"
-	"gitlab.com/semkodev/hercules.go/tangle"
-	"gitlab.com/semkodev/hercules.go/transaction"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/transaction"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 func storeTransactions (request Request, c *gin.Context, broadcast bool, t time.Time) {

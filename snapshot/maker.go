@@ -5,10 +5,10 @@ import (
 	"encoding/gob"
 	"github.com/pkg/errors"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/db"
-	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/transaction"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 type KeyValue struct {

@@ -14,8 +14,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/snapshot"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 func enableSnapshotApi(api *gin.Engine) {

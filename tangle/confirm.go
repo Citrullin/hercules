@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/db"
-	"gitlab.com/semkodev/hercules.go/logs"
-	"gitlab.com/semkodev/hercules.go/snapshot"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/snapshot"
 	"time"
 )
 

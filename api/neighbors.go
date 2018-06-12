@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules.go/server"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 func addNeighbors (request Request, c *gin.Context, t time.Time) {

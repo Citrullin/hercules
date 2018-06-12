@@ -7,7 +7,7 @@ import (
 	"time"
 	"math"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/utils"
+	"gitlab.com/semkodev/hercules/utils"
 )
 
 // TODO: the descriptions are mostly wrong...

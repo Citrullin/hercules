@@ -2,9 +2,9 @@ package tangle
 
 import (
 	"bytes"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/crypt"
-	"gitlab.com/semkodev/hercules.go/transaction"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/crypt"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 var TOTAL_IOTAS int64 = 2779530283277761

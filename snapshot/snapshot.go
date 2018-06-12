@@ -4,8 +4,8 @@ import (
     "time"
     "github.com/spf13/viper"
     "github.com/dgraph-io/badger"
-    "gitlab.com/semkodev/hercules.go/db"
-    "gitlab.com/semkodev/hercules.go/logs"
+    "gitlab.com/semkodev/hercules/db"
+    "gitlab.com/semkodev/hercules/logs"
 )
 
 const (

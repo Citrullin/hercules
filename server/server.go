@@ -6,7 +6,7 @@ import (
 	"time"
 	"sync"
 	"github.com/spf13/viper"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 const (

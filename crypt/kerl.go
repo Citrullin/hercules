@@ -4,7 +4,7 @@ import (
 	"hash"
 	"math/big"
 	"github.com/tonnerre/golang-go.crypto/sha3"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 const BIT_HASH_LENGTH = 384

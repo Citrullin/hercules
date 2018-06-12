@@ -3,7 +3,7 @@ package crypt
 import (
 	"testing"
 	"reflect"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 const kerlTrytes = "BXFYVMRKNEEVRQKZECFSIZRFKDH9HTZTGIKFXMUEIIWFLOYXHFLJTEX9TXKAUPIRMPXQGUSLHUREZ9999"

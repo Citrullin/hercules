@@ -6,7 +6,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/spf13/viper"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 const (

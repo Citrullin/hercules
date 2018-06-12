@@ -3,7 +3,7 @@ package transaction
 import "testing"
 import (
 	"reflect"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 const cooAddress = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"

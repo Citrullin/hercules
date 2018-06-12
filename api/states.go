@@ -5,8 +5,8 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/db"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
 )
 
 func getInclusionStates (request Request, c *gin.Context, t time.Time) {

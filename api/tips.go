@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules.go/tangle"
-	"gitlab.com/semkodev/hercules.go/convert"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 func getTips (request Request, c *gin.Context, t time.Time) {

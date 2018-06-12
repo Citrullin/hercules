@@ -2,8 +2,8 @@ package transaction
 
 import (
 	"strings"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/crypt"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/crypt"
 )
 
 const HASH_LENGTH = crypt.HASH_LENGTH

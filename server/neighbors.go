@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 	"net"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 func AddNeighbor (address string) error {

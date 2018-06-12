@@ -5,10 +5,10 @@ import (
 	"time"
 	"runtime"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules.go/convert"
-	"gitlab.com/semkodev/hercules.go/tangle"
-	"gitlab.com/semkodev/hercules.go/server"
-	"gitlab.com/semkodev/hercules.go/snapshot"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 func getNodeInfo (request Request, c *gin.Context, t time.Time) {

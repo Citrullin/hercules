@@ -1,8 +1,8 @@
 package tangle
 
 import (
-	"gitlab.com/semkodev/hercules.go/db"
-	"gitlab.com/semkodev/hercules.go/logs"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
 	"time"
 )
 
