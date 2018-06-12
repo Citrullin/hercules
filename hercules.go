@@ -1,4 +1,4 @@
-package hercules
+package main
 
 import (
 	"encoding/json"
