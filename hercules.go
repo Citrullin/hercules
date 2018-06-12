@@ -1,4 +1,4 @@
-package main
+package hercules_go
 
 import (
 	"encoding/json"
