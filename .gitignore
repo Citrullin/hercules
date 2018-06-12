@@ -2,3 +2,5 @@
 build/
 *.iml
 pkg/
+.vscode/
+.history/
