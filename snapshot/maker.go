@@ -27,6 +27,7 @@ func MakeSnapshot (timestamp int) error {
 	var bundles [][]byte
 	var txs []KeyValue
 	var toKeepBundle [][]byte
+	var snapshotted [][]byte
 
 	contains := func(key []byte) bool {
 		if bundles == nil { return false }
@@ -98,12 +99,15 @@ func MakeSnapshot (timestamp int) error {
 		}
 		logs.Log.Debugf("Found %v value bundles. Collecting corresponding transactions...", len(bundles))
 		for _, bundleHash := range bundles {
-			bundleTxs, bundleKeep, err := loadAllFromBundle(bundleHash, timestamp, txn)
+			bundleTxs, snaps, bundleKeep, err := loadAllFromBundle(bundleHash, timestamp, txn)
 			if err != nil { return err }
 			txs = append(txs, bundleTxs...)
 			if bundleKeep != nil && len(bundleKeep) == 16 {
 				logs.Log.Debug("Keeping bundle...", bundleKeep)
 				toKeepBundle = append(toKeepBundle, bundleKeep)
+			}
+			if snaps != nil {
+				snapshotted = append(snapshotted, snaps...)
 			}
 		}
 		return nil
@@ -149,6 +153,13 @@ func MakeSnapshot (timestamp int) error {
 		}
 	}
 
+	for _, key := range snapshotted {
+		err := db.Put(key, true, nil, nil)
+		if err != nil {
+			return err
+		}
+	}
+
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")
 		trimData(int64(timestamp))
@@ -170,7 +181,7 @@ func MakeSnapshot (timestamp int) error {
 	}
 }
 
-func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]KeyValue, []byte, error) {
+func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]KeyValue, [][]byte, []byte, error) {
 	var totalValue int64 = 0
 	opts := badger.DefaultIteratorOptions
 	opts.PrefetchValues = false
@@ -178,41 +189,49 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 	defer it.Close()
 	prefix := db.GetByteKey(bundleHash, db.KEY_BUNDLE)
 	var txs []KeyValue
+	var snapshotted [][]byte
+	var nonZero = false
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		k := it.Item().Key()
 		key := make([]byte, 16)
 		copy(key, k[16:])
+		// Filter out unconfirmed reattachments:
+		if !db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) {
+			continue
+		}
+
 		txTimestamp, err := db.GetInt(db.AsKey(key, db.KEY_TIMESTAMP), txn)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		// Some of the TXs from the bundle are in the future! Do not use.
 		if txTimestamp > timestamp {
-			logs.Log.Debugf("One of the TXs is younger than snapshot: %v. Skipping this bundle: %v", txTimestamp, convert.BytesToTrytes(bundleHash))
-			return nil, db.AsKey(k[:16], db.KEY_PENDING_BUNDLE), nil
+			snapshotted = append(snapshotted, db.AsKey(prefix, db.KEY_SNAPSHOTTED))
 		}
+
 		valueKey := db.AsKey(key, db.KEY_VALUE)
 		value, err := db.GetInt64(valueKey, txn)
 		if err == nil {
-			if value != 0 && db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn){
+			if value != 0 {
 				totalValue += value
 				txs = append(txs, KeyValue{valueKey, value})
+				nonZero = true
 			}
 		} else {
 			logs.Log.Errorf("Error reading value for %v", valueKey)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
 	// TODO: (OPT) investigate
-	if totalValue != 0 {
-		return nil, nil, nil
+	if totalValue != 0 || !nonZero {
+		return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
+		//return nil, nil, nil
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +
-			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash))
-		return nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
+			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash)[:81])
+		return nil, nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
 	}
-	return txs, nil, nil
+	return txs, snapshotted, nil, nil
 }
 
 func ReplaceTimestamps () {

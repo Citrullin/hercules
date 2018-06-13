@@ -140,7 +140,29 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
 			if err != nil {
-				logs.Log.Error("Could not get ignore TX timestamp from the database!", err)
+				logs.Log.Error("Could not get keep Bundle from the database!", err)
+				return err
+			}
+			line := convert.BytesToTrytes(key)
+			addToBuffer(line)
+		}
+		commitBuffer()
+		return nil
+	})
+	if err != nil { return err }
+
+
+	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
+	err = db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_SNAPSHOTTED}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			key := it.Item().Key()
+			if err != nil {
+				logs.Log.Error("Could not get ignore TX from the database!", err)
 				return err
 			}
 			line := convert.BytesToTrytes(key)

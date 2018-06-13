@@ -86,7 +86,7 @@ func loadSpentSnapshot(address []byte, txn *badger.Txn) error {
 	return nil
 }
 
-func loadPendingBundleSnapshot(key []byte) error {
+func loadKey(key []byte) error {
 	return db.Put(key, true, nil, nil)
 }
 
@@ -105,8 +105,7 @@ func doLoadSnapshot (path string) error{
 		return err
 	}
 
-	values := true
-	keepBundles := false
+	stage := 0
 	rd := bufio.NewReader(f)
 	var total int64 = 0
 	var totalSpent int64 = 0
@@ -124,14 +123,10 @@ func doLoadSnapshot (path string) error{
 			return err
 		}
 		if line == SNAPSHOT_SEPARATOR {
-			if values {
-				values = false
-			} else {
-				keepBundles = true
-			}
+			stage++
 			continue
 		}
-		if values {
+		if stage == 0 {
 			tokens := strings.Split(line, ";")
 			address := convert.TrytesToBytes(tokens[0])[:49]
 			value, err := strconv.ParseInt(tokens[1], 10, 64)
@@ -151,7 +146,7 @@ func doLoadSnapshot (path string) error{
 					return err
 				}
 			}
-		} else if !keepBundles {
+		} else if stage == 1 {
 			totalSpent++
 			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
 			if err != nil {
@@ -169,7 +164,7 @@ func doLoadSnapshot (path string) error{
 			}
 		} else {
 			key := convert.TrytesToBytes(line)[:16]
-			err = loadPendingBundleSnapshot(key)
+			err = loadKey(key)
 			if err != nil {
 				if err == badger.ErrTxnTooBig {
 					err := txn.Commit(func(e error) {})
@@ -177,7 +172,7 @@ func doLoadSnapshot (path string) error{
 						return err
 					}
 					txn = db.DB.NewTransaction(true)
-					err = loadPendingBundleSnapshot(key)
+					err = loadKey(key)
 					if err != nil { return err }
 				} else {
 					return err

@@ -84,24 +84,39 @@ func processIncomingTX(incoming *IncomingTX) {
 		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
 		removePendingRequest(tx.Hash)
 
+		removeTx := func () {
+			logs.Log.Warning("Skipping this TX:", convert.BytesToTrytes(tx.Hash)[:81])
+			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
+			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
+			db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+			err := db.Put(db.AsKey(key, db.KEY_EDGE), true, nil, txn)
+			_checkIncomingError(tx, err)
+			parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
+			if err == nil {
+				db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
+			}
+		}
+
 		snapTime := snapshot.GetSnapshotTimestamp(txn)
 		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				logs.Log.Warningf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
+				logs.Log.Debugf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
 					tx.Timestamp, snapTime, tx.Value)
-				logs.Log.Warning("Skipping this TX:", convert.BytesToTrytes(tx.Hash))
-				db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
-				db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
-				db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
-				err := db.Put(db.AsKey(key, db.KEY_EDGE), true, nil, txn)
-				_checkIncomingError(tx, err)
-				parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
-				if err == nil {
-					db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
-				}
+				removeTx()
 				return nil
 			}
+		}
+
+		if db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn) {
+			_, err := requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
+			_checkIncomingError(tx, err)
+			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)
+			_checkIncomingError(tx, err)
+			logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
+				convert.BytesToTrytes(tx.Hash)[:81], tx.Value)
+			removeTx()
+			return nil
 		}
 
 		if !db.Has(key, txn) {

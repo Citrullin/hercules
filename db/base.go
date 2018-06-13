@@ -55,6 +55,7 @@ const (
 	KEY_SNAPSHOT_LOCK             = byte(127) // byte -> int (timestamp)
 	KEY_SNAPSHOT_FILE             = byte(128) // byte -> string
 	KEY_SNAPSHOT_DATE             = byte(129) // byte -> int (timestamp)
+	KEY_SNAPSHOTTED               = byte(130) // byte -> int (timestamp)
 	KEY_EDGE                      = byte(150) // byte -> int (timestamp)
 	KEY_TEST                      = byte(187) // hash -> bool
 	KEY_OTHER                     = byte(255) // XXXX -> any bytes

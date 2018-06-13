@@ -19,7 +19,7 @@ func storeTransactions (request Request, c *gin.Context, broadcast bool, t time.
 		ReplyError("No trytes provided", c)
 		return
 	}
-	if !tangle.IsValidBundle(request.Trytes) {
+	if !transaction.IsValidBundleTrytes(request.Trytes) {
 		ReplyError("Invalid bundle", c)
 		return
 	}
