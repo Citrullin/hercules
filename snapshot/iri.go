@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 	"strconv"
-	"bytes"
 	"github.com/dgraph-io/badger"
 	"gitlab.com/semkodev/hercules/logs"
 	"gitlab.com/semkodev/hercules/db"
@@ -172,10 +171,6 @@ func LoadAddressBytes(valuesPath string) error {
 		}
 		tokens := strings.Split(line, ";")
 		address := convert.TrytesToBytes(tokens[0])[:49]
-		target := []byte{105, 0, 0, 61, 232, 23, 226, 201, 36, 132, 235, 184, 178, 153, 43, 42}
-		if bytes.Equal(db.GetByteKey(address, db.KEY_ADDRESS_BYTES), target) {
-			logs.Log.Warning("FOUND!", address)
-		}
 		addressKey := db.GetByteKey(address, db.KEY_ADDRESS_BYTES)
 		err = db.PutBytes(addressKey, address, nil, nil)
 		if err != nil { return err }

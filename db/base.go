@@ -156,6 +156,9 @@ func Get(key []byte, data interface{}, txn *badger.Txn) error {
 	}
 	item, err := tx.Get(key)
 	if err != nil {
+		if err == badger.ErrRetry {
+			return Get(key, data, txn)
+		}
 		return err
 	}
 	val, err := item.Value()
@@ -175,6 +178,26 @@ func GetBytes(key []byte, txn *badger.Txn) ([]byte, error) {
 	var resp []byte = nil
 	err := Get(key, &resp, txn)
 	return resp, err
+}
+
+func GetBytesRaw(key []byte, txn *badger.Txn) ([]byte, error) {
+	item, err := txn.Get(key)
+	if err != nil {
+		if err == badger.ErrRetry {
+			return GetBytesRaw(key, txn)
+		}
+		return nil, err
+	}
+
+	value, err := item.Value()
+	if err != nil {
+		return nil, err
+	}
+
+	response := make([]byte, len(value))
+	copy(response, value)
+
+	return response, nil
 }
 
 func GetString(key []byte, txn *badger.Txn) (string, error) {

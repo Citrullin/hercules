@@ -145,21 +145,252 @@ Log each request that is made to the API. Default is off
 The host to listen to. Setting it to `127.0.0.1` will make the API only accept localhost connections.
 the default is `0.0.0.0`` which allows the API server to listen to all connections.
 
-#### TODO
+#### --api.limitRemoteAccess="getNeighbors,addNeighbors,removeNeighbors"
+
+Similar to IRI, limit remote execution of certain API commands.
+
+#### --api.port=14265 or -p=14265
+
+Port the API server should listen on.
+
+#### --config="hercules.config.json" or -c=14"hercules.config.json"265
+
+Path to an configuration file in JSON format.
+
+#### --database.path="data"
+
+Path where the database will be stored.
+
+#### --light
+
+Use this flag for low-end devices with less than 2-3 GB RAM.
+It makes Hercules a little slower, but more stable in hard
+environments like the Raspberry Pi 3.
+
+#### --log.level="INFO"
+
+Sets, what log levels should be logged. Anything above the given level
+will be logged. Possible values: `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
+`INFO` and `DEBUG`. For more information, set this to DEBUG.
+
+#### --node.neighbors="0.0.0.0:14600,1.1.1.1:14600" or -n="0.0.0.0:14600,1.1.1.1:14600"
+
+Static neighbors to connect to. Each neighbor consists of an IP address and an **UDP** port.
+
+#### --node.port=14600 or -u=14600
+
+UDP port to be used for your Hercules node. 
+
+#### --snapshots.path="snapshots"
+
+Path where to store the snapshots.
+
+#### --snapshots.loadFile="snapshots/1234567.snap"
+
+When you first start Hercules, you should load an initial
+snapshot, which contains spent addresses and balances. Without it,
+Hercules will fail to start. Once the database is initialised, you do not
+need this option any longer.
+
+#### --snapshot.loadIRIFile="snapshotMainnet.txt" --snapshot.loadIRISpentFile="previousEpochsSpentAddresses.txt" --snapshot.loadIRITimestamp=1525017600
+
+Instead of using proprietary Hercules snapshot files, you can use the snapshot files
+from the IRI that can be downloaded [here](https://github.com/iotaledger/iri/tree/dev/src/main/resources).
+All three options have to be provided. Make sure you give the correct timestamp, for which
+the snapshot is being loaded. You can calculate the timestamp using an [online tool](https://www.unixtimestamp.com/index.php).
+
+The advantage is that this snapshot is official. The downside is that it will take you longer to sync.
+It might be even too much for a low-end device.
+
+As an alternative to using the official snapshot, we will provide a tool that
+automatically compares the balances between a given IRI and Hercules instances to
+make sure that both a in sync and have the same balances. This way you can check
+any time that your synced node used a correct snapshot that has not been tampered with.
+
+Other type of public service for snapshot consensus is coming soon.
+
+#### --snapshots.interval=0
+
+Interval in hours, how often do make an automated snapshot. Default is zero - disabled.
+
+#### --snapshots.period=168
+
+How much history of tangle to keep. Value in hours. Minimal value is 6 hours.
+
+#### --snapshots.enableapi=false
+
+True by default. Enables additional API commands for the snapshots. More info below:
+
+## Snapshots
+
+Please be aware that this is an experimental feature. The minimal period is 6 hours.
+We advise setting it to at least 12-24 hours on low-end devices and about a week
+for normal nodes.
+
+If the tangle is not fully synchronized, the snapshot will be skipped until the next
+`snapshots.interval` time. You cna start a snapshot anytime for any unix time in the past
+(between now and the snapshot time currently loaded in the database) using the snapshots
+API.
+
+The snapshots are stored in the directory defined by the `snapshots.path` option.
+They are currently not auto-deleted (currently about 80MB each).
+
+### API
+
+Make sure you disable at least `makeSnapshot` command with `api.limitRemoteAccess` or
+make the API accessible for local requests only.
+
+The snapshots API works with `POST` HTTP requests similar to the basic `IOTA` commands,
+however it is placed in `/snapshots` path.
+
+This is a preliminary description of the API. More detailed API reference will
+be posted in the project wiki.
+
+#### Getting snapshots info
+
+```
+curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "getSnapshotsInfo"}' | jq
+
+{
+  "currentSnapshotTimestamp": 1528908287,
+  "duration": 1.307782514,
+  "inProgress": false,
+  "isSynchronized": true,
+  "snapshots": [
+    {
+      "checksum": "f37fdacddeee49df8f0a3a47ae808be9",
+      "path": "/snapshots/1528357201.snap",
+      "timestamp": 1528357201
+    },
+    {
+      "checksum": "57d868ec86dd0f55e9f0f383d1e0f35b",
+      "path": "/snapshots/1528560748.snap",
+      "timestamp": 1528560748
+    }
+  ],
+  "time": 1528991928,
+  "unfinishedSnapshotTimestamp": -1
+}
+```
+
+The timestamps are in unix timestamp format. The snapshot files are named `<unix-timestamp-in-seconds>.snap`.
+The checksum for two snapshots made by two different, synchronised non-light nodes for the same timestamp
+should be the same. It is worth noting that `light nodes do not sort` the addresses
+in the snapshot and will therefore have different checksum.
+
+The checksum is meant to be used later on for automatic services to compare
+and download the correct snapshot for a new node from a set of public nodes that
+create snapshots for specific points in time.
+
+When there is a snapshot in progress, `inProgress` will be true and `unfinishedSnapshotTimestamp`
+will be set to the snapshot time that is being generated. 
+
+If only `unfinishedSnapshotTimestamp` is set while `inProgress` is false, it can mean two things:
+
+1. The snapshot is generated, but is currently being saved (which can take up to 30-40 minutes on a low-end device).
+2. The snapshot generation failed for some reason.
+
+#### Downloading a snapshot
+
+Using the `path` from the response above, you can downlaod the specific snapshot:
+
+```
+wget http://localhost:14265/snapshots/1528560748.snap
+```
+
+#### Triggering a snapshot
+
+The snapshot can be triggered with the `makeSnapshot` command.
+Please make sure it is not accessible from the outside either by:
+
+1. Running your API listening to localhost requests only.
+2. Adding `makeSnapshot` to `api.limitRemoteAccess`.
+3. Setting `snapshots.enableapi` to false.
+
+To trigger a snapshot, you have to provide a unix timestamp at what
+point in time the snapshot should be made. Any thing earlier than that
+timestamp will be snapshotted and marked for trimming.
+
+The trimming process is slow-ish to ensure consistency. So do not wonder
+that the database does not decrease in size right after triggering or completing the snapshot.
+The more transactions are to be trimmed, the longer it takes.
+
+```
+curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "getSnapshotsInfo", "timestamp": 1528560748 }' | jq
+```
+
+### Future development
+
+Permanent storage of specific transactions, addresses, bundles and tags
+is being prepared and will be released soon.
 
 ## Running on low-end devices
 
-TODO: setting correct options and swappiness. Performance considerations (snapshots)
+We currently officially support devices of 1GB RAM and above withat least two cores.
+There are currently tests using even smaller devices, which still need time to finish.
+
+The following setup refers to Raspberry Pi3 running Raspberian (Linux) OS.
+
+Follow the steps described above (installing Go and Hercules). Additionally:
+
+### Add more swap and increase swappiness
+
+The default swap size on RPi is 100MB. Sometimes, when compacting the database
+the memory usage of Hercules can spike beyond the 1GB + 100MB limit. Hence, it
+is a good idea adding more swap.
+
+RPi uses `dphys-swapfile` for seap management. Simply change `/etc/dphys-swapfile`
+to include:
+
+```
+CONF_SWAPSIZE=2048
+```
+
+This will increase the swap file to 2GB. Finally, restart `dphys-swapfile`:
+
+```
+/etc/init.d/dphys-swapfile restart
+```
+
+Also, change these settings, just in case. We do not know in how far they are needed.
+Our RPi's are set up like these and seem to perform nicely:
+
+```
+sysctl -w vm.overcommit_memory=1
+sysctl -w vm.swappiness=75
+sysctl -w vm.max_map_count=262144
+```
+
+### Run Hercules in "light" mode
+
+If your device has less than 2-3GB in memory, you will need to add `--light` option
+flag to your configuration. It makes Hercules a little slower, but much less hungry
+for RAM. The **downside** is that the file storage is accessed more often than running
+in full mode. On RPi, this could shorten the life of your SD Card if you use it as the
+primary storage. Certainly, it depends on the quality of your SD Card.
+
+Hence, we advise attaching a high-speed SSD external drive to store Hercules data and swap.
+
+Our RPi's run on and off for a month now using a Samsung SD Card without any issues, yet!
 
 ## API documentation
+
+The complete API will be described in the wiki. It is very similar to 
+the official IOTA API so that the official IOTA Wallet can use a Hercules node
+without noticing any difference.
+
+Biggest changes are the snapshot API described above and the `listAllAccounts` command,
+which is a little CPU-intensive and simply dumps all non-zero accounts with their
+respective balances. Feel free to try it out, but make sure to 
 
 TODO: difference to the default IRI API. Snapshots, account listing.
 
 ## Pending: Roadmap
 
-1. PoW - attachToTangle
-2. Integration tests for the tangle module.
-3. Integration tests for the snapshot module.
+1. PoW - attachToTangle.
+2. PoW - add support for PiDriver (FPGA).
+3. More integration tests for the tangle module.
+4. More integration tests for the snapshot module.
 
 ## Contributing
 
@@ -171,13 +402,14 @@ If you are a golang expert, feel welcome to make Hercules better!
 ### Testers
 
 Run Hercules and let us know of any bugs, and suggestions you might come up with!
+Please use the `issues function in gitlab. to report any problems.
 
 ### Donations
 
 **Donations always welcome**:
 
 ```
-YHZIJOENEFSDMZGZA9WOGFTRXOFPVFFCDEYEFHPUGKEUAOTTMVLPSSNZNHRJD99WAVESLFPSGLMTUEIBDZRKBKXWZD
+AAJXXFJUEQHKPYIOUIUO9FWCMOAFBZAZPXIFRI9FLDQZJGHQENG9HNMODUZJCHR9RHHUSBHWJELGRDOWZRNWYLYCQW
 ```
 
 ## Authors

@@ -21,7 +21,7 @@ var config *viper.Viper
 func init() {
 	logs.Setup()
 	config = loadConfig()
-	logs.SetConfig(config.Sub("log"))
+	logs.SetConfig(config)
 
 	cfg, _ := json.MarshalIndent(config.AllSettings(), "", "  ")
 	logs.Log.Debugf("Following settings loaded: \n %+v", string(cfg))
@@ -95,6 +95,10 @@ func loadConfig() *viper.Viper {
 	flag.String("database.path", "data", "Path to the database directory")
 
 	flag.String("snapshots.path", "data", "Path to the snapshots directory")
+	flag.String("snapshots.loadFile", "", "Path to a snapshot file to load")
+	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
+	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
+	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. Minimum 3.")
 	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+

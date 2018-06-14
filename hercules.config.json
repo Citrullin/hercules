@@ -29,6 +29,9 @@
   "snapshots" : {
     "path": "snapshots",
     "loadFile": "",
+    "loadIRIFile": "",
+    "loadIRISpentFile": "",
+    "loadIRITimestamp": 0,
     "interval": 0,
     "period": 168,
     "enableapi": true

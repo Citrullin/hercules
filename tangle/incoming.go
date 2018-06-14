@@ -85,7 +85,7 @@ func processIncomingTX(incoming *IncomingTX) {
 		removePendingRequest(tx.Hash)
 
 		removeTx := func () {
-			logs.Log.Warning("Skipping this TX:", convert.BytesToTrytes(tx.Hash)[:81])
+			logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
@@ -169,14 +169,17 @@ func processIncomingTX(incoming *IncomingTX) {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		if pendingKey != nil {
-			nowUnix := time.Now().Unix()
-			db.Put(pendingKey, hash, nil, nil)
-			db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
-			addPendingRequest(hash, int(nowUnix), incoming.Addr)
-		}
 		if err == badger.ErrConflict {
+			atomic.AddInt64(&totalTransactions, -1)
+			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: -1}
 			processIncomingTX(incoming)
+		} else {
+			if pendingKey != nil {
+				nowUnix := time.Now().Unix()
+				db.Put(pendingKey, hash, nil, nil)
+				db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
+				addPendingRequest(hash, int(nowUnix), incoming.Addr)
+			}
 		}
 	}
 }

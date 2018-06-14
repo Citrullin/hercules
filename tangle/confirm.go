@@ -35,6 +35,26 @@ func startConfirmThread() {
 			}
 			return nil
 		})
+		// Check unknown confirmed
+		_ = db.DB.View(func(txn *badger.Txn) error {
+			opts := badger.DefaultIteratorOptions
+			it := txn.NewIterator(opts)
+			defer it.Close()
+			prefix := []byte{db.KEY_PENDING_CONFIRMED}
+			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+				key := it.Item().Key()
+				if db.Has(db.AsKey(key, db.KEY_HASH), txn) {
+					logs.Log.Debug("Removed orphaned pending confirmed key", key)
+					err := db.DB.Update(func(txn *badger.Txn) error {
+						err := db.Remove(key, txn)
+						if err != nil { return err }
+						return confirmChild(db.AsKey(key, db.KEY_HASH), txn)
+					})
+					if err != nil { return err }
+				}
+			}
+			return nil
+		})
 		time.Sleep(CONFIRM_CHECK_INTERVAL)
 	}
 }
@@ -42,8 +62,7 @@ func startConfirmThread() {
 func confirm(key []byte, txn *badger.Txn) error {
 	db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 
-	_, confirmedError := txn.Get(db.AsKey(key, db.KEY_CONFIRMED))
-	if confirmedError == nil {
+	if db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) {
 		return nil
 	}
 
@@ -54,7 +73,7 @@ func confirm(key []byte, txn *badger.Txn) error {
 	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) && !bytes.Equal(address, COO_ADDRESS_BYTES) {
 		logs.Log.Debug("TX pending for trim, skipping",
 			timestamp, snapshot.GetSnapshotTimestamp(txn), convert.BytesToTrytes(address)[:81])
-		if value != 0 {
+		if false && value != 0 {
 			logs.Log.Errorf("TX with value %v skipped because of a trim - DB inconsistency imminent", value)
 			return errors.New("Value TX confirmation behind snapshot horizon!")
 		}
@@ -118,7 +137,7 @@ func confirmChild(key []byte, txn *badger.Txn) error {
 			logs.Log.Errorf("Could not save child confirm status: %v", err)
 			return errors.New("Could not save child confirm status!")
 		}
-	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) {
+	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) && db.Has(db.AsKey(key, db.KEY_PENDING_HASH), txn) {
 		err = db.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not save child pending confirm status: %v", err)

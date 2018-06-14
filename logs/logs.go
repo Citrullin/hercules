@@ -16,7 +16,7 @@ func Setup() {
 }
 
 func SetConfig(config *viper.Viper) {
-	level, err := logging.LogLevel(config.GetString("level"))
+	level, err := logging.LogLevel(config.GetString("log.level"))
 	if err == nil {
 		logging.SetLevel(level, "hercules")
 	} else {

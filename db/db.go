@@ -19,6 +19,7 @@ const (
 var DB *badger.DB
 var config *viper.Viper
 var Locker = &sync.Mutex{}
+var CleanupLocker = &sync.Mutex{}
 var LatestTransactionTimestamp = 0
 
 /*
@@ -89,8 +90,10 @@ Garbage-collects debris from the memory.
 func cleanupDB() {
 	logs.Log.Debug("Cleanup database started")
 	Locker.Lock()
+	CleanupLocker.Lock()
 	DB.RunValueLogGC(0.5)
 	Locker.Unlock()
+	CleanupLocker.Unlock()
 	logs.Log.Debug("Cleanup database finished")
 }
 

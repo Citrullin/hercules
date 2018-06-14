@@ -1,9 +1,9 @@
-              "Hercules.go"
+              "CarrIOTA Hercules"
             by SemkoDev GbR
 
 ---
 
-"Hercules.go" is a free software developed by:
+"CarrIOTA Hercules" is a free software developed by:
 
 SemkoDev GbR with  
 Anne Kathrin Semko, Vitaly Semko Androsenko, Roman Semko Androsenko  
@@ -32,11 +32,11 @@ Buying such a license is mandatory as soon as you develop commercial activities 
 
 Read more about the requirements of the AGPLv3 license in the license text below (**GNU AFFERO GENERAL PUBLIC LICENSE**).
 
-If you wish to discuss a commercual license, please contact SemkoDev GbR.
+If you wish to discuss a commercial license, please contact SemkoDev GbR.
 
 ---
 
-You can find the licenses of Hercules.go dependencies in the corresponing
+You can find the licenses of CarrIOTA Hercules dependencies in the corresponding
 folder(s) within the project.
 
 ---

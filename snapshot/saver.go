@@ -73,14 +73,9 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 					// Do not save zero-value addresses
 					if value == 0 { continue }
 
-					item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
+					addressHash, err := db.GetBytesRaw(db.AsKey(key, db.KEY_ADDRESS_BYTES), txn)
 					if err != nil {
 						logs.Log.Error("Could not get an address hash value from database!", err, key)
-						return err
-					}
-					addressHash, err := item.Value()
-					if err != nil {
-						logs.Log.Error("Could not parse an address hash value from database!", err)
 						return err
 					}
 					if len(addressHash) < 49 {
@@ -111,15 +106,14 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 		prefix := []byte{db.KEY_SNAPSHOT_SPENT}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
-			item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
+			addressHash, err := db.GetBytesRaw(db.AsKey(key, db.KEY_ADDRESS_BYTES), txn)
 			if err != nil {
-				logs.Log.Error("Could not get an address hash spent from database!", err)
+				logs.Log.Error("Could not get an address hash value from database!", err, key)
 				return err
 			}
-			addressHash, err := item.Value()
-			if err != nil {
-				logs.Log.Error("Could not parse an address hash spent from database!", err)
-				return err
+			if len(addressHash) < 49 {
+				logs.Log.Errorf("Wrong address length! (%v) => %v, key: %v", convert.BytesToTrytes(addressHash), addressHash, key)
+				addressHash = restoreBrokenAddress(db.AsKey(key, db.KEY_ADDRESS_BYTES))
 			}
 			line := convert.BytesToTrytes(addressHash)[:81]
 			addToBuffer(line)

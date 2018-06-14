@@ -34,10 +34,10 @@ func Start(cfg *viper.Viper) {
 
     lowEndDevice = config.GetBool("light")
     CurrentTimestamp = GetSnapshotTimestamp(nil)
+    logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
+
     // LoadIRISnapshot("snapshotMainnet.txt", "previousEpochsSpentAddresses.txt", 1525017600)
     // LoadAddressBytes("snapshotMainnet.txt")
-    // [ERRO] 19:32:32.456910 002390 [snapshot] SaveSnapshot.func3 -> Wrong address length! value 14560000, () => [], key: [120 0 0 61 232 23 226 201 36 132 235 184 178 153 43 42]
-    // [WARN] 19:32:32.457129 002391 [snapshot] restoreBrokenAddress -> Address hash not found for key [105 0 0 61 232 23 226 201 36 132 235 184 178 153 43 42]. Trying to restore...
 
     go trimTXRunner()
 
@@ -45,8 +45,13 @@ func Start(cfg *viper.Viper) {
     go startAutosnapshots()
 
     snapshotToLoad := config.GetString("snapshots.loadFile")
+    iri1 := config.GetString("snapshots.loadIRIFile")
+    iri2 := config.GetString("snapshots.loadIRISpentFile")
+    iriTimestamp := config.GetInt("snapshots.loadIRITimestamp")
     if len(snapshotToLoad) > 0 {
         LoadSnapshot(snapshotToLoad)
+    } else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0{
+        LoadIRISnapshot(iri1, iri2, iriTimestamp)
     }
     // TODO: (OPT) possibility to load an IRI snapshot.
 

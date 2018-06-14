@@ -22,7 +22,11 @@ Creates a snapshot on the current tangle database.
 func MakeSnapshot (timestamp int) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
 	InProgress = true
-	defer func() { InProgress = false }()
+	db.CleanupLocker.Lock()
+	defer func() {
+		InProgress = false
+		db.CleanupLocker.Unlock()
+	}()
 
 	var bundles [][]byte
 	var txs []KeyValue
@@ -163,7 +167,7 @@ func MakeSnapshot (timestamp int) error {
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")
 		trimData(int64(timestamp))
-		return db.DB.Update(func(txn *badger.Txn) error {
+		err = db.DB.Update(func(txn *badger.Txn) error {
 			err:= SetSnapshotTimestamp(timestamp, txn)
 			if err != nil { return err }
 
@@ -176,6 +180,7 @@ func MakeSnapshot (timestamp int) error {
 			logs.Log.Info("Snapshot finished and saved in", path)
 			return nil
 		})
+		return err
 	} else {
 		return errors.New("failed database snapshot integrity check")
 	}
