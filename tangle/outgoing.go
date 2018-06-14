@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	tipRequestInterval = time.Duration(3) * time.Second
+	tipRequestInterval = time.Duration(300) * time.Millisecond
 	reRequestInterval  = time.Duration(30) * time.Second
 )
 
@@ -100,7 +100,12 @@ func outgoingRunner() {
 		return
 	}
 	var pendingRequest *PendingRequest
-	shouldRequestTip := time.Now().Sub(lastTip) > tipRequestInterval
+	shouldRequestTip := false
+	if lowEndDevice {
+		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval * 5
+	} else {
+		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval
+	}
 
 	for identifier, neighbor := range server.Neighbors {
 		requestLocker.RLock()
