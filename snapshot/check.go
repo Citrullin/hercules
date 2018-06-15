@@ -39,7 +39,7 @@ func IsSynchronized () bool {
 	return db.LatestTransactionTimestamp > int(time.Now().Unix() - MAX_LATEST_TRANSACTION_AGE) &&
 		db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
-		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 2
+		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 5
 }
 
 /*

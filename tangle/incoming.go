@@ -169,7 +169,7 @@ func processIncomingTX(incoming *IncomingTX) {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		if err == badger.ErrConflict {
+		if !lowEndDevice && err == badger.ErrConflict {
 			atomic.AddInt64(&totalTransactions, -1)
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: -1}
 			processIncomingTX(incoming)
