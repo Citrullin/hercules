@@ -28,10 +28,8 @@ var config *viper.Viper
 var limitAccess []string
 var authEnabled = false
 
-// TODO: Add accounts api - list all accounts
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.
-
 
 func Start (apiConfig *viper.Viper) {
 	config = apiConfig

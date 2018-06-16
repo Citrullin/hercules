@@ -22,10 +22,8 @@ Creates a snapshot on the current tangle database.
 func MakeSnapshot (timestamp int) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
 	InProgress = true
-	db.CleanupLocker.Lock()
 	defer func() {
 		InProgress = false
-		db.CleanupLocker.Unlock()
 	}()
 
 	var bundles [][]byte
@@ -126,14 +124,12 @@ func MakeSnapshot (timestamp int) error {
 			address, err := db.GetBytes(db.AsKey(kv.key, db.KEY_ADDRESS_HASH), txn)
 			if err != nil { return err }
 
-			addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_BALANCE)
-
-			_, err = db.IncrBy(addressKey, kv.value, false, txn)
+			_, err = db.IncrBy(db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE), kv.value, false, txn)
 			if err != nil { return err }
 
 			// Update spents:
 			if kv.value < 0 {
-				err := db.Put(db.AsKey(addressKey, db.KEY_SNAPSHOT_SPENT), true, nil, txn)
+				err := db.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil, txn)
 				if err != nil { return err }
 			}
 

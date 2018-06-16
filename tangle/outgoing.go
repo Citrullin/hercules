@@ -320,9 +320,9 @@ func findPendingRequest(hash []byte) int {
 func getOldPending() *PendingRequest {
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
-	sortRange := 5000
+	sortRange := 2000
 	if lowEndDevice {
-		sortRange = 1000
+		sortRange = 500
 	}
 	for i, pendingRequest := range pendingRequests {
 		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
@@ -332,8 +332,9 @@ func getOldPending() *PendingRequest {
 			return nil
 		}
 	}
+
 	rotatePending++
-	if rotatePending > 1000 && len(pendingRequests) > sortRange {
+	if rotatePending > 5000 && len(pendingRequests) > sortRange {
 		pendingRequests = append(pendingRequests[sortRange:], pendingRequests[:sortRange]...)
 		rotatePending = 0
 	}

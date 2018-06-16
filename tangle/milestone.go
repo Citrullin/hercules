@@ -171,8 +171,6 @@ func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 Runs checking of pending milestones. If the
 */
 func startMilestoneChecker() {
-	// TODO: if milestone is pending  for too long, remove it from the loop
-	// TODO: also remove the events for milestone pairs
 	total := 0
 	db.Locker.Lock()
 	db.Locker.Unlock()
@@ -375,5 +373,9 @@ func getMilestoneIndex(tx *transaction.FastTX, trits []int) int {
 }
 
 func isMaybeMilestone(tx *transaction.FastTX) bool {
-	return bytes.Equal(tx.Address, COO_ADDRESS_BYTES)
+	return bytes.Equal(tx.Address, COO_ADDRESS_BYTES) && tx.Value == 0
+}
+
+func isMaybeMilestonePair(tx *transaction.FastTX) bool {
+	return bytes.Equal(tx.Address, COO_ADDRESS2_BYTES) && tx.Value == 0
 }

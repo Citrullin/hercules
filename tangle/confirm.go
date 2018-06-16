@@ -35,26 +35,32 @@ func startConfirmThread() {
 			}
 			return nil
 		})
-		// Check unknown confirmed
+		/*/ Check unknown confirmed
 		_ = db.DB.View(func(txn *badger.Txn) error {
 			opts := badger.DefaultIteratorOptions
 			it := txn.NewIterator(opts)
 			defer it.Close()
 			prefix := []byte{db.KEY_PENDING_CONFIRMED}
+			var toRemove [][]byte
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 				key := it.Item().Key()
 				if db.Has(db.AsKey(key, db.KEY_HASH), txn) {
-					logs.Log.Debug("Removed orphaned pending confirmed key", key)
-					err := db.DB.Update(func(txn *badger.Txn) error {
-						err := db.Remove(key, txn)
-						if err != nil { return err }
-						return confirmChild(db.AsKey(key, db.KEY_HASH), txn)
-					})
-					if err != nil { return err }
+					k := make([]byte, len(key))
+					copy(k, key)
+					toRemove = append(toRemove, k)
 				}
 			}
+			for _, key := range toRemove {
+				logs.Log.Debug("Removing orphaned pending confirmed key", key)
+				err := db.DB.Update(func(txn *badger.Txn) error {
+					err := db.Remove(key, txn)
+					if err != nil { return err }
+					return confirmChild(db.AsKey(key, db.KEY_HASH), txn)
+				})
+				if err != nil { return err }
+			}
 			return nil
-		})
+		})*/
 		time.Sleep(CONFIRM_CHECK_INTERVAL)
 	}
 }
@@ -89,21 +95,19 @@ func confirm(key []byte, txn *badger.Txn) error {
 
 	err = db.Put(db.AsKey(key, db.KEY_CONFIRMED), timestamp, nil, txn)
 
-	addressHash := db.GetByteKey(address, db.KEY_BALANCE)
-
 	if err != nil {
 		logs.Log.Errorf("Could not save confirmation status!", err)
 		return errors.New("Could not save confirmation status!")
 	}
 
 	if value != 0 {
-		_, err := db.IncrBy(addressHash, value, false, txn)
+		_, err := db.IncrBy(db.GetAddressKey(address, db.KEY_BALANCE), value, false, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not update account balance: %v", err)
 			return errors.New("Could not update account balance!")
 		}
 		if value < 0 {
-			err := db.Put(db.AsKey(addressHash, db.KEY_SPENT), true, nil, txn)
+			err := db.Put(db.GetAddressKey(address, db.KEY_SPENT), true, nil, txn)
 			if err != nil {
 				logs.Log.Errorf("Could not update account spent status: %v", err)
 				return errors.New("Could not update account spent status!")
@@ -137,7 +141,7 @@ func confirmChild(key []byte, txn *badger.Txn) error {
 			logs.Log.Errorf("Could not save child confirm status: %v", err)
 			return errors.New("Could not save child confirm status!")
 		}
-	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) && db.Has(db.AsKey(key, db.KEY_PENDING_HASH), txn) {
+	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) {
 		err = db.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not save child pending confirm status: %v", err)

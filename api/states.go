@@ -35,7 +35,7 @@ func wereAddressesSpentFrom (request Request, c *gin.Context, t time.Time) {
 				ReplyError("Wrong hash trytes", c)
 				return nil
 			}
-			states = append(states, db.Has(db.GetByteKey(convert.TrytesToBytes(hash)[:49], db.KEY_SPENT), txn))
+			states = append(states, db.Has(db.GetAddressKey(convert.TrytesToBytes(hash)[:49], db.KEY_SPENT), txn))
 		}
 		return nil
 	})

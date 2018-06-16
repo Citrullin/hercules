@@ -53,7 +53,6 @@ func Start(cfg *viper.Viper) {
     } else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0{
         LoadIRISnapshot(iri1, iri2, iriTimestamp)
     }
-    // TODO: (OPT) possibility to load an IRI snapshot.
 
     if !checkDatabaseSnapshot() {
         logs.Log.Fatalf("Database is in an inconsistent state. Try deleting it and loading a snapshot.")

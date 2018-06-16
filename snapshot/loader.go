@@ -59,16 +59,12 @@ func LoadSnapshot (path string) error {
 }
 
 func loadValueSnapshot(address []byte, value int64, txn *badger.Txn) error {
-	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_BALANCE)
-	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, txn)
+	addressKey := db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE)
+	err := db.Put(addressKey, value, nil, txn)
 	if err != nil {
 		return err
 	}
-	err = db.Put(addressKey, value, nil, txn)
-	if err != nil {
-		return err
-	}
-	err = db.Put(db.AsKey(addressKey, db.KEY_BALANCE), value, nil, txn)
+	err = db.Put(db.GetAddressKey(address, db.KEY_BALANCE), value, nil, txn)
 	if err != nil {
 		return err
 	}
@@ -76,12 +72,11 @@ func loadValueSnapshot(address []byte, value int64, txn *badger.Txn) error {
 }
 
 func loadSpentSnapshot(address []byte, txn *badger.Txn) error {
-	addressKey := db.GetByteKey(address, db.KEY_SNAPSHOT_SPENT)
-	err := db.PutBytes(db.AsKey(addressKey, db.KEY_ADDRESS_BYTES), address, nil, txn)
+	err := db.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address, nil, txn)
 	if err != nil { return err }
-	err = db.Put(addressKey, true, nil, txn)
+	err = db.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil, txn)
 	if err != nil { return err }
-	err = db.Put(db.AsKey(addressKey, db.KEY_SPENT), true, nil, txn)
+	err = db.Put(db.GetAddressKey(address, db.KEY_SPENT), true, nil, txn)
 	if err != nil { return err }
 	return nil
 }

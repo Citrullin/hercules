@@ -14,7 +14,6 @@ import (
 	"gitlab.com/semkodev/hercules/db"
 	"gitlab.com/semkodev/hercules/convert"
 	"gitlab.com/semkodev/hercules/utils"
-	"gitlab.com/semkodev/hercules/transaction"
 )
 
 func SaveSnapshot (snapshotDir string, timestamp int) error {
@@ -73,16 +72,7 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 					// Do not save zero-value addresses
 					if value == 0 { continue }
 
-					addressHash, err := db.GetBytesRaw(db.AsKey(key, db.KEY_ADDRESS_BYTES), txn)
-					if err != nil {
-						logs.Log.Error("Could not get an address hash value from database!", err, key)
-						return err
-					}
-					if len(addressHash) < 49 {
-						logs.Log.Errorf("Wrong address length! value %v, (%v) => %v, key: %v", value, convert.BytesToTrytes(addressHash), addressHash, key)
-						addressHash = restoreBrokenAddress(db.AsKey(key, db.KEY_ADDRESS_BYTES))
-					}
-					line := convert.BytesToTrytes(addressHash)[:81] + ";" + strconv.FormatInt(int64(value), 10)
+					line := convert.BytesToTrytes(key[1:])[:81] + ";" + strconv.FormatInt(int64(value), 10)
 					addToBuffer(line)
 				} else {
 					logs.Log.Error("Could not parse a snapshot value from database!", err)
@@ -106,16 +96,7 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 		prefix := []byte{db.KEY_SNAPSHOT_SPENT}
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			key := it.Item().Key()
-			addressHash, err := db.GetBytesRaw(db.AsKey(key, db.KEY_ADDRESS_BYTES), txn)
-			if err != nil {
-				logs.Log.Error("Could not get an address hash value from database!", err, key)
-				return err
-			}
-			if len(addressHash) < 49 {
-				logs.Log.Errorf("Wrong address length! (%v) => %v, key: %v", convert.BytesToTrytes(addressHash), addressHash, key)
-				addressHash = restoreBrokenAddress(db.AsKey(key, db.KEY_ADDRESS_BYTES))
-			}
-			line := convert.BytesToTrytes(addressHash)[:81]
+			line := convert.BytesToTrytes(key[1:])[:81]
 			addToBuffer(line)
 		}
 		commitBuffer()
@@ -170,56 +151,4 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 	err = w.Flush()
 	if err != nil { return err }
 	return os.Rename(pth, savepth)
-}
-
-func restoreBrokenAddress (key []byte) []byte {
-	logs.Log.Warningf("Address hash not found for key %v. Trying to restore...", key)
-	var hash []byte
-	db.DB.Update(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := db.AsKey(key, db.KEY_ADDRESS)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			txHashKey := it.Item().Key()[16:]
-			txBytes, err := db.GetBytes(db.AsKey(txHashKey, db.KEY_BYTES), txn)
-			if err != nil { continue }
-			trits := convert.BytesToTrits(txBytes)[:8019]
-			tx := transaction.TritsToFastTX(&trits, txBytes)
-			hash = tx.Address
-			break
-		}
-		if hash != nil {
-			logs.Log.Warningf(" Found address: %v. Restoring...", convert.BytesToTrytes(hash)[:81])
-			return db.PutBytes(db.GetByteKey(hash, db.KEY_ADDRESS_BYTES), hash, nil, txn)
-		} else {
-			logs.Log.Warning("Address not found. Trying to find in transactions data")
-			x := 0
-			opts := badger.DefaultIteratorOptions
-			it := txn.NewIterator(opts)
-			defer it.Close()
-			prefix := []byte{db.KEY_BYTES}
-			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				x++
-				if x % 100000 == 0 {
-					logs.Log.Debugf("Progress %v", x)
-				}
-				txHashKey := it.Item().Key()[16:]
-				txBytes, err := db.GetBytes(db.AsKey(txHashKey, db.KEY_BYTES), txn)
-				if err != nil { continue }
-				trits := convert.BytesToTrits(txBytes)[:8019]
-				tx := transaction.TritsToFastTX(&trits, txBytes)
-				if bytes.Equal(key, db.GetByteKey(tx.Address, db.KEY_ADDRESS_BYTES)) {
-					hash = tx.Address
-					break
-				}
-			}
-		}
-		if hash != nil {
-			logs.Log.Warningf(" Found address: %v. Restoring...", convert.BytesToTrytes(hash)[:81])
-			return db.PutBytes(db.GetByteKey(hash, db.KEY_ADDRESS_BYTES), hash, nil, txn)
-		}
-		return nil
-	})
-	return hash
 }

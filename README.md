@@ -192,7 +192,7 @@ snapshot, which contains spent addresses and balances. Without it,
 Hercules will fail to start. Once the database is initialised, you do not
 need this option any longer.
 
-#### --snapshot.loadIRIFile="snapshotMainnet.txt" --snapshot.loadIRISpentFile="previousEpochsSpentAddresses.txt" --snapshot.loadIRITimestamp=1525017600
+#### --snapshots.loadIRIFile="snapshotMainnet.txt" --snapshots.loadIRISpentFile="previousEpochsSpentAddresses.txt" --snapshots.loadIRITimestamp=1525017600
 
 Instead of using proprietary Hercules snapshot files, you can use the snapshot files
 from the IRI that can be downloaded [here](https://github.com/iotaledger/iri/tree/dev/src/main/resources).

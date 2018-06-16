@@ -81,6 +81,14 @@ func GetByteKey(bytes []byte, key byte) []byte {
 	return b[:]
 }
 
+// Returns a 16-bytes key based on bytes
+func GetAddressKey(address []byte, key byte) []byte {
+	b := make([]byte, 50)
+	b[0] = key
+	copy(b[1:], address)
+	return b
+}
+
 func Has(key []byte, txn *badger.Txn) bool {
 	tx := txn
 	var err error = nil

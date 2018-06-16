@@ -113,6 +113,10 @@ func processIncomingTX(incoming *IncomingTX) {
 			_checkIncomingError(tx, err)
 			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)
 			_checkIncomingError(tx, err)
+			err = db.Put(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+			_checkIncomingError(tx, err)
+			err = db.Put(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+			_checkIncomingError(tx, err)
 			logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
 				convert.BytesToTrytes(tx.Hash)[:81], tx.Value)
 			removeTx()

@@ -26,7 +26,7 @@ func getBalances (request Request, c *gin.Context, t time.Time) {
 				balances = append(balances, 0)
 				continue
 			}
-			balance, err := db.GetInt64(db.GetByteKey(addressBytes, db.KEY_BALANCE), nil)
+			balance, err := db.GetInt64(db.GetAddressKey(addressBytes, db.KEY_BALANCE), nil)
 			if err != nil {
 				balances = append(balances, 0)
 				continue
@@ -64,18 +64,7 @@ func listAllAccounts (request Request, c *gin.Context, t time.Time) {
 					// Do not save zero-value addresses
 					if value == 0 { continue }
 
-					item, err := txn.Get(db.AsKey(key, db.KEY_ADDRESS_BYTES))
-					if err != nil {
-						continue
-					}
-					addressHash, err := item.Value()
-					if err != nil {
-						continue
-					}
-					if len(addressHash) < 49 {
-						continue
-					}
-					accounts[convert.BytesToTrytes(addressHash)[:81]] = value
+					accounts[convert.BytesToTrytes(key[1:])[:81]] = value
 				} else {
 					logs.Log.Error("Could not parse a snapshot value from database!", err)
 					return err
