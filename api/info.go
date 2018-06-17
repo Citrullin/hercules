@@ -14,6 +14,8 @@ import (
 func getNodeInfo (request Request, c *gin.Context, t time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
+	server.NeighborsLock.RLock()
+	defer server.NeighborsLock.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
 		"appName": "CarrIOTA Hercules Go",

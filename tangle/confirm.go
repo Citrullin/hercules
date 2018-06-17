@@ -104,6 +104,8 @@ func confirm(key []byte, txn *badger.Txn) error {
 		return errors.New("Could not save confirmation status!")
 	}
 
+	// TODO: if value!= zero and keyindex is one: add bundle validation task
+	// Add value only when bundle is consistent.
 	if value != 0 {
 		_, err := db.IncrBy(db.GetAddressKey(address, db.KEY_BALANCE), value, false, txn)
 		if err != nil {

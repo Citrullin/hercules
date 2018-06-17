@@ -51,6 +51,8 @@ func loadPendingRequests() {
 	defer db.Locker.Unlock()
 	requestLocker.Lock()
 	defer requestLocker.Unlock()
+	server.NeighborsLock.RLock()
+	defer server.NeighborsLock.RUnlock()
 
 	total := 0
 	added := 0
@@ -96,6 +98,9 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
+	server.NeighborsLock.RLock()
+	defer server.NeighborsLock.RUnlock()
+
 	if len(txQueue) > 100 || len(srv.Incoming) > 100 {
 		return
 	}

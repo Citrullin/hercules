@@ -80,6 +80,7 @@ func GetNeighborByAddress(address string) (string, *Neighbor) {
 func UpdateHostnameAddresses () {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
+
 	for identifier, neighbor := range Neighbors {
 		if len(neighbor.Hostname) > 0 {
 			logs.Log.Debugf("Checking %v with current address: %v", identifier, neighbor.Addr)
@@ -95,6 +96,9 @@ func UpdateHostnameAddresses () {
 }
 
 func getNeighborByAddress(address string) (string, *Neighbor) {
+	NeighborsLock.RLock()
+	defer NeighborsLock.RUnlock()
+
 	identifier, _ := getAddressAndPort(address)
 	for id, neighbor := range Neighbors {
 		if neighbor.Addr == address || neighbor.Hostname == identifier {
