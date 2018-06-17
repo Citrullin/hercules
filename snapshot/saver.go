@@ -18,8 +18,6 @@ import (
 
 func SaveSnapshot (snapshotDir string, timestamp int) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
-	db.Locker.Lock()
-	defer db.Locker.Unlock()
 	utils.CreateDirectory(snapshotDir)
 
 	savepth := path.Join(snapshotDir, strconv.FormatInt(int64(timestamp), 10) + ".snap")

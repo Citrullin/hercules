@@ -20,6 +20,10 @@ func confirmOnLoad() {
 
 func startConfirmThread() {
 	for {
+		if snapshot.InProgress {
+			time.Sleep(time.Duration(1) * time.Second)
+			continue
+		}
 		db.Locker.Lock()
 		db.Locker.Unlock()
 		_ = db.DB.View(func(txn *badger.Txn) error {

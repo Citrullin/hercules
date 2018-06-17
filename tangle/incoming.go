@@ -25,6 +25,11 @@ func incomingRunner() {
 		var tx *transaction.FastTX
 		var isTipRequest = false
 
+		if snapshot.InProgress {
+			time.Sleep(time.Duration(1) * time.Second)
+			continue
+		}
+
 		incoming++
 
 		db.Locker.Lock()

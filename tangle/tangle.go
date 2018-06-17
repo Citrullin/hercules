@@ -1,16 +1,17 @@
 package tangle
 
 import (
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 	"github.com/spf13/viper"
 	"gitlab.com/semkodev/hercules/convert"
 	"gitlab.com/semkodev/hercules/db"
 	"gitlab.com/semkodev/hercules/logs"
 	"gitlab.com/semkodev/hercules/server"
 	"gitlab.com/semkodev/hercules/transaction"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
+	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 const (
@@ -101,6 +102,10 @@ func Start(s *server.Server, cfg *viper.Viper) {
 
 func runner() {
 	for {
+		if snapshot.InProgress {
+			time.Sleep(time.Duration(1) * time.Second)
+			continue
+		}
 		select {
 		case incomingTX := <-txQueue:
 			processIncomingTX(incomingTX)

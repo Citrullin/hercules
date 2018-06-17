@@ -1,6 +1,10 @@
 package tangle
 
 import (
+	"io"
+	"os"
+	"sync"
+	"time"
 	"bufio"
 	"bytes"
 	"encoding/gob"
@@ -10,10 +14,7 @@ import (
 	"gitlab.com/semkodev/hercules/db"
 	"gitlab.com/semkodev/hercules/logs"
 	"gitlab.com/semkodev/hercules/transaction"
-	"io"
-	"os"
-	"sync"
-	"time"
+	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
@@ -171,6 +172,10 @@ func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 Runs checking of pending milestones. If the
 */
 func startMilestoneChecker() {
+	if snapshot.InProgress {
+		time.Sleep(time.Duration(5) * time.Second)
+		go startMilestoneChecker()
+	}
 	total := 0
 	db.Locker.Lock()
 	db.Locker.Unlock()

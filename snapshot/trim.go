@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"time"
 	"bytes"
 	"encoding/gob"
 	"github.com/dgraph-io/badger"
@@ -30,6 +31,10 @@ func trimTXRunner () {
 	for hashKey := range edgeTransactions {
 		db.Locker.Lock()
 		db.Locker.Unlock()
+		if InProgress {
+			time.Sleep(time.Duration(1) * time.Second)
+			continue
+		}
 		trimTX(*hashKey)
 	}
 }
