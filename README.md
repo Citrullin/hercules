@@ -381,9 +381,7 @@ without noticing any difference.
 
 Biggest changes are the snapshot API described above and the `listAllAccounts` command,
 which is a little CPU-intensive and simply dumps all non-zero accounts with their
-respective balances. Feel free to try it out, but make sure to 
-
-TODO: difference to the default IRI API. Snapshots, account listing.
+respective balances. Feel free to try it out, but make sure to close it for public access. 
 
 ## Pending: Roadmap
 
@@ -391,6 +389,7 @@ TODO: difference to the default IRI API. Snapshots, account listing.
 2. PoW - add support for PiDriver (FPGA).
 3. More integration tests for the tangle module.
 4. More integration tests for the snapshot module.
+5. Port and integrate Nelson.
 
 ## Contributing
 
