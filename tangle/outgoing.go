@@ -51,8 +51,6 @@ func loadPendingRequests() {
 	defer db.Locker.Unlock()
 	requestLocker.Lock()
 	defer requestLocker.Unlock()
-	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
 
 	total := 0
 	added := 0
@@ -98,9 +96,6 @@ func loadPendingRequests() {
 }
 
 func outgoingRunner() {
-	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
-
 	if len(txQueue) > 100 || len(srv.Incoming) > 100 {
 		return
 	}
@@ -112,7 +107,10 @@ func outgoingRunner() {
 		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval
 	}
 
+	server.NeighborsLock.RLock()
+
 	for identifier, neighbor := range server.Neighbors {
+		server.NeighborsLock.RUnlock()
 		requestLocker.RLock()
 		requestQueue, requestOk := requestQueues[identifier]
 		requestLocker.RUnlock()
@@ -155,7 +153,9 @@ func outgoingRunner() {
 				sendReply(msg)
 			}
 		}
+		server.NeighborsLock.RLock()
 	}
+	server.NeighborsLock.RUnlock()
 }
 
 func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
