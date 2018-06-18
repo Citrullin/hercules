@@ -15,7 +15,7 @@ import (
 
 func getBalances (request Request, c *gin.Context, t time.Time) {
 	if request.Addresses != nil {
-		var balances []int64
+		var balances = []int64{}
 		for _, address := range request.Addresses {
 			if !convert.IsTrytes(address, 81) {
 				ReplyError("Wrong trytes", c)
