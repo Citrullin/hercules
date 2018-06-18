@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	tipRequestInterval = time.Duration(300) * time.Millisecond
+	tipRequestInterval = time.Duration(100) * time.Millisecond
 	reRequestInterval  = time.Duration(30) * time.Second
 )
 
