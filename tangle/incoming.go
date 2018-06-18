@@ -15,7 +15,8 @@ import (
 	"time"
 )
 
-const P_TIP_REPLY = 20
+const P_TIP_REPLY = 50
+const P_BROADCAST = 10
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
@@ -160,7 +161,7 @@ func processIncomingTX(incoming *IncomingTX) {
 
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
-			if utils.Random(0, 100) < 5 {
+			if utils.Random(0, 100) < P_BROADCAST {
 				Broadcast(tx.Hash)
 			}
 

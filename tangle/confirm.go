@@ -147,7 +147,7 @@ func confirmChild(key []byte, txn *badger.Txn) error {
 			logs.Log.Errorf("Could not save child confirm status: %v", err)
 			return errors.New("Could not save child confirm status!")
 		}
-	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) {
+	} else if !db.Has(db.AsKey(key, db.KEY_EDGE), txn) && db.Has(db.AsKey(key, db.KEY_PENDING_HASH), txn) {
 		err = db.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil, txn)
 		if err != nil {
 			logs.Log.Errorf("Could not save child pending confirm status: %v", err)

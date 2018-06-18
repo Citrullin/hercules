@@ -62,8 +62,9 @@ func TrackNeighbor (msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	neighbor, ok := Neighbors[msg.Addr]
-	if ok && neighbor != nil {
+	_, neighbor := getNeighborByAddress(msg.Addr)
+
+	if neighbor != nil {
 		neighbor.Incoming += msg.Incoming
 		neighbor.New += msg.New
 		neighbor.Invalid += msg.Invalid
