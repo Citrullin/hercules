@@ -104,7 +104,7 @@ func loadConfig() *viper.Viper {
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
 		"makeSnapshot, getSnapshotsInfo")
 
-	flag.IntP("node.port", "u", 13600, "UDP Node port")
+	flag.IntP("node.port", "u", 14600, "UDP Node port")
 	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
 
 	flag.Parse()
