@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"gitlab.com/semkodev/hercules/logs"
+	"strings"
 )
 
 type Request struct {
@@ -27,6 +28,7 @@ var srv *http.Server
 var config *viper.Viper
 var limitAccess []string
 var authEnabled = false
+var dummyHash = strings.Repeat("9", 81)
 
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.

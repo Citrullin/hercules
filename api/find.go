@@ -16,7 +16,7 @@ func findTransactions (request Request, c *gin.Context, t time.Time) {
 			ReplyError("Wrong address trytes", c)
 			return
 		}
-		hashes = append(hashes, find(convert.TrytesToBytes(address)[:49], db.KEY_ADDRESS)...)
+		hashes = append(hashes, findAddresses(convert.TrytesToBytes(address)[:49], len(request.Addresses) == 1)...)
 	}
 	for _, bundle := range request.Bundles {
 		if !convert.IsTrytes(bundle, 81) {
@@ -45,6 +45,17 @@ func findTransactions (request Request, c *gin.Context, t time.Time) {
 	})
 }
 
+func findAddresses (trits []byte, single bool) []string {
+	hashes := find(trits, db.KEY_ADDRESS)
+	if single && len(hashes) == 0 {
+		// Workaround for IOTA wallet support. Fake transactions for positive addresses:
+		balance, err := db.GetInt64(db.GetAddressKey(trits, db.KEY_BALANCE), nil)
+		if err == nil && balance > 0 {
+			return []string{dummyHash}
+		}
+	}
+	return hashes
+}
 
 func find (trits []byte, prefix byte) []string {
 	var response = []string{}
