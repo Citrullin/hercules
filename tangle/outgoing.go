@@ -13,6 +13,7 @@ import (
 const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
 	reRequestInterval  = time.Duration(30) * time.Second
+	maxIncoming = 200
 )
 
 type PendingRequest struct {
@@ -120,7 +121,7 @@ func getSomeRequest (addr string) []byte {
 }
 
 func outgoingRunner() {
-	if len(txQueue) > 100 || len(srv.Incoming) > 100 {
+	if len(srv.Incoming) > maxIncoming {
 		return
 	}
 

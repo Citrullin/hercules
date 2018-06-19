@@ -7,10 +7,9 @@ import (
 )
 
 func Report() {
-	logs.Log.Debugf("INCOMING:      In: %v, Queued: %v, Pending: %v \n",
+	logs.Log.Debugf("INCOMING:      In: %v, Queued: %v \n",
 		incoming,
-		incomingProcessed,
-		len(txQueue))
+		incomingProcessed)
 	logs.Log.Debugf("OUTGOING:      %v", outgoing)
 	logs.Log.Debugf("SERVER QUEUE:  In: %v, Out: %v \n",
 		len(srv.Incoming),

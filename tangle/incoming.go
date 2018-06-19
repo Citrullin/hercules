@@ -36,7 +36,7 @@ func incomingRunner() {
 
 		var isJustTipRequest = bytes.Equal(data, tipBytes)
 
-		if isJustTipRequest && utils.Random(0, 100) > P_TIP_REPLY {
+		if len(srv.Incoming) > maxIncoming && isJustTipRequest && utils.Random(0, 100) > P_TIP_REPLY {
 			continue
 		}
 
@@ -50,6 +50,11 @@ func incomingRunner() {
 				processIncomingTX(IncomingTX{tx, raw.Addr, &data})
 				incomingProcessed++
 			}
+		}
+
+		// Pause for a while without responding to prevent flooding
+		if len(srv.Incoming) > maxIncoming {
+			continue
 		}
 
 		var reply []byte = nil

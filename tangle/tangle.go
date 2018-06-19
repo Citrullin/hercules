@@ -55,8 +55,6 @@ var requestQueues map[string]*RequestQueue
 var requestLocker = &sync.RWMutex{}
 var pendingRequestLocker = &sync.RWMutex{}
 
-var txQueue TXQueue
-
 var lowEndDevice = false
 var totalTransactions int64 = 0
 var totalConfirmations int64 = 0
@@ -71,7 +69,6 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	srv = s
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	requestQueues = make(map[string]*RequestQueue)
-	txQueue = make(TXQueue, maxQueueSize)
 
 	lowEndDevice = config.GetBool("light")
 
@@ -92,13 +89,12 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	}
 
 	go report()
-	go runner()
 	logs.Log.Info("Tangle started!")
-}
 
-func runner() {
-	for {
-		outgoingRunner()
-		time.Sleep(1)
-	}
+	go func () {
+		for {
+			outgoingRunner()
+			time.Sleep(1000)
+		}
+	}()
 }
