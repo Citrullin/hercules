@@ -34,7 +34,7 @@ func storeTransactions (request Request, c *gin.Context, broadcast bool, t time.
 					return err
 				}
 				if broadcast {
-					tangle.Broadcast(tx.Hash)
+					tangle.Broadcast(tx.Bytes)
 					broadcasted++
 				}
 				stored++

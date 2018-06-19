@@ -20,11 +20,6 @@ func Report() {
 		logs.Log.Debugf("PEER I QUEUE:  %v - %v \n", i, len(*queue))
 	}
 	requestLocker.RUnlock()
-	replyLocker.RLock()
-	for i, queue := range replyQueues {
-		logs.Log.Debugf("PEER O QUEUE:  %v - %v \n", i, len(*queue))
-	}
-	replyLocker.RUnlock()
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
 		totalConfirmations,

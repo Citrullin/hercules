@@ -11,7 +11,6 @@ import (
 	"gitlab.com/semkodev/hercules/logs"
 	"gitlab.com/semkodev/hercules/server"
 	"gitlab.com/semkodev/hercules/transaction"
-	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 const (
@@ -53,10 +52,8 @@ var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 var srv *server.Server
 var config *viper.Viper
 var requestQueues map[string]*RequestQueue
-var replyQueues map[string]*RequestQueue
 var requestLocker = &sync.RWMutex{}
 var pendingRequestLocker = &sync.RWMutex{}
-var replyLocker = &sync.RWMutex{}
 
 var txQueue TXQueue
 
@@ -74,7 +71,6 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	srv = s
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	requestQueues = make(map[string]*RequestQueue)
-	replyQueues = make(map[string]*RequestQueue)
 	txQueue = make(TXQueue, maxQueueSize)
 
 	lowEndDevice = config.GetBool("light")
@@ -102,16 +98,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 
 func runner() {
 	for {
-		if snapshot.InProgress {
-			time.Sleep(time.Duration(1) * time.Second)
-			continue
-		}
-		select {
-		case incomingTX := <-txQueue:
-			processIncomingTX(incomingTX)
-		default:
-		}
 		outgoingRunner()
-		time.Sleep(time.Duration(len(srv.Incoming) * 10000))
+		time.Sleep(1)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"github.com/spf13/viper"
 	"gitlab.com/semkodev/hercules/logs"
+	"strings"
 )
 
 const (
@@ -72,7 +73,7 @@ func Create (serverConfig *viper.Viper) *Server {
 	Neighbors = make(map[string]*Neighbor)
 	logs.Log.Debug("Initial neighbors", config.GetStringSlice("node.neighbors"))
 	for _, v := range config.GetStringSlice("node.neighbors") {
-		err := AddNeighbor(v)
+		err := AddNeighbor(strings.Replace(v, "udp://", "", -1))
 		if err != nil {
 			logs.Log.Warning("Error adding neighbor:", err)
 		}

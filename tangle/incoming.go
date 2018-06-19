@@ -15,16 +15,14 @@ import (
 	"time"
 )
 
-const P_TIP_REPLY = 50
+const P_TIP_REPLY = 100
 const P_BROADCAST = 10
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
 		data := raw.Msg[:1604]
-		req := raw.Msg[1604:1650]
-		msg := &Message{&data, &req, raw.Addr}
-		var tx *transaction.FastTX
-		var isTipRequest = false
+		req := make([]byte, 49)
+		copy(req, raw.Msg[1604:1650])
 
 		if snapshot.InProgress {
 			time.Sleep(time.Duration(1) * time.Second)
@@ -36,46 +34,35 @@ func incomingRunner() {
 		db.Locker.Lock()
 		db.Locker.Unlock()
 
-		err := db.DB.Update(func(txn *badger.Txn) (e error) {
-			isTipRequest = bytes.Equal(*msg.Bytes, tipBytes)
+		var isJustTipRequest = bytes.Equal(data, tipBytes)
 
-			trits := convert.BytesToTrits(*msg.Bytes)[:8019]
-			tx = transaction.TritsToTX(&trits, *msg.Bytes)
+		if isJustTipRequest && utils.Random(0, 100) > P_TIP_REPLY {
+			continue
+		}
+
+		trits := convert.BytesToTrits(data)[:8019]
+		var tx = transaction.TritsToTX(&trits, data)
+
+		if !isJustTipRequest {
 			if !crypt.IsValidPoW(tx.Hash, MWM) {
-				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: msg.Addr, Invalid: 1}
-				return nil
-			}
-			tipRequest := isTipRequest || bytes.Equal(tx.Hash[:46], tipFastTX.Hash[:46]) || bytes.Equal(tx.Hash[:46], (*msg.Requested)[:46])
-
-			if !tipRequest || utils.Random(0, 100) < P_TIP_REPLY {
-				req := make([]byte, 49)
-				copy(req, *msg.Requested)
-				replyLocker.Lock()
-				identifier, _ := server.GetNeighborByAddress(msg.Addr)
-				queue, ok := replyQueues[identifier]
-				if !ok {
-					q := make(RequestQueue, maxQueueSize)
-					queue = &q
-					replyQueues[identifier] = queue
-				}
-				replyLocker.Unlock()
-				*queue <- &Request{req, tipRequest}
-			}
-			return nil
-		})
-		if err == nil && !isTipRequest && tx != nil {
-			incomingProcessed++
-			if lowEndDevice {
-				txQueue <- &IncomingTX{tx, raw.Addr, msg.Bytes}
+				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: raw.Addr, Invalid: 1}
 			} else {
-				i := IncomingTX{tx, raw.Addr, msg.Bytes}
-				processIncomingTX(&i)
+				processIncomingTX(IncomingTX{tx, raw.Addr, &data})
+				incomingProcessed++
 			}
 		}
+
+		var reply []byte = nil
+		if !isJustTipRequest && !bytes.Equal(tx.Hash, req) {
+			reply, _ = db.GetBytes(db.GetByteKey(req, db.KEY_BYTES), nil)
+		}
+
+		request := getSomeRequest(raw.Addr)
+		sendReply(getMessage(reply, request, request == nil, raw.Addr, nil))
 	}
 }
 
-func processIncomingTX(incoming *IncomingTX) {
+func processIncomingTX(incoming IncomingTX) {
 	tx := incoming.TX
 	var pendingMilestone *PendingMilestone
 	var hash []byte
@@ -162,7 +149,7 @@ func processIncomingTX(incoming *IncomingTX) {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(tx.Hash)
+				Broadcast(tx.Bytes)
 			}
 
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: 1}
