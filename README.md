@@ -76,7 +76,7 @@ cd $HOME
 git clone https://gitlab.com/semkodev/hercules.git
 cd hercules
 ```
-This will download and place the hercules source files in `$HOME` (/home/<your_user_name>).
+This will download and place the hercules source files in `$HOME` (/home/your_user_name).
 
 ## Building hercules
 
