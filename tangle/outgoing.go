@@ -181,14 +181,16 @@ func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err 
 		if pending != nil {
 			requestLocker.Lock()
 			_, neighbor := server.GetNeighborByAddress(addr)
-			queue, ok := requestQueues[neighbor.Addr]
-			if !ok {
-				q := make(RequestQueue, maxQueueSize)
-				queue = &q
-				requestQueues[neighbor.Addr] = queue
+			if neighbor != nil {
+				queue, ok := requestQueues[neighbor.Addr]
+				if !ok {
+					q := make(RequestQueue, maxQueueSize)
+					queue = &q
+					requestQueues[neighbor.Addr] = queue
+				}
+				requestLocker.Unlock()
+				*queue <- &Request{hash, false}
 			}
-			requestLocker.Unlock()
-			*queue <- &Request{hash, false}
 		}
 
 		has = false
