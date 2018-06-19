@@ -1,9 +1,10 @@
 package crypt
 
 import (
-	"testing"
 	"reflect"
-	"gitlab.com/semkodev/hercules/convert"
+	"testing"
+
+	"../convert"
 )
 
 const kerlTrytes = "BXFYVMRKNEEVRQKZECFSIZRFKDH9HTZTGIKFXMUEIIWFLOYXHFLJTEX9TXKAUPIRMPXQGUSLHUREZ9999"
@@ -42,7 +43,7 @@ func TestKerl3(t *testing.T) {
 	result := make([]int, len(expected))
 	kerl := new(Kerl)
 	kerl.Initialize()
-	kerl.Absorb(data, 0, HASH_LENGTH * 27)
+	kerl.Absorb(data, 0, HASH_LENGTH*27)
 	kerl.Squeeze(result, 0, HASH_LENGTH)
 	if !reflect.DeepEqual(result, expected) {
 		t.Error("Wrong kerl!", result)
@@ -74,4 +75,3 @@ func TestKerl5(t *testing.T) {
 		t.Error("Wrong kerl!", result)
 	}
 }
-

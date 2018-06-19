@@ -3,8 +3,9 @@ package crypt
 import (
 	"hash"
 	"math/big"
+
+	"../convert"
 	"github.com/tonnerre/golang-go.crypto/sha3"
-	"gitlab.com/semkodev/hercules/convert"
 )
 
 const BIT_HASH_LENGTH = 384
@@ -17,7 +18,7 @@ type Kerl struct {
 	Hash
 	byte_state []byte
 	trit_state []int
-	hash hash.Hash
+	hash       hash.Hash
 }
 
 func (kerl *Kerl) Initialize() {
@@ -31,26 +32,32 @@ func (kerl *Kerl) Reset() {
 }
 
 func (kerl *Kerl) Absorb(trits []int, offset int, length int) {
-	if length % 243 != 0 { panic("wrong length provided for kerl") }
+	if length%243 != 0 {
+		panic("wrong length provided for kerl")
+	}
 	for {
 		copy(kerl.trit_state[:HASH_LENGTH], trits[offset:offset+HASH_LENGTH])
-		kerl.trit_state[HASH_LENGTH - 1] = 0
+		kerl.trit_state[HASH_LENGTH-1] = 0
 		intToBytes(convert.TritsToInt(kerl.trit_state), kerl.byte_state, 0)
 		kerl.hash.Write(kerl.byte_state)
 		offset += HASH_LENGTH
 		length -= HASH_LENGTH
-		if length <= 0 { break }
+		if length <= 0 {
+			break
+		}
 	}
 }
 
 func (kerl *Kerl) Squeeze(trits []int, offset int, length int) []int {
-	if length % 243 != 0 { panic("wrong length provided for kerl") }
+	if length%243 != 0 {
+		panic("wrong length provided for kerl")
+	}
 	for {
 		kerl.byte_state = kerl.hash.Sum(nil)
-		intValue := bytesToInt(kerl.byte_state, 0 , BYTE_HASH_LENGTH)
+		intValue := bytesToInt(kerl.byte_state, 0, BYTE_HASH_LENGTH)
 		kerl.trit_state = convert.IntToTrits(intValue, len(kerl.trit_state))
-		kerl.trit_state[HASH_LENGTH - 1] = 0
-		copy(trits[offset: offset + HASH_LENGTH], kerl.trit_state[0:HASH_LENGTH])
+		kerl.trit_state[HASH_LENGTH-1] = 0
+		copy(trits[offset:offset+HASH_LENGTH], kerl.trit_state[0:HASH_LENGTH])
 
 		i := len(kerl.byte_state) - 1
 		for i >= 0 {
@@ -61,7 +68,9 @@ func (kerl *Kerl) Squeeze(trits []int, offset int, length int) []int {
 
 		offset += HASH_LENGTH
 		length -= HASH_LENGTH
-		if length <= 0 { break }
+		if length <= 0 {
+			break
+		}
 	}
 	return trits
 }
@@ -81,19 +90,19 @@ func RunHashKerl(trits []int) []int {
 func bytesToInt(input []byte, offset int, size int) *big.Int {
 	var cp = make([]byte, len(input))
 	copy(cp, input)
-	isPositive := cp[0] >> 7 == 0
-	nullEndian := cp [len(cp)-1] == 0
+	isPositive := cp[0]>>7 == 0
+	nullEndian := cp[len(cp)-1] == 0
 	if !isPositive {
 		for i, b := range cp {
 			//if i != len(cp)- 1 {
-				cp[i] = b ^0xFF
+			cp[i] = b ^ 0xFF
 			//}
 		}
 		if !nullEndian {
-			cp [len(cp)-1] += 1
+			cp[len(cp)-1] += 1
 		}
 	}
-	bigInt := big.NewInt(0).SetBytes(cp[offset:offset+size])
+	bigInt := big.NewInt(0).SetBytes(cp[offset : offset+size])
 	if !isPositive {
 		if nullEndian {
 			bigInt = bigInt.Add(bigInt, one)
@@ -104,12 +113,14 @@ func bytesToInt(input []byte, offset int, size int) *big.Int {
 }
 
 func intToBytes(value *big.Int, destination []byte, offset int) {
-	if len(destination) - offset < BYTE_HASH_LENGTH { panic("Destination array has invalid size for Kerl") }
+	if len(destination)-offset < BYTE_HASH_LENGTH {
+		panic("Destination array has invalid size for Kerl")
+	}
 	bts := value.Bytes()
 	isPositive := value.Sign() >= 0
 
 	i := 0
-	for i + len(bts) < BYTE_HASH_LENGTH {
+	for i+len(bts) < BYTE_HASH_LENGTH {
 		if isPositive {
 			destination[i] = 0
 		} else {
@@ -119,11 +130,11 @@ func intToBytes(value *big.Int, destination []byte, offset int) {
 	}
 	j := len(bts)
 	for j > 0 {
-		destination[i] = bts[len(bts) - j]
+		destination[i] = bts[len(bts)-j]
 		if isPositive {
-			destination[i] = bts[len(bts) - j]
+			destination[i] = bts[len(bts)-j]
 		} else {
-			destination[i] = bts[len(bts) - j] ^ 0xFF
+			destination[i] = bts[len(bts)-j] ^ 0xFF
 		}
 		j--
 		i++
@@ -131,7 +142,9 @@ func intToBytes(value *big.Int, destination []byte, offset int) {
 	if !isPositive {
 		for j = len(destination) - 1; j >= 0; j-- {
 			destination[j] += 1
-			if destination[j] != 0 { break }
+			if destination[j] != 0 {
+				break
+			}
 		}
 	}
 }

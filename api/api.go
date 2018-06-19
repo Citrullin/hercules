@@ -6,7 +6,7 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"gitlab.com/semkodev/hercules/logs"
+	"../logs"
 	"strings"
 )
 
