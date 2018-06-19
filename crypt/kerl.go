@@ -84,7 +84,6 @@ func RunHashKerl(trits []int) []int {
 	kerl.Squeeze(resp, 0, HASH_LENGTH)
 
 	return resp
-	return nil
 }
 
 func bytesToInt(input []byte, offset int, size int) *big.Int {

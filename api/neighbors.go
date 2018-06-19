@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"../logs"
@@ -13,12 +14,14 @@ func addNeighbors(request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		added := 0
 		for _, address := range request.Uris {
-			logs.Log.Info("Adding neighbor: ", address)
+			address = strings.TrimPrefix(address, " ")
+			address = strings.TrimSuffix(address, " ")
+			logs.Log.Infof("Adding neighbor: '%v'", address)
 			err := server.AddNeighbor(address)
 			if err == nil {
 				added++
 			} else {
-				logs.Log.Warningf("Could not add neighbor '%v'", address)
+				logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -32,12 +35,14 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		removed := 0
 		for _, address := range request.Uris {
-			logs.Log.Info("Removing neighbor: ", address)
+			address = strings.TrimPrefix(address, " ")
+			address = strings.TrimSuffix(address, " ")
+			logs.Log.Infof("Removing neighbor: '%v'", address)
 			err := server.RemoveNeighbor(address)
 			if err == nil {
 				removed++
 			} else {
-				logs.Log.Warningf("Could not remove neighbor '%v'", address)
+				logs.Log.Warningf("Could not remove neighbor '%v' (%v)", address, err)
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{
