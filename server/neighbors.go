@@ -2,13 +2,12 @@ package server
 
 import (
 	"errors"
-	"net"
 	"strings"
-
-	"../logs"
+	"net"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
-func AddNeighbor(address string) error {
+func AddNeighbor (address string) error {
 	hostname := ""
 	identifier, port := getAddressAndPort(address)
 
@@ -42,9 +41,9 @@ func AddNeighbor(address string) error {
 	return nil
 }
 
-func RemoveNeighbor(address string) int {
+func RemoveNeighbor (address string) int {
 	tokens := strings.Split(address, ":")
-	lastIndex := len(tokens) - 1
+	lastIndex := len(tokens)-1
 	identifier := strings.Join(tokens[:lastIndex], ":")
 
 	NeighborsLock.Lock()
@@ -59,7 +58,7 @@ func RemoveNeighbor(address string) int {
 	return 0
 }
 
-func TrackNeighbor(msg *NeighborTrackingMessage) {
+func TrackNeighbor (msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
@@ -79,7 +78,7 @@ func GetNeighborByAddress(address string) (string, *Neighbor) {
 	return getNeighborByAddress(address)
 }
 
-func UpdateHostnameAddresses() {
+func UpdateHostnameAddresses () {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 	for identifier, neighbor := range Neighbors {
@@ -106,20 +105,20 @@ func getNeighborByAddress(address string) (string, *Neighbor) {
 	return "", nil
 }
 
-func createNeighbor(address string, hostname string) *Neighbor {
+func createNeighbor (address string, hostname string) *Neighbor {
 	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
 	neighbor := Neighbor{
-		Addr:     address,
+		Addr: address,
 		Hostname: hostname,
-		UDPAddr:  UDPAddr,
+		UDPAddr: UDPAddr,
 		Incoming: 0,
-		New:      0,
-		Invalid:  0,
+		New: 0,
+		Invalid: 0,
 	}
 	return &neighbor
 }
 
-func listenNeighborTracker() {
+func listenNeighborTracker () {
 	for msg := range NeighborTrackingQueue {
 		TrackNeighbor(msg)
 	}

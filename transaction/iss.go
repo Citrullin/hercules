@@ -2,9 +2,8 @@ package transaction
 
 import (
 	"strings"
-
-	"../convert"
-	"../crypt"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/crypt"
 )
 
 const HASH_LENGTH = crypt.HASH_LENGTH
@@ -21,7 +20,7 @@ const NORMALIZED_FRAGMENT_LENGTH = HASH_LENGTH / TRYTE_WIDTH / NUMBER_OF_SECURIT
 var NULL_HASH_TRITS = convert.TrytesToTrits(strings.Repeat("9", 81))
 
 func Address(digests []int) []int {
-	if len(digests) == 0 || len(digests)%HASH_LENGTH != 0 {
+	if len(digests) == 0 || len(digests) % HASH_LENGTH != 0 {
 		panic("Invalid digests length")
 	}
 	address := make([]int, HASH_LENGTH)
@@ -33,7 +32,7 @@ func Address(digests []int) []int {
 }
 
 func Digest(normalizedBundleFragment []int, signatureFragment []int, nbOffset int, sfOffset int, asKerl bool) []int {
-	if len(normalizedBundleFragment)%NORMALIZED_FRAGMENT_LENGTH != 0 {
+	if len(normalizedBundleFragment) % NORMALIZED_FRAGMENT_LENGTH != 0 {
 		panic("Invalid normalized bundleValidator fragment length!")
 	}
 	if len(signatureFragment) != FRAGMENT_LENGTH {
@@ -52,10 +51,10 @@ func Digest(normalizedBundleFragment []int, signatureFragment []int, nbOffset in
 	}
 
 	for j := 0; j < NUMBER_OF_FRAGMENT_CHUNKS; j++ {
-		for k := normalizedBundleFragment[nbOffset+j] - MIN_TRYTE_VALUE; k > 0; k-- {
+		for k := normalizedBundleFragment[nbOffset + j] - MIN_TRYTE_VALUE; k > 0; k-- {
 			hsh.Reset()
-			hsh.Absorb(buffer, j*HASH_LENGTH, HASH_LENGTH)
-			hsh.Squeeze(buffer, j*HASH_LENGTH, HASH_LENGTH)
+			hsh.Absorb(buffer, j * HASH_LENGTH, HASH_LENGTH)
+			hsh.Squeeze(buffer, j * HASH_LENGTH, HASH_LENGTH)
 		}
 	}
 
@@ -66,22 +65,22 @@ func Digest(normalizedBundleFragment []int, signatureFragment []int, nbOffset in
 	return digest
 }
 
-func NormalizedBundle(bundle []int) []int {
+func NormalizedBundle (bundle []int) []int {
 	if len(bundle) != HASH_LENGTH {
 		panic("Invalid bundleValidator length")
 	}
 
-	normalizedBundle := make([]int, HASH_LENGTH/TRYTE_WIDTH)
+	normalizedBundle := make([]int, HASH_LENGTH / TRYTE_WIDTH)
 	for i := 0; i < NUMBER_OF_SECURITY_LEVELS; i++ {
 		sum := 0
-		for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i+1)*NORMALIZED_FRAGMENT_LENGTH; j++ {
+		for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i + 1) * NORMALIZED_FRAGMENT_LENGTH; j++ {
 			normalizedBundle[j] = bundle[j*TRYTE_WIDTH] + bundle[j*TRYTE_WIDTH+1]*3 + bundle[j*TRYTE_WIDTH+2]*9
 			sum += normalizedBundle[j]
 		}
 		if sum > 0 {
 			for sum > 0 {
 				sum--
-				for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i+1)*NORMALIZED_FRAGMENT_LENGTH; j++ {
+				for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i + 1) * NORMALIZED_FRAGMENT_LENGTH; j++ {
 					if normalizedBundle[j] > MIN_TRYTE_VALUE {
 						normalizedBundle[j]--
 						break
@@ -91,7 +90,7 @@ func NormalizedBundle(bundle []int) []int {
 		} else {
 			for sum < 0 {
 				sum++
-				for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i+1)*NORMALIZED_FRAGMENT_LENGTH; j++ {
+				for j := i * NORMALIZED_FRAGMENT_LENGTH; j < (i + 1) * NORMALIZED_FRAGMENT_LENGTH; j++ {
 					if normalizedBundle[j] < MAX_TRYTE_VALUE {
 						normalizedBundle[j]++
 						break
@@ -103,13 +102,13 @@ func NormalizedBundle(bundle []int) []int {
 	return normalizedBundle
 }
 
-func GetMerkleRoot(hash []int, trits []int, offset int, indexIn int, size int) []int {
+func GetMerkleRoot (hash []int, trits []int, offset int, indexIn int, size int) []int {
 	index := uint32(indexIn)
 	curl := new(crypt.Curl)
 	curl.InitializeCurl(nil, 0, crypt.NUMBER_OF_ROUNDSP27)
 	for i := 0; i < size; i++ {
 		curl.Reset()
-		if index&1 == 0 {
+		if index & 1 == 0 {
 			curl.Absorb(hash, 0, len(hash))
 			curl.Absorb(trits, offset+i*HASH_LENGTH, HASH_LENGTH)
 		} else {

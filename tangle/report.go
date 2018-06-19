@@ -1,10 +1,9 @@
 package tangle
 
 import (
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
 	"time"
-
-	"../db"
-	"../logs"
 )
 
 func Report() {

@@ -1,16 +1,15 @@
 package api
 
 import (
-	"net/http"
 	"time"
-
-	"../convert"
-	"../db"
-	"github.com/dgraph-io/badger"
+	"net/http"
 	"github.com/gin-gonic/gin"
+	"github.com/dgraph-io/badger"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
 )
 
-func findTransactions(request Request, c *gin.Context, t time.Time) {
+func findTransactions (request Request, c *gin.Context, t time.Time) {
 	var hashes = []string{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
@@ -41,12 +40,12 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], db.KEY_APPROVEE)...)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"hashes":   hashes,
+		"hashes": hashes,
 		"duration": getDuration(t),
 	})
 }
 
-func findAddresses(trits []byte, single bool) []string {
+func findAddresses (trits []byte, single bool) []string {
 	hashes := find(trits, db.KEY_ADDRESS)
 	if single && len(hashes) == 0 {
 		// Workaround for IOTA wallet support. Fake transactions for positive addresses:
@@ -58,7 +57,7 @@ func findAddresses(trits []byte, single bool) []string {
 	return hashes
 }
 
-func find(trits []byte, prefix byte) []string {
+func find (trits []byte, prefix byte) []string {
 	var response = []string{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions

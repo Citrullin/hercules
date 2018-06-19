@@ -1,13 +1,13 @@
 package transaction
 
 import (
-	"../convert"
-	"../crypt"
+	"gitlab.com/semkodev/hercules/crypt"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 const (
 	ESSENCE_START = 6561
-	ESSENCE_SIZE  = 486 // => 7047
+	ESSENCE_SIZE = 486 // => 7047
 )
 
 type TX struct {
@@ -64,25 +64,25 @@ func TritsToTX(trits *[]int, raw []byte) *FastTX {
 		Tag:                      convert.TritsToBytes((*trits)[7776:7857]),
 		ObsoleteTag:              convert.TritsToBytes((*trits)[6885:6966]),
 		SignatureMessageFragment: (*trits)[:6561],
-		Bytes: raw,
+		Bytes:                    raw,
 	}
 }
 
 func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
 	return &FastTX{
-		Hash:                     nil,
-		Address:                  convert.TritsToBytes((*trits)[6561:6804])[:49],
-		Value:                    value64((*trits)[6804:6837]),
-		Timestamp:                int(value64((*trits)[7857:7884]) / 1000),
-		TXTimestamp:              value((*trits)[6966:6993]),
-		CurrentIndex:             value((*trits)[6993:7020]),
-		TrunkTransaction:         convert.TritsToBytes((*trits)[7290:7533])[:49],
-		BranchTransaction:        convert.TritsToBytes((*trits)[7533:7776])[:49],
-		Bundle:                   convert.TritsToBytes((*trits)[7047:7290])[:49],
-		Tag:                      convert.TritsToBytes((*trits)[7776:7857]),
-		ObsoleteTag:              convert.TritsToBytes((*trits)[6885:6966]),
+		Hash:                nil,
+		Address:             convert.TritsToBytes((*trits)[6561:6804])[:49],
+		Value:               value64((*trits)[6804:6837]),
+		Timestamp:           int(value64((*trits)[7857:7884]) / 1000),
+		TXTimestamp:         value((*trits)[6966:6993]),
+		CurrentIndex:        value((*trits)[6993:7020]),
+		TrunkTransaction:    convert.TritsToBytes((*trits)[7290:7533])[:49],
+		BranchTransaction:   convert.TritsToBytes((*trits)[7533:7776])[:49],
+		Bundle:              convert.TritsToBytes((*trits)[7047:7290])[:49],
+		Tag:                 convert.TritsToBytes((*trits)[7776:7857]),
+		ObsoleteTag:         convert.TritsToBytes((*trits)[6885:6966]),
 		SignatureMessageFragment: (*trits)[:6561],
-		Bytes: raw,
+		Bytes: 			   raw,
 	}
 }
 
@@ -99,7 +99,7 @@ func TrytesToObject(trytes string) *TX {
 
 	trits := convert.TrytesToTrits(trytes)
 	return &TX{
-		Hash: convert.TritsToTrytes(crypt.RunHashCurl(trits)),
+		Hash:                          convert.TritsToTrytes(crypt.RunHashCurl(trits)),
 		SignatureMessageFragment:      trytes[:2187],
 		Address:                       trytes[2187:2268],
 		Value:                         value64(trits[6804:6837]),
@@ -114,12 +114,12 @@ func TrytesToObject(trytes string) *TX {
 		AttachmentTimestamp:           value(trits[7857:7884]),
 		AttachmentTimestampLowerBound: value(trits[7884:7911]),
 		AttachmentTimestampUpperBound: value(trits[7911:7938]),
-		Nonce: trytes[2646:2673],
+		Nonce:                         trytes[2646:2673],
 	}
 }
 
-func GetEssenceTrits(trits *[]int) []int {
-	return (*trits)[ESSENCE_START : ESSENCE_START+ESSENCE_SIZE]
+func GetEssenceTrits (trits *[]int) []int{
+	return (*trits)[ESSENCE_START:ESSENCE_START+ESSENCE_SIZE]
 }
 
 func value(trits []int) int {

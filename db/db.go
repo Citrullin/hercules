@@ -3,15 +3,14 @@ package db
 import (
 	"sync"
 	"time"
-
-	"../logs"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/spf13/viper"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 const (
-	dbCleanupInterval      = time.Duration(5) * time.Minute
+	dbCleanupInterval = time.Duration(5) * time.Minute
 	dbCleanupIntervalLight = time.Duration(30) * time.Second
 )
 
@@ -24,7 +23,7 @@ var LatestTransactionTimestamp = 0
 
 /*
 Loads the database and configures according the the config options.
-*/
+ */
 func Load(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")
 
@@ -63,7 +62,7 @@ func Load(cfg *viper.Viper) {
 Locks the database for five seconds. Should be called before exiting.
 This is useful to allow running database processes to finished, but
 deny locking of new tasks.
-*/
+ */
 func End() {
 	Locker.Lock()
 	time.Sleep(time.Duration(5) * time.Second)
@@ -72,8 +71,8 @@ func End() {
 
 /*
 Runner for database garbage collection.
-*/
-func periodicDatabaseCleanup() {
+ */
+func periodicDatabaseCleanup () {
 	var duration = dbCleanupInterval
 	if config.GetBool("light") {
 		duration = dbCleanupIntervalLight
@@ -86,7 +85,7 @@ func periodicDatabaseCleanup() {
 
 /*
 Garbage-collects debris from the memory.
-*/
+ */
 func cleanupDB() {
 	logs.Log.Debug("Cleanup database started")
 	Locker.Lock()
@@ -94,3 +93,4 @@ func cleanupDB() {
 	Locker.Unlock()
 	logs.Log.Debug("Cleanup database finished")
 }
+

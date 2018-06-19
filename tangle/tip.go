@@ -3,14 +3,13 @@ package tangle
 import (
 	"bytes"
 	"encoding/gob"
+	"github.com/dgraph-io/badger"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
+	"gitlab.com/semkodev/hercules/utils"
 	"sync"
 	"time"
-
-	"../db"
-	"../logs"
-	"../transaction"
-	"../utils"
-	"github.com/dgraph-io/badger"
 )
 
 type Tip struct {

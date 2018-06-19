@@ -1,12 +1,12 @@
 package tangle
 
 import (
-	"../convert"
-	"../db"
-	"../logs"
-	"../transaction"
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {

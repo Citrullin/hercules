@@ -10,11 +10,11 @@ import (
 	"encoding/gob"
 	"errors"
 	"github.com/dgraph-io/badger"
-	"../convert"
-	"../db"
-	"../logs"
-	"../transaction"
-	"../snapshot"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
+	"gitlab.com/semkodev/hercules/snapshot"
 )
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"

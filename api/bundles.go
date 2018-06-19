@@ -3,17 +3,16 @@ package api
 import (
 	"net/http"
 	"time"
-
-	"../convert"
-	"../db"
-	"../logs"
-	"../tangle"
-	"../transaction"
-	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
+	"github.com/dgraph-io/badger"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/transaction"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
-func storeTransactions(request Request, c *gin.Context, broadcast bool, t time.Time) {
+func storeTransactions (request Request, c *gin.Context, broadcast bool, t time.Time) {
 	var stored = 0
 	var broadcasted = 0
 	if request.Trytes == nil || len(request.Trytes) < 1 {
@@ -49,8 +48,8 @@ func storeTransactions(request Request, c *gin.Context, broadcast bool, t time.T
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"stored":      stored,
+		"stored": stored,
 		"broadcasted": broadcasted,
-		"duration":    getDuration(t),
+		"duration": getDuration(t),
 	})
 }

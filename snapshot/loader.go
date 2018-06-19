@@ -9,9 +9,9 @@ import (
 	"os"
 	"github.com/pkg/errors"
 	"github.com/dgraph-io/badger"
-	"../db"
-	"../logs"
-	"../convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 func LoadSnapshot (path string) error {

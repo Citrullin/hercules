@@ -8,9 +8,9 @@ import (
 	"strings"
 	"strconv"
 	"github.com/dgraph-io/badger"
-	"../logs"
-	"../db"
-	"../convert"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {

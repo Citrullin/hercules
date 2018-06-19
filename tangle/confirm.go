@@ -2,14 +2,13 @@ package tangle
 
 import (
 	"bytes"
-	"time"
-
-	"../convert"
-	"../db"
-	"../logs"
-	"../snapshot"
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"time"
 )
 
 const CONFIRM_CHECK_INTERVAL = time.Duration(500) * time.Millisecond

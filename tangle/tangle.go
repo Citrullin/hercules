@@ -5,13 +5,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"../convert"
-	"../db"
-	"../logs"
-	"../server"
-	"../transaction"
 	"github.com/spf13/viper"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 const (
@@ -92,7 +91,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	go report()
 	logs.Log.Info("Tangle started!")
 
-	go func() {
+	go func () {
 		for {
 			outgoingRunner()
 			time.Sleep(1000)

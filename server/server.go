@@ -2,41 +2,40 @@ package server
 
 import (
 	"net"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"../logs"
+	"sync"
 	"github.com/spf13/viper"
+	"gitlab.com/semkodev/hercules/logs"
+	"strings"
 )
 
 const (
-	flushInterval           = time.Duration(1) * time.Second
+	flushInterval = time.Duration(1) * time.Second
 	hostnameRefreshInterval = time.Duration(300) * time.Second
-	maxQueueSize            = 1000000
-	UDPPacketSize           = 1650
+	maxQueueSize  = 1000000
+	UDPPacketSize = 1650
 )
 
 type Neighbor struct {
 	Hostname string
-	Addr     string
-	UDPAddr  *net.UDPAddr
+	Addr string
+	UDPAddr *net.UDPAddr
 	Incoming int
-	New      int
-	Invalid  int
+	New int
+	Invalid int
 }
 
 type Message struct {
-	Addr string
-	Msg  []byte
+	Addr   string
+	Msg    []byte
 }
 
 type NeighborTrackingMessage struct {
-	Addr     string
+	Addr string
 	Incoming int
-	New      int
-	Invalid  int
+	New int
+	Invalid int
 }
 
 type messageQueue chan *Message
@@ -47,12 +46,12 @@ type Server struct {
 	Outgoing messageQueue
 }
 
+
 var ops uint64 = 0
 var Speed uint64 = 1
 var total uint64 = 0
 var flushTicker *time.Ticker
 var hostnameTicker *time.Ticker
-
 //var nbWorkers = runtime.NumCPU()
 var mq messageQueue
 var NeighborTrackingQueue neighborTrackingQueue
@@ -63,7 +62,7 @@ var Neighbors map[string]*Neighbor
 var connection net.PacketConn
 var ended = false
 
-func Create(serverConfig *viper.Viper) *Server {
+func Create (serverConfig *viper.Viper) *Server {
 	config = serverConfig
 	mq = make(messageQueue, maxQueueSize)
 	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
@@ -80,7 +79,7 @@ func Create(serverConfig *viper.Viper) *Server {
 		}
 	}
 
-	c, err := net.ListenPacket("udp", ":"+config.GetString("node.port"))
+	c, err := net.ListenPacket("udp", ":" + config.GetString("node.port"))
 	if err != nil {
 		panic(err)
 	}
@@ -88,18 +87,16 @@ func Create(serverConfig *viper.Viper) *Server {
 	return server
 }
 
-func Start() {
+func Start () {
 	server.listenAndReceive(1)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {
 		for range flushTicker.C {
-			if ended {
-				break
-			}
+			if ended { break }
 			report()
 			atomic.AddUint64(&total, ops)
-			atomic.StoreUint64(&Speed, ops+1)
+			atomic.StoreUint64(&Speed, ops + 1)
 			atomic.StoreUint64(&ops, 0)
 		}
 	}()
@@ -107,9 +104,7 @@ func Start() {
 	hostnameTicker = time.NewTicker(hostnameRefreshInterval)
 	go func() {
 		for range hostnameTicker.C {
-			if ended {
-				break
-			}
+			if ended { break }
 			UpdateHostnameAddresses()
 		}
 	}()
@@ -117,9 +112,7 @@ func Start() {
 	go listenNeighborTracker()
 	go func() {
 		for msg := range server.Outgoing {
-			if ended {
-				break
-			}
+			if ended { break }
 			if len(msg.Addr) > 0 {
 				NeighborsLock.RLock()
 				_, neighbor := getNeighborByAddress(msg.Addr)
@@ -134,7 +127,7 @@ func Start() {
 	}()
 }
 
-func End() {
+func End () {
 	ended = true
 	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
@@ -206,6 +199,6 @@ func handleMessage(msg *Message) {
 	atomic.AddUint64(&ops, 1)
 }
 
-func report() {
+func report () {
 	logs.Log.Debugf("Incoming TX/s: %.2f\n", float64(ops))
 }

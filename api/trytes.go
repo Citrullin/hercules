@@ -3,14 +3,13 @@ package api
 import (
 	"net/http"
 	"time"
-
-	"../convert"
-	"../db"
-	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
+	"github.com/dgraph-io/badger"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
 )
 
-func getTrytes(request Request, c *gin.Context, t time.Time) {
+func getTrytes (request Request, c *gin.Context, t time.Time) {
 	var trytes []interface{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Hashes {
@@ -30,14 +29,14 @@ func getTrytes(request Request, c *gin.Context, t time.Time) {
 
 	if trytes == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"trytes":   make([]string, 0),
+			"trytes": make([]string, 0),
 			"duration": getDuration(t),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"trytes":   trytes,
+		"trytes": trytes,
 		"duration": getDuration(t),
 	})
 }
