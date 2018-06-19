@@ -50,10 +50,11 @@ func getNeighbors(request Request, c *gin.Context, t time.Time) {
 	var neighbors []interface{}
 	for _, neighbor := range server.Neighbors {
 		neighbors = append(neighbors, gin.H{
-			"address":                     "udp://" + neighbor.Addr,
+			"address":                     strings.Replace(neighbor.Addr, "udp://", "", -1),
 			"numberOfAllTransactions":     neighbor.Incoming,
 			"numberOfInvalidTransactions": neighbor.Invalid,
-			"numberOfNewTransactions":     neighbor.New})
+			"numberOfNewTransactions":     neighbor.New,
+			"connectionType":              "udp"}) // Only UDP is currently supported
 	}
 
 	if neighbors == nil {
