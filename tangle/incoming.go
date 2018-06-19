@@ -15,8 +15,9 @@ import (
 	"time"
 )
 
-const P_TIP_REPLY = 100
+const P_TIP_REPLY = 50
 const P_BROADCAST = 10
+const P_TIP_REQUEST = 50
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
@@ -58,11 +59,19 @@ func incomingRunner() {
 		}
 
 		var reply []byte = nil
-		if !isJustTipRequest && !bytes.Equal(tx.Hash, req) {
+		var isTipRequest = isJustTipRequest || bytes.Equal(tx.Hash, req)
+
+		if !isTipRequest {
 			reply, _ = db.GetBytes(db.GetByteKey(req, db.KEY_BYTES), nil)
 		}
 
 		request := getSomeRequest(raw.Addr)
+		// It's a specific (not tip) request that we do not have.
+		// Avoid creating a tip request on our own
+		if !isTipRequest && request == nil && len(srv.Incoming) > maxIncoming / 2 {
+			continue
+		}
+
 		sendReply(getMessage(reply, request, request == nil, raw.Addr, nil))
 	}
 }
