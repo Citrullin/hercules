@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"sort"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/logs"
-	"gitlab.com/semkodev/hercules/db"
-	"gitlab.com/semkodev/hercules/convert"
-	"gitlab.com/semkodev/hercules/utils"
+	"../logs"
+	"../db"
+	"../convert"
+	"../utils"
 )
 
 func SaveSnapshot (snapshotDir string, timestamp int) error {

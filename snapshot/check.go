@@ -12,8 +12,8 @@ import (
 	"os"
 	"github.com/pkg/errors"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/logs"
-	"gitlab.com/semkodev/hercules/db"
+	"../logs"
+	"../db"
 )
 
 /*

@@ -3,24 +3,25 @@ package api
 import (
 	"net/http"
 	"time"
+
+	"../convert"
+	"../tangle"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules/tangle"
-	"gitlab.com/semkodev/hercules/convert"
 )
 
-func getTips (request Request, c *gin.Context, t time.Time) {
+func getTips(request Request, c *gin.Context, t time.Time) {
 	var tips = []string{}
 	for _, tip := range tangle.Tips {
 		//if i >= 25 { break }
 		tips = append(tips, convert.BytesToTrytes(tip.Hash)[:81])
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"hashes": tips,
+		"hashes":   tips,
 		"duration": getDuration(t),
 	})
 }
 
-func getTransactionsToApprove (request Request, c *gin.Context, t time.Time) {
+func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 	var trunk string
 	var branch string
 	trunkBytes := tangle.GetRandomTip()
@@ -32,8 +33,8 @@ func getTransactionsToApprove (request Request, c *gin.Context, t time.Time) {
 		branch = convert.BytesToTrytes(branchBytes)[:81]
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"trunkTransaction": trunk,
+		"trunkTransaction":  trunk,
 		"branchTransaction": branch,
-		"duration": getDuration(t),
+		"duration":          getDuration(t),
 	})
 }

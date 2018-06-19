@@ -3,7 +3,8 @@ package transaction
 import "testing"
 import (
 	"reflect"
-	"gitlab.com/semkodev/hercules/convert"
+
+	"../convert"
 )
 
 const cooAddress = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
@@ -19,7 +20,7 @@ func TestGetMerkleRoot(t *testing.T) {
 	signatureFragmentTrits := convert.TrytesToTrits(t0.SignatureMessageFragment)
 	t1Trits := convert.TrytesToTrits(trytes1)
 	normalized := NormalizedBundle(trunkTransactionTrits)[:NUMBER_OF_FRAGMENT_CHUNKS]
-	digests := Digest(normalized, signatureFragmentTrits, 0, 0,false)
+	digests := Digest(normalized, signatureFragmentTrits, 0, 0, false)
 	address := Address(digests)
 	merkleRoot := GetMerkleRoot(
 		address,

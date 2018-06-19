@@ -2,8 +2,9 @@ package transaction
 
 import (
 	"bytes"
-	"gitlab.com/semkodev/hercules/convert"
-	"gitlab.com/semkodev/hercules/crypt"
+
+	"../convert"
+	"../crypt"
 )
 
 var TOTAL_IOTAS int64 = 2779530283277761
@@ -23,7 +24,7 @@ func IsValidBundleTrytes(trytes []string) bool {
 	return IsValidBundle(txs)
 }
 
-func IsValidBundle(txs []*FastTX) bool{
+func IsValidBundle(txs []*FastTX) bool {
 	// TODO: catch error, return false
 
 	// Get transaction objects

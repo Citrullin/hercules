@@ -3,17 +3,18 @@ package tangle
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/db"
-	"gitlab.com/semkodev/hercules/logs"
-	"gitlab.com/semkodev/hercules/server"
 	"time"
+
+	"../db"
+	"../logs"
+	"../server"
+	"github.com/dgraph-io/badger"
 )
 
 const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
 	reRequestInterval  = time.Duration(30) * time.Second
-	maxIncoming = 200
+	maxIncoming        = 200
 )
 
 type PendingRequest struct {
@@ -31,7 +32,7 @@ func Broadcast(data []byte) int {
 	sent := 0
 
 	server.NeighborsLock.RLock()
-	for _, neighbor:= range server.Neighbors {
+	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
 
 		request := getSomeRequest(neighbor.Addr)
@@ -101,7 +102,7 @@ func loadPendingRequests() {
 	logs.Log.Info("Pending requests loaded", added, total)
 }
 
-func getSomeRequest (addr string) []byte {
+func getSomeRequest(addr string) []byte {
 	requestLocker.RLock()
 	requestQueue, requestOk := requestQueues[addr]
 	requestLocker.RUnlock()
@@ -127,7 +128,7 @@ func outgoingRunner() {
 
 	shouldRequestTip := false
 	if lowEndDevice {
-		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval * 5
+		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval*5
 	} else {
 		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval
 	}
@@ -137,7 +138,7 @@ func outgoingRunner() {
 		server.NeighborsLock.RUnlock()
 
 		var request = getSomeRequest(neighbor.Addr)
-		if request != nil  {
+		if request != nil {
 			sendReply(getMessage(nil, request, false, neighbor.Addr, nil))
 		} else if len(srv.Incoming) < 50 && shouldRequestTip {
 			lastTip = time.Now()
