@@ -33,7 +33,13 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 		removed := 0
 		for _, address := range request.Uris {
 			logs.Log.Info("Removing neighbor: ", address)
-			removed += server.RemoveNeighbor(address)
+			err := server.RemoveNeighbor(address)
+			if err == nil {
+				removed++
+			} else {
+				logs.Log.Warningf("Could not add neighbor %v", address)
+			}
+
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,
