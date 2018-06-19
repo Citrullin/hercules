@@ -18,7 +18,7 @@ func addNeighbors(request Request, c *gin.Context, t time.Time) {
 			if err == nil {
 				added++
 			} else {
-				logs.Log.Warningf("Could not add neighbor %v", address)
+				logs.Log.Warningf("Could not add neighbor '%v'", address)
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -37,9 +37,8 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 			if err == nil {
 				removed++
 			} else {
-				logs.Log.Warningf("Could not add neighbor %v", address)
+				logs.Log.Warningf("Could not remove neighbor '%v'", address)
 			}
-
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,

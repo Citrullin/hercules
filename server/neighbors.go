@@ -10,7 +10,7 @@ import (
 
 func AddNeighbor(address string) error {
 	if strings.HasPrefix(address, "tcp://") {
-		return errors.New("TCP protocol is not supported yet. " + address + " could not be added.")
+		return errors.New("TCP protocol is not supported yet. '" + address + "' could not be removed")
 	}
 
 	address = strings.Replace(address, "udp://", "", -1)
@@ -34,7 +34,7 @@ func AddNeighbor(address string) error {
 
 	for _, neighbor := range Neighbors {
 		if neighbor.Addr == address || (len(hostname) > 0 && neighbor.Hostname == hostname) {
-			return nil
+			return errors.New("Neighbor '" + address + "' already exists")
 		}
 	}
 
@@ -49,7 +49,7 @@ func AddNeighbor(address string) error {
 
 func RemoveNeighbor(address string) error {
 	if strings.HasPrefix(address, "tcp://") {
-		return errors.New("TCP protocol is not supported yet. " + address + " could not be removed.")
+		return errors.New("TCP protocol is not supported yet. '" + address + "' could not be removed")
 	}
 
 	address = strings.Replace(address, "udp://", "", -1)
@@ -63,9 +63,10 @@ func RemoveNeighbor(address string) error {
 	identifier, neighbor := getNeighborByAddress(identifier)
 	if neighbor != nil {
 		delete(Neighbors, identifier)
+		return nil
+	} else {
+		return errors.New("Could not create neighbor for '" + address + "'")
 	}
-
-	return nil
 }
 
 func TrackNeighbor(msg *NeighborTrackingMessage) {
