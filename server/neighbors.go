@@ -9,6 +9,7 @@ import (
 )
 
 func AddNeighbor(address string) error {
+	address = strings.Replace(address, "udp://", "", -1)
 	hostname := ""
 	identifier, port := getAddressAndPort(address)
 
@@ -43,6 +44,7 @@ func AddNeighbor(address string) error {
 }
 
 func RemoveNeighbor(address string) int {
+	address = strings.Replace(address, "udp://", "", -1)
 	tokens := strings.Split(address, ":")
 	lastIndex := len(tokens) - 1
 	identifier := strings.Join(tokens[:lastIndex], ":")
@@ -109,12 +111,13 @@ func getNeighborByAddress(address string) (string, *Neighbor) {
 func createNeighbor(address string, hostname string) *Neighbor {
 	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
 	neighbor := Neighbor{
-		Addr:     address,
-		Hostname: hostname,
-		UDPAddr:  UDPAddr,
-		Incoming: 0,
-		New:      0,
-		Invalid:  0,
+		Addr:           address,
+		Hostname:       hostname,
+		UDPAddr:        UDPAddr,
+		ConnectionType: "udp", // Only UDP is currently supported
+		Incoming:       0,
+		New:            0,
+		Invalid:        0,
 	}
 	return &neighbor
 }

@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"../logs"
@@ -15,7 +14,7 @@ func addNeighbors(request Request, c *gin.Context, t time.Time) {
 		added := 0
 		for _, address := range request.Uris {
 			logs.Log.Info("Adding neighbor: ", address)
-			err := server.AddNeighbor(strings.Replace(address, "udp://", "", -1))
+			err := server.AddNeighbor(address)
 			if err == nil {
 				added++
 			} else {
@@ -34,7 +33,7 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 		removed := 0
 		for _, address := range request.Uris {
 			logs.Log.Info("Removing neighbor: ", address)
-			removed += server.RemoveNeighbor(strings.Replace(address, "udp://", "", -1))
+			removed += server.RemoveNeighbor(address)
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,
@@ -50,11 +49,11 @@ func getNeighbors(request Request, c *gin.Context, t time.Time) {
 	var neighbors []interface{}
 	for _, neighbor := range server.Neighbors {
 		neighbors = append(neighbors, gin.H{
-			"address":                     strings.Replace(neighbor.Addr, "udp://", "", -1),
+			"address":                     neighbor.Addr,
 			"numberOfAllTransactions":     neighbor.Incoming,
 			"numberOfInvalidTransactions": neighbor.Invalid,
 			"numberOfNewTransactions":     neighbor.New,
-			"connectionType":              "udp"}) // Only UDP is currently supported
+			"connectionType":              neighbor.ConnectionType})
 	}
 
 	if neighbors == nil {

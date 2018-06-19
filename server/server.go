@@ -2,7 +2,6 @@ package server
 
 import (
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,12 +18,13 @@ const (
 )
 
 type Neighbor struct {
-	Hostname string
-	Addr     string
-	UDPAddr  *net.UDPAddr
-	Incoming int
-	New      int
-	Invalid  int
+	Hostname       string
+	Addr           string
+	UDPAddr        *net.UDPAddr
+	Incoming       int
+	New            int
+	Invalid        int
+	ConnectionType string
 }
 
 type Message struct {
@@ -73,8 +73,8 @@ func Create(serverConfig *viper.Viper) *Server {
 
 	Neighbors = make(map[string]*Neighbor)
 	logs.Log.Debug("Initial neighbors", config.GetStringSlice("node.neighbors"))
-	for _, v := range config.GetStringSlice("node.neighbors") {
-		err := AddNeighbor(strings.Replace(v, "udp://", "", -1))
+	for _, address := range config.GetStringSlice("node.neighbors") {
+		err := AddNeighbor(address)
 		if err != nil {
 			logs.Log.Warning("Error adding neighbor:", err)
 		}
