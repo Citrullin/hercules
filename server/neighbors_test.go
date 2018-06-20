@@ -11,8 +11,8 @@ import (
 )
 
 var expectedConnectionType = "udp"
-var expectedIdentifier = "iota.love"
-var expectedPort = "15000"
+var expectedIdentifier = "field.carriota.com"
+var expectedPort = "443"
 var invalidConnectionType = "tcp"
 
 var addresses = []string{
@@ -24,13 +24,25 @@ var addresses = []string{
 }
 
 func TestGetConnectionTypeAndAddressAndPort(t *testing.T) {
+	restartConfig()
 
 	for _, address := range addresses {
-
+		logs.Log.Info("Running test with neighbor's address: " + address)
 		connectionType, identifier, port, err := getConnectionTypeAndAddressAndPort(address)
 
-		if err != nil || connectionType != expectedConnectionType || identifier != expectedIdentifier || port != expectedPort {
+		if connectionType != expectedConnectionType && connectionType != invalidConnectionType || err != nil || identifier != expectedIdentifier {
 			t.Error("Not all URI parameters have been detected!")
+		} else {
+
+			if strings.Contains(address, expectedPort) {
+				if port != expectedPort {
+					t.Error("An invalid port was returned!")
+				}
+			} else {
+				if port != config.GetString("node.port") {
+					t.Error("An invalid port was returned!")
+				}
+			}
 		}
 	}
 
