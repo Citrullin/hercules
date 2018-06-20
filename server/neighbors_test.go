@@ -133,6 +133,25 @@ func TestRemoveNeighbor(t *testing.T) {
 
 }
 
+func TestGetIpAndHostname(t *testing.T) {
+
+	Neighbors = make(map[string]*Neighbor)
+
+	neighbor, err := createNeighbor("udp://node.myiota.me:14600")
+
+	if err != nil {
+		t.Error("Error during test set up")
+	}
+
+	Neighbors[neighbor.Addr] = neighbor
+
+	ip, hostname, err := getIpAndHostname(neighbor.Addr)
+
+	if err != nil || ip == "" || hostname == "" {
+		t.Error("Could not get IP and Hostname for " + neighbor.Addr)
+	}
+}
+
 func restartConfig() {
 	config = viper.New()
 	flag.IntP("node.port", "u", 14600, "UDP Node port")

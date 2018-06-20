@@ -80,7 +80,8 @@ func UpdateHostnameAddresses() {
 		isRegisteredWithHostname := len(neighbor.Hostname) > 0
 		if isRegisteredWithHostname {
 			logs.Log.Debugf("Checking '%v' with current IP address: '%v'", neighbor.Hostname, neighbor.IP)
-			ip, _, _ := getIpAndHostname(neighbor.Addr)
+			identifier, _ := getIdentifierAndPort(neighbor.Addr)
+			ip, _, _ := getIpAndHostname(identifier)
 
 			if neighbor.IP != ip {
 				logs.Log.Debugf("Updated '%v' IP address from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
