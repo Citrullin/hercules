@@ -83,7 +83,7 @@ func UpdateHostnameAddresses() {
 			ip, _, _ := getIpAndHostname(neighbor.Addr)
 
 			if neighbor.IP != ip {
-				logs.Log.Debugf("Updated '%v' IP address to '%v'", neighbor.Hostname, neighbor.IP)
+				logs.Log.Debugf("Updated '%v' IP address from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", getFormattedAddress(neighbor.IP, neighbor.Port))
 			}
 		}
