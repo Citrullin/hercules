@@ -15,9 +15,8 @@ import (
 	"time"
 )
 
-const P_TIP_REPLY = 50
+const P_TIP_REPLY = 25
 const P_BROADCAST = 10
-const P_TIP_REQUEST = 50
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
@@ -37,7 +36,7 @@ func incomingRunner() {
 
 		var isJustTipRequest = bytes.Equal(data, tipBytes)
 
-		if len(srv.Incoming) > maxIncoming && isJustTipRequest && utils.Random(0, 100) > P_TIP_REPLY {
+		if isJustTipRequest && utils.Random(0, 100) < P_TIP_REPLY {
 			continue
 		}
 
@@ -68,7 +67,7 @@ func incomingRunner() {
 		request := getSomeRequest(raw.Addr)
 		// It's a specific (not tip) request that we do not have.
 		// Avoid creating a tip request on our own
-		if !isTipRequest && request == nil && len(srv.Incoming) > maxIncoming / 2 {
+		if !isTipRequest && request == nil && reply == nil {
 			continue
 		}
 

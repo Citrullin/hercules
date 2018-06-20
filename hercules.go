@@ -91,6 +91,7 @@ func loadConfig() *viper.Viper {
 	flag.StringSlice("api.limitRemoteAccess", nil, "Limit access to these commands from remote")
 
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
+	flag.Bool("log.hello", true, "Show welcome banner")
 
 	flag.String("database.path", "data", "Path to the database directory")
 
@@ -139,6 +140,10 @@ func loadConfig() *viper.Viper {
 }
 
 func Hello() {
+	if !config.GetBool("log.hello") {
+		return
+	}
+
 	logs.Log.Info(`
 
 

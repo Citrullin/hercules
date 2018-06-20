@@ -76,7 +76,7 @@ func Create(serverConfig *viper.Viper) *Server {
 	for _, address := range config.GetStringSlice("node.neighbors") {
 		err := AddNeighbor(address)
 		if err != nil {
-			logs.Log.Warning("Error adding neighbor:", err)
+			logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
 		}
 	}
 

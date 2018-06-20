@@ -20,6 +20,7 @@
   },
   "light": false,
   "log": {
+    "hello": true,
     "level": "INFO"
   },
   "node": {

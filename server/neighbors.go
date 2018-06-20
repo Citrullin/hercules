@@ -16,8 +16,8 @@ func AddNeighbor(address string) error {
 		connectionType = strings.ToLower(connectionType)
 	}
 
-	if connectionType == "tcp" {
-		return errors.New("TCP protocol is not supported yet")
+	if connectionType != "udp" {
+		return errors.New("This protocol is not supported yet")
 	}
 
 	hostname := ""
@@ -47,9 +47,10 @@ func AddNeighbor(address string) error {
 	if len(hostname) > 0 {
 		identifier = hostname
 	}
-	Neighbors[identifier] = createNeighbor(connectionType, address, hostname)
-	logs.Log.Debugf("Adding neighbor '%v' with address/port '%v://%v' and hostname '%v'",
-		identifier, Neighbors[identifier].ConnectionType, Neighbors[identifier].Addr, Neighbors[identifier].Hostname)
+	neighbor := createNeighbor(connectionType, address, hostname)
+	Neighbors[identifier] = neighbor
+	logs.Log.Debugf("Adding neighbor '%v://%v' with address/port '%v' and hostname '%v'",
+		neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
 	return nil
 }
 

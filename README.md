@@ -169,6 +169,10 @@ Use this flag for low-end devices with less than 2-3 GB RAM.
 It makes Hercules a little slower, but more stable in hard
 environments like the Raspberry Pi 3.
 
+#### --log.hello=false
+
+Do not show the hercules banner at the start of the logs.
+
 #### --log.level="INFO"
 
 Sets, what log levels should be logged. Anything above the given level
@@ -192,7 +196,8 @@ Path where to store the snapshots.
 When you first start Hercules, you should load an initial
 snapshot, which contains spent addresses and balances. Without it,
 Hercules will fail to start. Once the database is initialised, you do not
-need this option any longer.
+need this option any longer. It will be ignored if the database has been already initialised
+with a snapshot file. The same applies for the IRI snapshots below:
 
 #### --snapshots.loadIRIFile="snapshotMainnet.txt" --snapshots.loadIRISpentFile="previousEpochsSpentAddresses.txt" --snapshots.loadIRITimestamp=1525017600
 
