@@ -13,9 +13,10 @@ func AddNeighbor(address string) error {
 	if strings.Contains(address, "://") {
 		result := strings.SplitN(address, "://", 2)
 		connectionType, address = result[0], result[1]
+		connectionType = strings.ToLower(connectionType)
 	}
 
-	if strings.ToLower(connectionType) == "tcp" {
+	if connectionType == "tcp" {
 		return errors.New("TCP protocol is not supported yet")
 	}
 

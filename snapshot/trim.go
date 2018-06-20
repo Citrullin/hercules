@@ -1,17 +1,18 @@
 package snapshot
 
 import (
-	"time"
 	"bytes"
 	"encoding/gob"
+	"time"
+
+	"../convert"
+	"../db"
+	"../logs"
+	"../transaction"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/db"
-	"gitlab.com/semkodev/hercules/logs"
-	"gitlab.com/semkodev/hercules/convert"
-	"gitlab.com/semkodev/hercules/transaction"
 )
 
-func trimTXRunner () {
+func trimTXRunner() {
 	logs.Log.Debug("Loading trimmable TXs", len(edgeTransactions))
 	db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -41,10 +42,10 @@ func trimTXRunner () {
 
 /*
 Removes all data from the database that is before a given timestamp
- */
- // TODO: (OPT) decrease transactions counter? What about confirmed? Not first priority now.
- // The counter can be treated as incremental counter of all TXs known plus received since start of the node.
-func trimData (timestamp int64) error {
+*/
+// TODO: (OPT) decrease transactions counter? What about confirmed? Not first priority now.
+// The counter can be treated as incremental counter of all TXs known plus received since start of the node.
+func trimData(timestamp int64) error {
 	var txs [][]byte
 	var total = 0
 	var found = 0
@@ -87,7 +88,9 @@ func trimData (timestamp int64) error {
 		}
 		return nil
 	})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	logs.Log.Infof("Scheduling to trim %v transactions", found)
 	txn := db.DB.NewTransaction(true)
@@ -98,7 +101,9 @@ func trimData (timestamp int64) error {
 				_ = txn.Commit(func(e error) {})
 				txn = db.DB.NewTransaction(true)
 				err := db.Put(k, true, nil, txn)
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 			} else {
 				return err
 			}
@@ -111,7 +116,7 @@ func trimData (timestamp int64) error {
 	return nil
 }
 
-func trimTX (hashKey []byte) error {
+func trimTX(hashKey []byte) error {
 	key := db.AsKey(hashKey, db.KEY_BYTES)
 	txBytes, err := db.GetBytes(key, nil)
 	var tx *transaction.FastTX

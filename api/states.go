@@ -3,13 +3,14 @@ package api
 import (
 	"net/http"
 	"time"
-	"github.com/gin-gonic/gin"
+
+	"../convert"
+	"../db"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/convert"
-	"gitlab.com/semkodev/hercules/db"
+	"github.com/gin-gonic/gin"
 )
 
-func getInclusionStates (request Request, c *gin.Context, t time.Time) {
+func getInclusionStates(request Request, c *gin.Context, t time.Time) {
 	var states = []bool{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Transactions {
@@ -22,12 +23,12 @@ func getInclusionStates (request Request, c *gin.Context, t time.Time) {
 		return nil
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"states": states,
+		"states":   states,
 		"duration": getDuration(t),
 	})
 }
 
-func wereAddressesSpentFrom (request Request, c *gin.Context, t time.Time) {
+func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
 	var states = []bool{}
 	_ = db.DB.View(func(txn *badger.Txn) error {
 		for _, hash := range request.Addresses {
@@ -40,7 +41,7 @@ func wereAddressesSpentFrom (request Request, c *gin.Context, t time.Time) {
 		return nil
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"states": states,
+		"states":   states,
 		"duration": getDuration(t),
 	})
 }

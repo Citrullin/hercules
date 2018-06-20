@@ -62,13 +62,6 @@ Now run `go version` to make sure that everything works and you have the correct
 
 ### Get Hercules
 
-**Using "go get"**
-```
-go get gitlab.com/semkodev/hercules
-cd $GOPATH/src/gitlab.com/semkodev/hercules
-```
-This will download and place the hercules source files in `$GOPATH/src/gitlab.com/semkodev/hercules`.
-
 **Using "git clone"**
 
 ```
