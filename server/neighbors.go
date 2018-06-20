@@ -50,9 +50,10 @@ func AddNeighbor(address string) error {
 	addingLogMessage := "Adding neighbor '%v://%v' with address:port '%v'"
 	if neighbor.Hostname != "" {
 		addingLogMessage += " and hostname '%v'"
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
+	} else {
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr)
 	}
-
-	logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
 
 	return nil
 }
