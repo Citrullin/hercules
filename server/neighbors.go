@@ -79,12 +79,13 @@ func UpdateHostnameAddresses() {
 	for _, neighbor := range Neighbors {
 		isRegisteredWithHostname := len(neighbor.Hostname) > 0
 		if isRegisteredWithHostname {
-			logs.Log.Debugf("Checking '%v' with current IP address: '%v'", neighbor.Hostname, neighbor.IP)
 			identifier, _ := getIdentifierAndPort(neighbor.Addr)
 			ip, _, _ := getIpAndHostname(identifier)
 
-			if neighbor.IP != ip {
-				logs.Log.Debugf("Updated '%v' IP address from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
+			if neighbor.IP == ip {
+				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
+			} else {
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", getFormattedAddress(neighbor.IP, neighbor.Port))
 			}
 		}
