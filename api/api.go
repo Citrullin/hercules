@@ -3,11 +3,12 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
+
+	"../logs"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"../logs"
-	"strings"
 )
 
 type Request struct {
@@ -29,11 +30,12 @@ var config *viper.Viper
 var limitAccess []string
 var authEnabled = false
 var dummyHash = strings.Repeat("9", 81)
+var apiCalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
 
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.
 
-func Start (apiConfig *viper.Viper) {
+func Start(apiConfig *viper.Viper) {
 	config = apiConfig
 	if !config.GetBool("api.debug") {
 		gin.SetMode(gin.ReleaseMode)
@@ -46,51 +48,32 @@ func Start (apiConfig *viper.Viper) {
 	username := config.GetString("api.auth.username")
 	password := config.GetString("api.auth.password")
 	if len(username) > 0 && len(password) > 0 {
-		api.Use(gin.BasicAuth(gin.Accounts{ username: password }))
+		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
 	}
 
 	api.POST("/", func(c *gin.Context) {
 		t := time.Now()
+
 		var request Request
-		if err := c.ShouldBindJSON(&request); err == nil {
+		err := c.ShouldBindJSON(&request)
+		if err == nil {
+
 			if triesToAccessLimited(request.Command, c) {
 				logs.Log.Warningf("Denying limited command request %v from remote %v",
 					request.Command, c.Request.RemoteAddr)
 				ReplyError("Limited remote command access", c)
 				return
 			}
-			if request.Command == "addNeighbors" {
-				addNeighbors(request, c, t)
-			} else if request.Command == "removeNeighbors" {
-				removeNeighbors(request, c, t)
-			} else if request.Command == "getNeighbors" {
-				getNeighbors(request, c, t)
-			} else if request.Command == "getBalances" {
-				getBalances(request, c, t)
-			} else if request.Command == "listAllAccounts" {
-				listAllAccounts(request, c, t)
-			} else if request.Command == "findTransactions" {
-				findTransactions(request, c, t)
-			} else if request.Command == "getTrytes" {
-				getTrytes(request, c, t)
-			} else if request.Command == "getTips" {
-				getTips(request, c, t)
-			} else if request.Command == "getTransactionsToApprove" {
-				getTransactionsToApprove(request, c, t)
-			} else if request.Command == "getInclusionStates" {
-				getInclusionStates(request, c, t)
-			} else if request.Command == "wereAddressesSpentFrom" {
-				wereAddressesSpentFrom(request, c, t)
-			} else if request.Command == "storeTransactions" {
-				storeTransactions(request, c, false, t)
-			} else if request.Command == "broadcastTransactions" {
-				storeTransactions(request, c, true, t)
-			} else if request.Command == "getNodeInfo" {
-				getNodeInfo(request, c, t)
+
+			caseInsensitiveCommand := strings.ToLower(request.Command)
+			apiCall, apiCallExists := apiCalls[caseInsensitiveCommand]
+			if apiCallExists {
+				apiCall(request, c, t)
 			} else {
 				logs.Log.Error("Unknown command", request.Command)
 				ReplyError("No known command provided", c)
 			}
+
 		} else {
 			logs.Log.Error("ERROR request", err)
 			ReplyError("Wrongly formed JSON", c)
@@ -102,7 +85,7 @@ func Start (apiConfig *viper.Viper) {
 	}
 
 	srv = &http.Server{
-		Addr:   config.GetString("api.host") + ":" + config.GetString("api.port"),
+		Addr:    config.GetString("api.host") + ":" + config.GetString("api.port"),
 		Handler: api,
 	}
 	go func() {
@@ -113,7 +96,7 @@ func Start (apiConfig *viper.Viper) {
 	}()
 }
 
-func End () {
+func End() {
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -124,7 +107,7 @@ func End () {
 	}
 }
 
-func ReplyError (message string, c *gin.Context) {
+func ReplyError(message string, c *gin.Context) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error": message,
 	})
@@ -134,7 +117,7 @@ func getDuration(t time.Time) float64 {
 	return time.Now().Sub(t).Seconds()
 }
 
-func triesToAccessLimited (command string, c *gin.Context) bool {
+func triesToAccessLimited(command string, c *gin.Context) bool {
 	if c.Request.RemoteAddr[:9] == "127.0.0.1" {
 		return false
 	}
@@ -144,4 +127,9 @@ func triesToAccessLimited (command string, c *gin.Context) bool {
 		}
 	}
 	return false
+}
+
+func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
+	caseInsensitiveApiCall := strings.ToLower(apiCall)
+	apiCalls[caseInsensitiveApiCall] = implementation
 }

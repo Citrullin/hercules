@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("getTrytes", getTrytes)
+}
+
 func getTrytes(request Request, c *gin.Context, t time.Time) {
 	var trytes []interface{}
 	_ = db.DB.View(func(txn *badger.Txn) error {

@@ -12,6 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("getNodeInfo", getNodeInfo)
+}
+
 func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)

@@ -13,7 +13,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func storeTransactions(request Request, c *gin.Context, broadcast bool, t time.Time) {
+func init() {
+	addAPICall("storeTransactions", storeTransactions)
+	addAPICall("broadcastTransactions", broadcastTransactions)
+}
+
+func storeTransactions(request Request, c *gin.Context, t time.Time) {
+	storeAndBroadcastTransactions(request, c, false, t)
+}
+
+func broadcastTransactions(request Request, c *gin.Context, t time.Time) {
+	storeAndBroadcastTransactions(request, c, true, t)
+}
+
+func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bool, t time.Time) {
 	var stored = 0
 	var broadcasted = 0
 	if request.Trytes == nil || len(request.Trytes) < 1 {

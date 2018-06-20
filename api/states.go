@@ -10,6 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("getInclusionStates", getInclusionStates)
+	addAPICall("wereAddressesSpentFrom", wereAddressesSpentFrom)
+}
+
 func getInclusionStates(request Request, c *gin.Context, t time.Time) {
 	var states = []bool{}
 	_ = db.DB.View(func(txn *badger.Txn) error {

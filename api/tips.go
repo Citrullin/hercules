@@ -9,6 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("getTips", getTips)
+	addAPICall("getTransactionsToApprove", getTransactionsToApprove)
+}
+
 func getTips(request Request, c *gin.Context, t time.Time) {
 	var tips = []string{}
 	for _, tip := range tangle.Tips {
