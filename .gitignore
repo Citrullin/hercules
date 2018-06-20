@@ -7,3 +7,4 @@ pkg/
 debug
 data/*
 *.snap
+*.test

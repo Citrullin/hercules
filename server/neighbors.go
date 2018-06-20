@@ -9,21 +9,18 @@ import (
 )
 
 func AddNeighbor(address string) error {
-	connectionType := "udp"
-	if strings.Contains(address, "://") {
-		result := strings.SplitN(address, "://", 2)
-		connectionType, address = result[0], result[1]
-		connectionType = strings.ToLower(connectionType)
+	connectionType, identifier, port, err := getConnectionTypeAndAddressAndPort(address)
+
+	if err != nil {
+		return err
 	}
 
 	if connectionType != "udp" {
 		return errors.New("This protocol is not supported yet")
 	}
 
-	hostname := ""
-	identifier, port := getAddressAndPort(address)
-
 	addr := net.ParseIP(identifier)
+	hostname := ""
 	if addr == nil {
 		// Probably hostname. Check it
 		addresses, _ := net.LookupHost(identifier)
@@ -49,24 +46,16 @@ func AddNeighbor(address string) error {
 	}
 	neighbor := createNeighbor(connectionType, address, hostname)
 	Neighbors[identifier] = neighbor
-	logs.Log.Debugf("Adding neighbor '%v://%v' with address/port '%v' and hostname '%v'",
+	logs.Log.Debugf("Adding neighbor '%v://%v' with address:port '%v' and hostname '%v'",
 		neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
 	return nil
 }
 
 func RemoveNeighbor(address string) error {
-	if strings.Contains(address, "://") {
-		address = strings.SplitN(address, "://", 2)[1]
-	}
-
-	tokens := strings.Split(address, ":")
-	lastIndex := len(tokens) - 1
-	identifier := strings.Join(tokens[:lastIndex], ":")
-
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	identifier, neighbor := getNeighborByAddress(identifier)
+	identifier, neighbor := getNeighborByAddress(address)
 	if neighbor != nil {
 		delete(Neighbors, identifier)
 		return nil
@@ -113,7 +102,12 @@ func UpdateHostnameAddresses() {
 }
 
 func getNeighborByAddress(address string) (string, *Neighbor) {
-	identifier, _ := getAddressAndPort(address)
+	_, identifier, _, err := getConnectionTypeAndAddressAndPort(address)
+
+	if err != nil {
+		return "", nil
+	}
+
 	for id, neighbor := range Neighbors {
 		if neighbor.Addr == address || neighbor.Hostname == identifier {
 			return id, neighbor
@@ -141,13 +135,40 @@ func listenNeighborTracker() {
 		TrackNeighbor(msg)
 	}
 }
+func getConnectionTypeAndAddressAndPort(address string) (connectionType string, addr string, port string, e error) {
+	addressWithoutConnectionType, connectionType := getConnectionType(address)
+	addr, port = getAddressAndPort(addressWithoutConnectionType)
+
+	if connectionType == "" || addr == "" || port == "" {
+		return "", "", "", errors.New("Address could not be loaded")
+	}
+
+	return
+}
+
+func getConnectionType(address string) (addressWithoutConnectionType string, connectionType string) {
+	tokens := strings.Split(address, "://")
+	addressAndPortIndex := len(tokens) - 1
+	if addressAndPortIndex > 0 {
+		connectionType = tokens[0]
+		addressWithoutConnectionType = tokens[addressAndPortIndex]
+	} else {
+		connectionType = "udp" // default if none is provided
+		addressWithoutConnectionType = address
+	}
+	return
+}
 
 func getAddressAndPort(address string) (addr string, port string) {
 	tokens := strings.Split(address, ":")
-	lastIndex := len(tokens) - 1
-	if lastIndex > 0 {
-		port = tokens[lastIndex]
+	portIndex := len(tokens) - 1
+	if portIndex > 0 {
+		port = tokens[portIndex]
+		addr = strings.Join(tokens[:portIndex], ":")
+	} else {
+		addr = address
+		port = config.GetString("node.port") // Tries to use same port as this node
 	}
-	addr = strings.Join(tokens[:lastIndex], ":")
+
 	return addr, port
 }
