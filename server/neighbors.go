@@ -30,6 +30,8 @@ func AddNeighbor(address string) error {
 		} else {
 			return errors.New("Couldn't lookup host: " + address)
 		}
+	} else {
+		address = addr.String() + ":" + port
 	}
 
 	NeighborsLock.Lock()
@@ -62,7 +64,8 @@ func RemoveNeighbor(address string) error {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	identifier, neighbor := getNeighborByAddress(address)
+	addressWithoutConnectionType, _ := getConnectionType(address)
+	identifier, neighbor := getNeighborByAddress(addressWithoutConnectionType)
 	if neighbor != nil {
 		delete(Neighbors, identifier)
 		return nil
