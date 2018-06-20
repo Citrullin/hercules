@@ -2,12 +2,23 @@ package server
 
 import (
 	"errors"
-	"strings"
 	"net"
-	"gitlab.com/semkodev/hercules/logs"
+	"strings"
+
+	"../logs"
 )
 
-func AddNeighbor (address string) error {
+func AddNeighbor(address string) error {
+	connectionType := "udp"
+	if strings.Contains(address, "://") {
+		result := strings.SplitN(address, "://", 2)
+		connectionType, address = result[0], result[1]
+	}
+
+	if strings.ToLower(connectionType) == "tcp" {
+		return errors.New("TCP protocol is not supported yet")
+	}
+
 	hostname := ""
 	identifier, port := getAddressAndPort(address)
 
@@ -28,22 +39,26 @@ func AddNeighbor (address string) error {
 
 	for _, neighbor := range Neighbors {
 		if neighbor.Addr == address || (len(hostname) > 0 && neighbor.Hostname == hostname) {
-			return nil
+			return errors.New("Neighbor already exists")
 		}
 	}
 
 	if len(hostname) > 0 {
 		identifier = hostname
 	}
-	Neighbors[identifier] = createNeighbor(address, hostname)
-	logs.Log.Debugf("Adding neighbor '%v' with address/port '%v' and hostname '%v'",
-		identifier, Neighbors[identifier].Addr, Neighbors[identifier].Hostname)
+	Neighbors[identifier] = createNeighbor(connectionType, address, hostname)
+	logs.Log.Debugf("Adding neighbor '%v' with address/port '%v://%v' and hostname '%v'",
+		identifier, Neighbors[identifier].ConnectionType, Neighbors[identifier].Addr, Neighbors[identifier].Hostname)
 	return nil
 }
 
-func RemoveNeighbor (address string) int {
+func RemoveNeighbor(address string) error {
+	if strings.Contains(address, "://") {
+		address = strings.SplitN(address, "://", 2)[1]
+	}
+
 	tokens := strings.Split(address, ":")
-	lastIndex := len(tokens)-1
+	lastIndex := len(tokens) - 1
 	identifier := strings.Join(tokens[:lastIndex], ":")
 
 	NeighborsLock.Lock()
@@ -52,13 +67,13 @@ func RemoveNeighbor (address string) int {
 	identifier, neighbor := getNeighborByAddress(identifier)
 	if neighbor != nil {
 		delete(Neighbors, identifier)
-		return 1
+		return nil
 	}
 
-	return 0
+	return errors.New("Neighbor not found")
 }
 
-func TrackNeighbor (msg *NeighborTrackingMessage) {
+func TrackNeighbor(msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
@@ -78,7 +93,7 @@ func GetNeighborByAddress(address string) (string, *Neighbor) {
 	return getNeighborByAddress(address)
 }
 
-func UpdateHostnameAddresses () {
+func UpdateHostnameAddresses() {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 	for identifier, neighbor := range Neighbors {
@@ -105,20 +120,21 @@ func getNeighborByAddress(address string) (string, *Neighbor) {
 	return "", nil
 }
 
-func createNeighbor (address string, hostname string) *Neighbor {
+func createNeighbor(connectionType string, address string, hostname string) *Neighbor {
 	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
 	neighbor := Neighbor{
-		Addr: address,
-		Hostname: hostname,
-		UDPAddr: UDPAddr,
-		Incoming: 0,
-		New: 0,
-		Invalid: 0,
+		Addr:           address,
+		Hostname:       hostname,
+		UDPAddr:        UDPAddr,
+		ConnectionType: connectionType,
+		Incoming:       0,
+		New:            0,
+		Invalid:        0,
 	}
 	return &neighbor
 }
 
-func listenNeighborTracker () {
+func listenNeighborTracker() {
 	for msg := range NeighborTrackingQueue {
 		TrackNeighbor(msg)
 	}

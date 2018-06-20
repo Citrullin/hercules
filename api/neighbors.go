@@ -1,58 +1,69 @@
 package api
 
 import (
-	"time"
 	"net/http"
 	"strings"
+	"time"
+
+	"../logs"
+	"../server"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/semkodev/hercules/server"
-	"gitlab.com/semkodev/hercules/logs"
 )
 
-func addNeighbors (request Request, c *gin.Context, t time.Time) {
+func addNeighbors(request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		added := 0
 		for _, address := range request.Uris {
-			logs.Log.Info("Adding neighbor: ", address)
-			err := server.AddNeighbor(strings.Replace(address, "udp://", "", -1))
+			address = strings.TrimPrefix(address, " ")
+			address = strings.TrimSuffix(address, " ")
+			logs.Log.Infof("Adding neighbor: '%v'", address)
+			err := server.AddNeighbor(address)
 			if err == nil {
 				added++
 			} else {
-				logs.Log.Warningf("Could not add neighbor %v", address)
+				logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"addedNeighbors": added,
-			"duration": getDuration(t),
+			"duration":       getDuration(t),
 		})
 	}
 }
 
-func removeNeighbors (request Request, c *gin.Context, t time.Time) {
+func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		removed := 0
 		for _, address := range request.Uris {
-			logs.Log.Info("Removing neighbor: ", address)
-			removed += server.RemoveNeighbor(strings.Replace(address, "udp://", "", -1))
+			address = strings.TrimPrefix(address, " ")
+			address = strings.TrimSuffix(address, " ")
+			logs.Log.Infof("Removing neighbor: '%v'", address)
+			err := server.RemoveNeighbor(address)
+			if err == nil {
+				removed++
+			} else {
+				logs.Log.Warningf("Could not remove neighbor '%v' (%v)", address, err)
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,
-			"duration": getDuration(t),
+			"duration":         getDuration(t),
 		})
 	}
 }
 
-func getNeighbors (request Request, c *gin.Context, t time.Time) {
+func getNeighbors(request Request, c *gin.Context, t time.Time) {
 	server.NeighborsLock.RLock()
 	defer server.NeighborsLock.RUnlock()
 
 	var neighbors []interface{}
 	for _, neighbor := range server.Neighbors {
 		neighbors = append(neighbors, gin.H{
-			"address": "udp://" + neighbor.Addr,
-			"numberOfAllTransactions": neighbor.Incoming,
+			"address":                     neighbor.Addr,
+			"numberOfAllTransactions":     neighbor.Incoming,
 			"numberOfInvalidTransactions": neighbor.Invalid,
-			"numberOfNewTransactions": neighbor.New})
+			"numberOfNewTransactions":     neighbor.New,
+			"connectionType":              neighbor.ConnectionType})
 	}
 
 	if neighbors == nil {

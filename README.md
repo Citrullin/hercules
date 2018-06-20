@@ -62,20 +62,29 @@ Now run `go version` to make sure that everything works and you have the correct
 
 ### Get Hercules
 
-Simply run:
-
+**Using "go get"**
 ```
 go get gitlab.com/semkodev/hercules
+cd $GOPATH/src/gitlab.com/semkodev/hercules
 ```
+This will download and place the hercules source files in `$GOPATH/src/gitlab.com/semkodev/hercules`.
 
-This will download and place the hercules source files in `$HOME/go/gitlab.com/semkodev/hercules`.
-
-Now you can build Hercules with go. In the example below it is supposed, that you have
-a `build` directory in your home folder, where the binary is placed. Make sure to
-change it accordingly, if you want it to be compiled somewhere else:
+**Using "git clone"**
 
 ```
-go build -v -o ~/build/hercules ./go/src/gitlab.com/semkodev/hercules/hercules.go
+cd $HOME
+git clone https://gitlab.com/semkodev/hercules.git
+cd hercules
+```
+This will download and place the hercules source files in `$HOME` (/home/your_user_name).
+
+## Building hercules
+
+If you want to build Hercules in a different directory you just need to change the path in the commands below:
+```
+go get -d ./...
+mkdir build
+go build -v -o build/hercules hercules.go
 ```
 
 That's it! Hercules is ready to be used.
