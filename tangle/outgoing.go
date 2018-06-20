@@ -204,7 +204,7 @@ func sendReply(msg *Message) {
 		return
 	}
 	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
-	srv.Outgoing <- &server.Message{msg.Addr, data}
+	srv.Outgoing <- &server.Message{Addr: msg.Addr, Msg: data}
 	outgoing++
 }
 
