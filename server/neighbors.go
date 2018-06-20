@@ -46,8 +46,14 @@ func AddNeighbor(address string) error {
 	}
 	neighbor := createNeighbor(connectionType, address, hostname)
 	Neighbors[identifier] = neighbor
-	logs.Log.Debugf("Adding neighbor '%v://%v' with address:port '%v' and hostname '%v'",
-		neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
+
+	addingLogMessage := "Adding neighbor '%v://%v' with address:port '%v'"
+	if neighbor.Hostname != "" {
+		addingLogMessage += " and hostname '%v'"
+	}
+
+	logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
+
 	return nil
 }
 
