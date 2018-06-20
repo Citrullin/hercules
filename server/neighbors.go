@@ -31,12 +31,12 @@ func AddNeighbor(address string) error {
 }
 
 func logAddNeighbor(neighbor *Neighbor) {
-	addingLogMessage := "Adding neighbor '%v://%v:%v'"
+	addingLogMessage := "Adding neighbor '%v://%v'"
 	if neighbor.Hostname != "" {
-		addingLogMessage += " - hostname '%v'"
-		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr, neighbor.Port, neighbor.Hostname)
+		addingLogMessage += " - IP Address: '%v'"
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr, neighbor.IP)
 	} else {
-		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr, neighbor.Port)
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr)
 	}
 }
 
@@ -85,8 +85,8 @@ func UpdateHostnameAddresses() {
 			if neighbor.IP == ip {
 				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
 			} else {
-				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", getFormattedAddress(neighbor.IP, neighbor.Port))
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 			}
 		}
 	}
