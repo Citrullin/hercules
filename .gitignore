@@ -4,3 +4,4 @@ build/
 pkg/
 .vscode/
 .history/
+debug
