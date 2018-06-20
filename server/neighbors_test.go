@@ -11,7 +11,8 @@ import (
 )
 
 var expectedConnectionType = "udp"
-var expectedIdentifier = "field.carriota.com"
+var expectedIdentifier = "77.55.235.204"
+var expectedHostname = "field.carriota.com"
 var expectedPort = "443"
 var invalidConnectionType = "tcp"
 
@@ -20,15 +21,17 @@ var addresses = []string{
 
 	expectedIdentifier,
 	expectedIdentifier + ":" + expectedPort,
+
+	expectedConnectionType + "://" + expectedIdentifier,
 	expectedConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
 }
 
-func TestGetConnectionTypeAndAddressAndPort(t *testing.T) {
+func TestGetConnectionTypeAndIdentifierAndPort(t *testing.T) {
 	restartConfig()
 
 	for _, address := range addresses {
 		logs.Log.Info("Running test with neighbor's address: " + address)
-		connectionType, identifier, port, err := getConnectionTypeAndAddressAndPort(address)
+		connectionType, identifier, port, err := getConnectionTypeAndIdentifierAndPort(address)
 
 		if connectionType != expectedConnectionType && connectionType != invalidConnectionType || err != nil || identifier != expectedIdentifier {
 			t.Error("Not all URI parameters have been detected!")
@@ -65,6 +68,22 @@ func TestAddNeighbor(t *testing.T) {
 		} else {
 			if err != nil {
 				t.Error("Could not add neighbor!")
+			}
+
+			for _, neighbor := range Neighbors {
+				addr, _ := getConnectionType(address)
+				if strings.Contains(address, expectedPort) {
+					if neighbor.Addr != addr {
+						t.Errorf("Add neighbor %v does not match with loaded %v", neighbor.Addr, addr)
+					}
+				} else {
+					configPort := config.GetString("node.port")
+					addressWithConfigPort := addr + ":" + configPort
+					if neighbor.Addr != addressWithConfigPort {
+						t.Errorf("Add neighbor %v does not match with loaded %v", neighbor.Addr, addressWithConfigPort)
+					}
+				}
+
 			}
 
 			err = RemoveNeighbor(address)

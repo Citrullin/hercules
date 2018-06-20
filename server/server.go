@@ -15,16 +15,20 @@ const (
 	hostnameRefreshInterval = time.Duration(300) * time.Second
 	maxQueueSize            = 1000000
 	UDPPacketSize           = 1650
+	UDP                     = "udp"
+	TCP                     = "tcp"
 )
 
 type Neighbor struct {
-	Hostname       string
-	Addr           string
+	Hostname       string // Formatted like: <domainname> (Empty if its IP address)
+	Addr           string // Formatted like: <ip>:<port> OR <domainname>:<port>
+	IP             string // Formatted like: XXX.XXX.XXX.XXX OR [x:x:x:...] (IPv6)
+	Port           string // Also saved separately from Addr for performance reasons
 	UDPAddr        *net.UDPAddr
 	Incoming       int
 	New            int
 	Invalid        int
-	ConnectionType string
+	ConnectionType string // Formatted like: udp
 }
 
 type Message struct {
@@ -122,9 +126,9 @@ func Start() {
 			}
 			if len(msg.Addr) > 0 {
 				NeighborsLock.RLock()
-				_, neighbor := getNeighborByAddress(msg.Addr)
+				neighborExists, neighbor := checkNeighbourExistsByAddress(msg.Addr)
 				NeighborsLock.RUnlock()
-				if neighbor != nil {
+				if neighborExists {
 					neighbor.Write(msg)
 				}
 			} else {
@@ -145,7 +149,7 @@ func End() {
 func (neighbor Neighbor) Write(msg *Message) {
 	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
 	if err != nil {
-		logs.Log.Errorf("Error sending to neighbor %v: %v", neighbor.Addr, err)
+		logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
 	}
 }
 
@@ -189,9 +193,9 @@ func (server Server) receive() {
 		}
 		address := addr.String()
 		NeighborsLock.RLock()
-		_, neighbor := getNeighborByAddress(address)
+		neighborExists, _ := checkNeighbourExistsByAddress(address)
 		NeighborsLock.RUnlock()
-		if neighbor != nil {
+		if neighborExists {
 			mq.enqueue(&Message{address, msg})
 		} else {
 			//logs.Log.Warning("Received from an unknown neighbor", address)
