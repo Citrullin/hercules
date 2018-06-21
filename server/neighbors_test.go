@@ -152,6 +152,9 @@ func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
 }
 
 func TestRemoveNeighbor(t *testing.T) {
+
+	restartConfig()
+
 	Neighbors = make(map[string]*Neighbor)
 
 	for _, address := range addresses {
