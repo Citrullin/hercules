@@ -23,9 +23,9 @@ const (
 )
 
 type Message struct {
-	Bytes     *[]byte
-	Requested *[]byte
-	Addr      string
+	Bytes             *[]byte
+	Requested         *[]byte
+	IPAddressWithPort string
 }
 
 type Request struct {
@@ -34,9 +34,9 @@ type Request struct {
 }
 
 type IncomingTX struct {
-	TX    *transaction.FastTX
-	Addr  string
-	Bytes *[]byte
+	TX                *transaction.FastTX
+	IPAddressWithPort string
+	Bytes             *[]byte
 }
 
 type RequestQueue chan *Request

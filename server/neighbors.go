@@ -9,62 +9,44 @@ import (
 )
 
 func AddNeighbor(address string) error {
-	connectionType, identifier, port, err := getConnectionTypeAndAddressAndPort(address)
+	neighbor, err := createNeighbor(address)
 
 	if err != nil {
 		return err
 	}
 
-	if connectionType != "udp" {
-		return errors.New("This protocol is not supported yet")
-	}
-
-	addr := net.ParseIP(identifier)
-	hostname := ""
-	if addr == nil {
-		// Probably hostname. Check it
-		addresses, _ := net.LookupHost(identifier)
-		if len(addresses) > 0 {
-			hostname = identifier
-			address = addresses[0] + ":" + port
-		} else {
-			return errors.New("Couldn't lookup host: " + address)
-		}
-	}
-
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	for _, neighbor := range Neighbors {
-		if neighbor.Addr == address || (len(hostname) > 0 && neighbor.Hostname == hostname) {
-			return errors.New("Neighbor already exists")
-		}
+	neighborExists, _ := checkNeighbourExists(neighbor)
+	if neighborExists {
+		return errors.New("Neighbor already exists")
 	}
 
-	if len(hostname) > 0 {
-		identifier = hostname
-	}
-	neighbor := createNeighbor(connectionType, address, hostname)
-	Neighbors[identifier] = neighbor
+	Neighbors[neighbor.Addr] = neighbor
 
-	addingLogMessage := "Adding neighbor '%v://%v' with address:port '%v'"
-	if neighbor.Hostname != "" {
-		addingLogMessage += " and hostname '%v'"
-		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr, neighbor.Hostname)
-	} else {
-		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, identifier, neighbor.Addr)
-	}
+	logAddNeighbor(neighbor)
 
 	return nil
+}
+
+func logAddNeighbor(neighbor *Neighbor) {
+	addingLogMessage := "Adding neighbor '%v://%v'"
+	if neighbor.Hostname != "" {
+		addingLogMessage += " - IP Address: '%v'"
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr, neighbor.IP)
+	} else {
+		logs.Log.Debugf(addingLogMessage, neighbor.ConnectionType, neighbor.Addr)
+	}
 }
 
 func RemoveNeighbor(address string) error {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	identifier, neighbor := getNeighborByAddress(address)
-	if neighbor != nil {
-		delete(Neighbors, identifier)
+	neighborExists, neighbor := checkNeighbourExistsByAddress(address)
+	if neighborExists {
+		delete(Neighbors, neighbor.Addr)
 		return nil
 	}
 
@@ -75,66 +57,82 @@ func TrackNeighbor(msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	_, neighbor := getNeighborByAddress(msg.Addr)
-
-	if neighbor != nil {
+	neighborExists, neighbor := checkNeighbourExistsByIPAddress(msg.IPAddressWithPort)
+	if neighborExists {
 		neighbor.Incoming += msg.Incoming
 		neighbor.New += msg.New
 		neighbor.Invalid += msg.Invalid
 	}
 }
 
-func GetNeighborByAddress(address string) (string, *Neighbor) {
+func GetNeighborByAddress(address string) *Neighbor {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	return getNeighborByAddress(address)
+	_, neighbor := checkNeighbourExistsByAddress(address)
+	return neighbor
+}
+
+func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
+	NeighborsLock.Lock()
+	defer NeighborsLock.Unlock()
+
+	_, neighbor := checkNeighbourExistsByIPAddress(ipAddressWithPort)
+	return neighbor
 }
 
 func UpdateHostnameAddresses() {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
-	for identifier, neighbor := range Neighbors {
-		if len(neighbor.Hostname) > 0 {
-			logs.Log.Debugf("Checking %v with current address: %v", identifier, neighbor.Addr)
-			_, port := getAddressAndPort(neighbor.Addr)
-			addresses, _ := net.LookupHost(neighbor.Hostname)
-			if len(addresses) > 0 {
-				neighbor.Addr = addresses[0] + ":" + port
-				logs.Log.Debugf("Refreshed Hostname address for %v: %v", neighbor.Hostname, neighbor.Addr)
-				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", neighbor.Addr)
+
+	for _, neighbor := range Neighbors {
+		isRegisteredWithHostname := len(neighbor.Hostname) > 0
+		if isRegisteredWithHostname {
+			identifier, _ := getIdentifierAndPort(neighbor.Addr)
+			ip, _, _ := getIPAndHostname(identifier)
+
+			if neighbor.IP == ip {
+				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
+			} else {
+				neighbor.IP = ip
+				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", GetFormattedAddress(neighbor.IP, neighbor.Port))
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 			}
 		}
 	}
 }
 
-func getNeighborByAddress(address string) (string, *Neighbor) {
-	_, identifier, _, err := getConnectionTypeAndAddressAndPort(address)
-
+func createNeighbor(address string) (*Neighbor, error) {
+	connectionType, identifier, port, err := getConnectionTypeAndIdentifierAndPort(address)
 	if err != nil {
-		return "", nil
+		return nil, err
 	}
 
-	for id, neighbor := range Neighbors {
-		if neighbor.Addr == address || neighbor.Hostname == identifier {
-			return id, neighbor
-		}
+	if connectionType != UDP {
+		return nil, errors.New("This protocol is not supported yet")
 	}
-	return "", nil
-}
 
-func createNeighbor(connectionType string, address string, hostname string) *Neighbor {
-	UDPAddr, _ := net.ResolveUDPAddr("udp", address)
+	ip, hostname, err := getIPAndHostname(identifier)
+	if err != nil {
+		return nil, err
+	}
+
 	neighbor := Neighbor{
-		Addr:           address,
 		Hostname:       hostname,
-		UDPAddr:        UDPAddr,
+		IP:             ip,
+		Addr:           GetFormattedAddress(identifier, port),
+		Port:           port,
 		ConnectionType: connectionType,
 		Incoming:       0,
 		New:            0,
 		Invalid:        0,
 	}
-	return &neighbor
+
+	if connectionType == UDP {
+		neighbor.UDPAddr, _ = net.ResolveUDPAddr(UDP, GetFormattedAddress(neighbor.IP, port))
+	}
+
+	return &neighbor, nil
 }
 
 func listenNeighborTracker() {
@@ -142,11 +140,12 @@ func listenNeighborTracker() {
 		TrackNeighbor(msg)
 	}
 }
-func getConnectionTypeAndAddressAndPort(address string) (connectionType string, addr string, port string, e error) {
-	addressWithoutConnectionType, connectionType := getConnectionType(address)
-	addr, port = getAddressAndPort(addressWithoutConnectionType)
 
-	if connectionType == "" || addr == "" || port == "" {
+func getConnectionTypeAndIdentifierAndPort(address string) (connectionType string, identifier string, port string, e error) {
+	addressWithoutConnectionType, connectionType := getConnectionType(address)
+	identifier, port = getIdentifierAndPort(addressWithoutConnectionType)
+
+	if connectionType == "" || identifier == "" || port == "" {
 		return "", "", "", errors.New("Address could not be loaded")
 	}
 
@@ -160,22 +159,69 @@ func getConnectionType(address string) (addressWithoutConnectionType string, con
 		connectionType = tokens[0]
 		addressWithoutConnectionType = tokens[addressAndPortIndex]
 	} else {
-		connectionType = "udp" // default if none is provided
+		connectionType = UDP // default if none is provided
 		addressWithoutConnectionType = address
 	}
 	return
 }
 
-func getAddressAndPort(address string) (addr string, port string) {
+func getIdentifierAndPort(address string) (identifier string, port string) {
 	tokens := strings.Split(address, ":")
 	portIndex := len(tokens) - 1
 	if portIndex > 0 {
+		identifier = strings.Join(tokens[:portIndex], ":")
 		port = tokens[portIndex]
-		addr = strings.Join(tokens[:portIndex], ":")
 	} else {
-		addr = address
+		identifier = address
 		port = config.GetString("node.port") // Tries to use same port as this node
 	}
 
-	return addr, port
+	return identifier, port
+}
+
+func getIPAndHostname(identifier string) (ip string, hostname string, err error) {
+
+	addr := net.ParseIP(identifier)
+	isIPFormat := addr != nil
+	if isIPFormat {
+		return addr.String(), "", nil // leave hostname empty when its in IP format
+	}
+
+	// Probably domain name. Check it
+	addresses, err := net.LookupHost(identifier)
+	if err != nil {
+		return "", "", errors.New("Could not process look up for " + identifier)
+	}
+	addressFound := len(addresses) > 0
+	if addressFound {
+		return addresses[0], identifier, nil
+	}
+
+	return "", "", errors.New("Could not resolve a hostname for " + identifier)
+}
+
+func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbor *Neighbor) {
+	_, identifier, port, _ := getConnectionTypeAndIdentifierAndPort(address)
+	formattedAddress := GetFormattedAddress(identifier, port)
+	neighbor, neighborExists = Neighbors[formattedAddress]
+	return
+}
+
+func checkNeighbourExistsByIPAddress(ipAddressWithPort string) (neighborExists bool, neighbor *Neighbor) {
+	identifier, port := getIdentifierAndPort(ipAddressWithPort)
+	for _, candidateNeighbor := range Neighbors {
+		if candidateNeighbor.IP == identifier && candidateNeighbor.Port == port {
+			return true, candidateNeighbor
+		}
+	}
+	return
+}
+
+func checkNeighbourExists(candidateNeighbor *Neighbor) (bool, *Neighbor) {
+	neighbor, neighborExists := Neighbors[candidateNeighbor.Addr]
+	return neighborExists, neighbor
+}
+
+func GetFormattedAddress(identifier string, port string) string {
+	return identifier + ":" + port
 }
