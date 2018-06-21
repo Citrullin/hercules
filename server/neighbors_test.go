@@ -17,13 +17,13 @@ var expectedPort = "443"
 var invalidConnectionType = "tcp"
 
 var addresses = []string{
-	invalidConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
-
-	expectedIdentifier,
 	expectedIdentifier + ":" + expectedPort,
+	expectedIdentifier,
 
 	expectedConnectionType + "://" + expectedIdentifier,
 	expectedConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
+
+	invalidConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
 }
 
 func TestGetConnectionTypeAndIdentifierAndPort(t *testing.T) {
@@ -48,7 +48,6 @@ func TestGetConnectionTypeAndIdentifierAndPort(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func TestAddNeighbor(t *testing.T) {
@@ -100,6 +99,58 @@ func TestAddNeighbor(t *testing.T) {
 
 }
 
+func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
+	restartConfig()
+
+	Neighbors = make(map[string]*Neighbor)
+
+	testAddresses := []string{
+		expectedIdentifier + ":" + expectedPort,
+		expectedHostname + ":" + expectedPort,
+	}
+
+	for _, address := range testAddresses {
+		logs.Log.Info("Running test with neighbor's address: " + address)
+
+		err := AddNeighbor(address)
+		if err != nil {
+			t.Error("Error during test set up")
+		}
+
+		_, identifier, port, err := getConnectionTypeAndIdentifierAndPort(address)
+		if err != nil {
+			t.Error("Error during test set up")
+		}
+
+		ip, _, err := getIPAndHostname(identifier)
+		if err != nil {
+			t.Error("Error during test set up")
+		}
+
+		ipWithPort := getFormattedAddress(ip, port)
+
+		neighborsExists, neighbor := checkNeighbourExistsByIPAddress(ipWithPort)
+		if !neighborsExists {
+			t.Error("Neighbor does NOT exist!")
+		} else {
+			formattedAddress := getFormattedAddress(identifier, port)
+			if neighbor.Addr != formattedAddress || neighbor.IP != ip || neighbor.Port != port {
+				t.Error("Neighbor was found but it is NOT the same as the one which was searched for!")
+			}
+		}
+
+		// Clean-up
+		err = RemoveNeighbor(address)
+		if err != nil {
+			t.Error("Error during test clean up")
+		}
+
+		if len(Neighbors) > 0 {
+			logs.Log.Fatal("Test clean up did not work as intended")
+		}
+	}
+}
+
 func TestRemoveNeighbor(t *testing.T) {
 
 	restartConfig()
@@ -135,20 +186,10 @@ func TestRemoveNeighbor(t *testing.T) {
 
 func TestGetIpAndHostname(t *testing.T) {
 
-	Neighbors = make(map[string]*Neighbor)
-
-	neighbor, err := createNeighbor("udp://node.myiota.me:14600")
-
-	if err != nil {
-		t.Error("Error during test set up")
-	}
-
-	Neighbors[neighbor.Addr] = neighbor
-
-	ip, hostname, err := getIpAndHostname(neighbor.Addr)
+	ip, hostname, err := getIPAndHostname(expectedHostname)
 
 	if err != nil || ip == "" || hostname == "" {
-		t.Error("Could not get IP and Hostname for " + neighbor.Addr)
+		t.Error("Could not get IP and Hostname for " + expectedHostname)
 	}
 }
 

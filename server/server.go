@@ -32,15 +32,15 @@ type Neighbor struct {
 }
 
 type Message struct {
-	Addr string
-	Msg  []byte
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX OR [x:x:x:...]:x (IPv6)
+	Msg               []byte
 }
 
 type NeighborTrackingMessage struct {
-	Addr     string
-	Incoming int
-	New      int
-	Invalid  int
+	IPAddressWithPort string
+	Incoming          int
+	New               int
+	Invalid           int
 }
 
 type messageQueue chan *Message
@@ -124,9 +124,9 @@ func Start() {
 			if ended {
 				break
 			}
-			if len(msg.Addr) > 0 {
+			if len(msg.IPAddressWithPort) > 0 {
 				NeighborsLock.RLock()
-				neighborExists, neighbor := checkNeighbourExistsByAddress(msg.Addr)
+				neighborExists, neighbor := checkNeighbourExistsByIPAddress(msg.IPAddressWithPort)
 				NeighborsLock.RUnlock()
 				if neighborExists {
 					neighbor.Write(msg)
@@ -191,12 +191,12 @@ func (server Server) receive() {
 			logs.Log.Errorf("Error reading incoming packet: %v", err)
 			continue
 		}
-		address := addr.String()
+		ipAddressWithPort := addr.String() // Format <ip>:<port>
 		NeighborsLock.RLock()
-		neighborExists, _ := checkNeighbourExistsByAddress(address)
+		neighborExists, _ := checkNeighbourExistsByIPAddress(ipAddressWithPort)
 		NeighborsLock.RUnlock()
 		if neighborExists {
-			mq.enqueue(&Message{address, msg})
+			mq.enqueue(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
 		} else {
 			//logs.Log.Warning("Received from an unknown neighbor", address)
 		}
@@ -206,7 +206,7 @@ func (server Server) receive() {
 
 func handleMessage(msg *Message) {
 	server.Incoming <- msg
-	NeighborTrackingQueue <- &NeighborTrackingMessage{Addr: msg.Addr, Incoming: 1}
+	NeighborTrackingQueue <- &NeighborTrackingMessage{IPAddressWithPort: msg.IPAddressWithPort, Incoming: 1}
 	atomic.AddUint64(&ops, 1)
 }
 

@@ -57,7 +57,7 @@ func TrackNeighbor(msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	neighborExists, neighbor := checkNeighbourExistsByAddress(msg.Addr)
+	neighborExists, neighbor := checkNeighbourExistsByIPAddress(msg.IPAddressWithPort)
 	if neighborExists {
 		neighbor.Incoming += msg.Incoming
 		neighbor.New += msg.New
@@ -80,7 +80,7 @@ func UpdateHostnameAddresses() {
 		isRegisteredWithHostname := len(neighbor.Hostname) > 0
 		if isRegisteredWithHostname {
 			identifier, _ := getIdentifierAndPort(neighbor.Addr)
-			ip, _, _ := getIpAndHostname(identifier)
+			ip, _, _ := getIPAndHostname(identifier)
 
 			if neighbor.IP == ip {
 				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
@@ -102,7 +102,7 @@ func createNeighbor(address string) (*Neighbor, error) {
 		return nil, errors.New("This protocol is not supported yet")
 	}
 
-	ip, hostname, err := getIpAndHostname(identifier)
+	ip, hostname, err := getIPAndHostname(identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -169,25 +169,25 @@ func getIdentifierAndPort(address string) (identifier string, port string) {
 	return identifier, port
 }
 
-func getIpAndHostname(identifier string) (ip string, hostname string, err error) {
+func getIPAndHostname(identifier string) (ip string, hostname string, err error) {
 
 	addr := net.ParseIP(identifier)
-	isIpFormat := addr != nil
-	if isIpFormat {
+	isIPFormat := addr != nil
+	if isIPFormat {
 		return addr.String(), "", nil // leave hostname empty when its in IP format
-	} else {
-		// Probably domain name. Check it
-		addresses, err := net.LookupHost(identifier)
-		if err != nil {
-			return "", "", errors.New("Could not process look up for " + identifier)
-		}
-		addressFound := len(addresses) > 0
-		if addressFound {
-			return addresses[0], identifier, nil
-		} else {
-			return "", "", errors.New("Could not resolve a hostname for " + identifier)
-		}
 	}
+
+	// Probably domain name. Check it
+	addresses, err := net.LookupHost(identifier)
+	if err != nil {
+		return "", "", errors.New("Could not process look up for " + identifier)
+	}
+	addressFound := len(addresses) > 0
+	if addressFound {
+		return addresses[0], identifier, nil
+	}
+
+	return "", "", errors.New("Could not resolve a hostname for " + identifier)
 }
 
 func getNeighborByAddress(address string) *Neighbor {
@@ -199,14 +199,14 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	_, identifier, port, _ := getConnectionTypeAndIdentifierAndPort(address)
 	formattedAddress := getFormattedAddress(identifier, port)
 	neighbor, neighborExists = Neighbors[formattedAddress]
+	return
+}
 
-	if !neighborExists {
-		for _, neighborTmp := range Neighbors {
-			if (neighborTmp.IP == identifier) && (neighborTmp.Port == port) {
-				neighbor = neighborTmp
-				neighborExists = true
-				return
-			}
+func checkNeighbourExistsByIPAddress(ipAddress string) (neighborExists bool, neighbor *Neighbor) {
+	for _, candidateNeighbor := range Neighbors {
+		identifier, port := getIdentifierAndPort(ipAddress)
+		if candidateNeighbor.IP == identifier && candidateNeighbor.Port == port {
+			return true, candidateNeighbor
 		}
 	}
 	return
