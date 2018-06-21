@@ -108,7 +108,7 @@ func processIncomingTX(incoming IncomingTX) {
 		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				logs.Log.Debugf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
+				logs.Log.Debugf("Got old TX older than snapshot (skipping) - Tx timestamp: '%v' - Snapshot timestamp: '%v' - Tx value: %v",
 					tx.Timestamp, snapTime, tx.Value)
 				removeTx()
 				return nil
