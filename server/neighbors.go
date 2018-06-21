@@ -208,8 +208,8 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 }
 
 func checkNeighbourExistsByIPAddress(ipAddress string) (neighborExists bool, neighbor *Neighbor) {
+	identifier, _ := getIdentifierAndPort(ipAddress)
 	for _, candidateNeighbor := range Neighbors {
-		identifier, _ := getIdentifierAndPort(ipAddress)
 		if candidateNeighbor.IP == identifier {
 			return true, candidateNeighbor
 		}
