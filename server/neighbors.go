@@ -73,11 +73,11 @@ func GetNeighborByAddress(address string) *Neighbor {
 	return neighbor
 }
 
-func GetNeighborByIPAddress(ipAddress string) *Neighbor {
+func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	_, neighbor := checkNeighbourExistsByIPAddress(ipAddress)
+	_, neighbor := checkNeighbourExistsByIPAddress(ipAddressWithPort)
 	return neighbor
 }
 
@@ -207,10 +207,10 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	return
 }
 
-func checkNeighbourExistsByIPAddress(ipAddress string) (neighborExists bool, neighbor *Neighbor) {
-	identifier, _ := getIdentifierAndPort(ipAddress)
+func checkNeighbourExistsByIPAddress(ipAddressWithPort string) (neighborExists bool, neighbor *Neighbor) {
+	identifier, port := getIdentifierAndPort(ipAddressWithPort)
 	for _, candidateNeighbor := range Neighbors {
-		if candidateNeighbor.IP == identifier {
+		if candidateNeighbor.IP == identifier && candidateNeighbor.Port == port {
 			return true, candidateNeighbor
 		}
 	}

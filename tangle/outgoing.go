@@ -122,7 +122,7 @@ func getSomeRequestByAddress(address string) []byte {
 }
 
 func getSomeRequestByIPAddressWithPort(IPAddressWithPort string) []byte {
-	neighbor := server.GetNeighborByIPAddress(IPAddressWithPort)
+	neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 	return getSomeRequestByAddress(neighbor.Addr)
 }
 
@@ -186,7 +186,7 @@ func requestIfMissing(hash []byte, IPAddressWithPort string, txn *badger.Txn) (h
 
 		pending := addPendingRequest(hash, timestamp, IPAddressWithPort)
 		if pending != nil {
-			neighbor := server.GetNeighborByIPAddress(IPAddressWithPort)
+			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 			if neighbor != nil {
 				requestLocker.Lock()
 				queue, ok := requestQueues[neighbor.Addr]
