@@ -69,7 +69,8 @@ func GetNeighborByAddress(address string) *Neighbor {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	return getNeighborByAddress(address)
+	_, neighbor := checkNeighbourExistsByAddress(address)
+	return neighbor
 }
 
 func GetNeighborByIPAddress(ipAddress string) *Neighbor {
@@ -197,11 +198,6 @@ func getIPAndHostname(identifier string) (ip string, hostname string, err error)
 	}
 
 	return "", "", errors.New("Could not resolve a hostname for " + identifier)
-}
-
-func getNeighborByAddress(address string) *Neighbor {
-	_, neighbor := checkNeighbourExistsByAddress(address)
-	return neighbor
 }
 
 func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbor *Neighbor) {
