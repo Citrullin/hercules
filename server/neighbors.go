@@ -65,11 +65,19 @@ func TrackNeighbor(msg *NeighborTrackingMessage) {
 	}
 }
 
-func GetNeighborByAddress(address string) (string, *Neighbor) {
+func GetNeighborByAddress(address string) *Neighbor {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	return "", getNeighborByAddress(address)
+	return getNeighborByAddress(address)
+}
+
+func GetNeighborByIPAddress(ipAddress string) *Neighbor {
+	NeighborsLock.Lock()
+	defer NeighborsLock.Unlock()
+
+	_, neighbor := checkNeighbourExistsByIPAddress(ipAddress)
+	return neighbor
 }
 
 func UpdateHostnameAddresses() {
@@ -85,7 +93,8 @@ func UpdateHostnameAddresses() {
 			if neighbor.IP == ip {
 				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
 			} else {
-				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", getFormattedAddress(neighbor.IP, neighbor.Port))
+				neighbor.IP = ip
+				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", GetFormattedAddress(neighbor.IP, neighbor.Port))
 				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
 			}
 		}
@@ -110,7 +119,7 @@ func createNeighbor(address string) (*Neighbor, error) {
 	neighbor := Neighbor{
 		Hostname:       hostname,
 		IP:             ip,
-		Addr:           getFormattedAddress(identifier, port),
+		Addr:           GetFormattedAddress(identifier, port),
 		Port:           port,
 		ConnectionType: connectionType,
 		Incoming:       0,
@@ -119,7 +128,7 @@ func createNeighbor(address string) (*Neighbor, error) {
 	}
 
 	if connectionType == UDP {
-		neighbor.UDPAddr, _ = net.ResolveUDPAddr(UDP, getFormattedAddress(neighbor.IP, port))
+		neighbor.UDPAddr, _ = net.ResolveUDPAddr(UDP, GetFormattedAddress(neighbor.IP, port))
 	}
 
 	return &neighbor, nil
@@ -197,15 +206,15 @@ func getNeighborByAddress(address string) *Neighbor {
 
 func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbor *Neighbor) {
 	_, identifier, port, _ := getConnectionTypeAndIdentifierAndPort(address)
-	formattedAddress := getFormattedAddress(identifier, port)
+	formattedAddress := GetFormattedAddress(identifier, port)
 	neighbor, neighborExists = Neighbors[formattedAddress]
 	return
 }
 
 func checkNeighbourExistsByIPAddress(ipAddress string) (neighborExists bool, neighbor *Neighbor) {
 	for _, candidateNeighbor := range Neighbors {
-		identifier, port := getIdentifierAndPort(ipAddress)
-		if candidateNeighbor.IP == identifier && candidateNeighbor.Port == port {
+		identifier, _ := getIdentifierAndPort(ipAddress)
+		if candidateNeighbor.IP == identifier {
 			return true, candidateNeighbor
 		}
 	}
@@ -217,6 +226,6 @@ func checkNeighbourExists(candidateNeighbor *Neighbor) (bool, *Neighbor) {
 	return neighborExists, neighbor
 }
 
-func getFormattedAddress(identifier string, port string) string {
+func GetFormattedAddress(identifier string, port string) string {
 	return identifier + ":" + port
 }
