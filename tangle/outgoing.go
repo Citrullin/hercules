@@ -266,17 +266,6 @@ func getMessage(resp []byte, req []byte, tip bool, addr string, txn *badger.Txn)
 	return &Message{&resp, &req, addr}
 }
 
-func (pendingRequest PendingRequest) request(addr string) {
-	queue, ok := requestQueues[addr]
-	if !ok {
-		q := make(RequestQueue, maxQueueSize)
-		queue = &q
-		requestQueues[addr] = queue
-	}
-	*queue <- &Request{pendingRequest.Hash, false}
-	pendingRequest.LastTried = time.Now()
-}
-
 func addPendingRequest(hash []byte, timestamp int, addr string) *PendingRequest {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()

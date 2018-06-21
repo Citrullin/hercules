@@ -40,32 +40,6 @@ func startConfirmThread() {
 			}
 			return nil
 		})
-		/*/ Check unknown confirmed
-		_ = db.DB.View(func(txn *badger.Txn) error {
-			opts := badger.DefaultIteratorOptions
-			it := txn.NewIterator(opts)
-			defer it.Close()
-			prefix := []byte{db.KEY_PENDING_CONFIRMED}
-			var toRemove [][]byte
-			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				key := it.Item().Key()
-				if db.Has(db.AsKey(key, db.KEY_HASH), txn) {
-					k := make([]byte, len(key))
-					copy(k, key)
-					toRemove = append(toRemove, k)
-				}
-			}
-			for _, key := range toRemove {
-				logs.Log.Debug("Removing orphaned pending confirmed key", key)
-				err := db.DB.Update(func(txn *badger.Txn) error {
-					err := db.Remove(key, txn)
-					if err != nil { return err }
-					return confirmChild(db.AsKey(key, db.KEY_HASH), txn)
-				})
-				if err != nil { return err }
-			}
-			return nil
-		})*/
 		time.Sleep(CONFIRM_CHECK_INTERVAL)
 	}
 }
@@ -105,8 +79,6 @@ func confirm(key []byte, txn *badger.Txn) error {
 		return errors.New("Could not save confirmation status!")
 	}
 
-	// TODO: if value!= zero and keyindex is one: add bundle validation task
-	// Add value only when bundle is consistent.
 	if value != 0 {
 		_, err := db.IncrBy(db.GetAddressKey(address, db.KEY_BALANCE), value, false, txn)
 		if err != nil {
@@ -157,5 +129,3 @@ func confirmChild(key []byte, txn *badger.Txn) error {
 	}
 	return nil
 }
-
-// TODO: add rescanner!

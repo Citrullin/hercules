@@ -104,11 +104,14 @@ func processIncomingTX(incoming IncomingTX) {
 		}
 
 		snapTime := snapshot.GetSnapshotTimestamp(txn)
-		if tx.Timestamp != 0 && snapTime >= tx.Timestamp && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
+		futureTime := int(time.Now().Add(time.Duration(2) * time.Hour).Unix())
+		maybeMilestonePair := isMaybeMilestone(tx) || isMaybeMilestonePair(tx)
+		isOutsideOfTimeframe := !maybeMilestonePair && (tx.Timestamp > futureTime || snapTime >= tx.Timestamp)
+		if isOutsideOfTimeframe && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				logs.Log.Debugf("Got old TX older than snapshot (skipping): %v vs %v, Value: %v",
-					tx.Timestamp, snapTime, tx.Value)
+				logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
+					snapTime, futureTime, tx.Timestamp)
 				removeTx()
 				return nil
 			}

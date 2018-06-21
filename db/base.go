@@ -42,10 +42,11 @@ const (
 	KEY_PENDING_BUNDLE    = byte(39) // hash -> timestamp
 
 	// PERSISTENT EVENTS
-	KEY_EVENT_MILESTONE_PENDING      = byte(50) // trunk hash (999 address) -> tx hash
-	KEY_EVENT_MILESTONE_PAIR_PENDING = byte(51) // trunk hash (999 address) -> tx hash
-	KEY_EVENT_CONFIRMATION_PENDING   = byte(56) // hash (coo address) -> index
-	KEY_EVENT_TRIM_PENDING           = byte(58) // hash -> bool
+	KEY_EVENT_MILESTONE_PENDING           = byte(50) // trunk hash (999 address) -> tx hash
+	KEY_EVENT_MILESTONE_PAIR_PENDING      = byte(51) // trunk hash (999 address) -> tx hash
+	KEY_EVENT_CONFIRMATION_PENDING        = byte(56) // hash (coo address) -> index
+	KEY_EVENT_BUNDLE_CONFIRMATION_PENDING = byte(57)
+	KEY_EVENT_TRIM_PENDING                = byte(58) // hash -> bool
 
 	// OTHER
 	KEY_BALANCE          = byte(100) // address hash -> int64
@@ -268,7 +269,6 @@ func RemoveAll(key byte) error {
 		}
 	}
 	return nil
-
 }
 
 func Count(key byte) int {

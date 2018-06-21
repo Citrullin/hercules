@@ -18,7 +18,7 @@ func IsValidBundleTrytes(trytes []string) bool {
 		if t == nil {
 			return false
 		}
-		tx := TritsToTX(&t, b)
+		tx := TritsToFastTX(&t, b)
 		txs = append(txs, tx)
 	}
 	return IsValidBundle(txs)

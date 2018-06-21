@@ -8,18 +8,10 @@ import (
 )
 
 func Report() {
-	logs.Log.Debugf("INCOMING:      In: %v, Queued: %v \n",
-		incoming,
-		incomingProcessed)
-	logs.Log.Debugf("OUTGOING:      %v", outgoing)
-	logs.Log.Debugf("SERVER QUEUE:  In: %v, Out: %v \n",
+	logs.Log.Debugf("TX IN/OUT:     %v, %v", incoming, outgoing)
+	logs.Log.Debugf("SERVER I/O Q:  %v, %v \n",
 		len(srv.Incoming),
 		len(srv.Outgoing))
-	requestLocker.RLock()
-	for i, queue := range requestQueues {
-		logs.Log.Debugf("PEER I QUEUE:  %v - %v \n", i, len(*queue))
-	}
-	requestLocker.RUnlock()
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
 		totalConfirmations,
