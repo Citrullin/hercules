@@ -127,13 +127,13 @@ func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
 			t.Error("Error during test set up")
 		}
 
-		ipWithPort := getFormattedAddress(ip, port)
+		ipWithPort := GetFormattedAddress(ip, port)
 
 		neighborsExists, neighbor := checkNeighbourExistsByIPAddress(ipWithPort)
 		if !neighborsExists {
 			t.Error("Neighbor does NOT exist!")
 		} else {
-			formattedAddress := getFormattedAddress(identifier, port)
+			formattedAddress := GetFormattedAddress(identifier, port)
 			if neighbor.Addr != formattedAddress || neighbor.IP != ip || neighbor.Port != port {
 				t.Error("Neighbor was found but it is NOT the same as the one which was searched for!")
 			}
@@ -152,9 +152,6 @@ func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
 }
 
 func TestRemoveNeighbor(t *testing.T) {
-
-	restartConfig()
-
 	Neighbors = make(map[string]*Neighbor)
 
 	for _, address := range addresses {
