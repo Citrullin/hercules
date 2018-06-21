@@ -199,6 +199,16 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	_, identifier, port, _ := getConnectionTypeAndIdentifierAndPort(address)
 	formattedAddress := getFormattedAddress(identifier, port)
 	neighbor, neighborExists = Neighbors[formattedAddress]
+
+	if !neighborExists {
+		for _, neighborTmp := range Neighbors {
+			if (neighborTmp.IP == identifier) && (neighborTmp.Port == port) {
+				neighbor = neighborTmp
+				neighborExists = true
+				return
+			}
+		}
+	}
 	return
 }
 

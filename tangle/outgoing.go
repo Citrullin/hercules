@@ -180,9 +180,9 @@ func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err 
 
 		pending := addPendingRequest(hash, timestamp, addr)
 		if pending != nil {
-			requestLocker.Lock()
 			_, neighbor := server.GetNeighborByAddress(addr)
 			if neighbor != nil {
+				requestLocker.Lock()
 				queue, ok := requestQueues[neighbor.Addr]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
