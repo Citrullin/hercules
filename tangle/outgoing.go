@@ -35,7 +35,7 @@ func Broadcast(data []byte) int {
 	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
 
-		request := getSomeRequest(neighbor.Addr)
+		request := getSomeRequestByAddress(neighbor.Addr)
 		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
 		sent++
 
@@ -102,9 +102,9 @@ func loadPendingRequests() {
 	logs.Log.Info("Pending requests loaded", added, total)
 }
 
-func getSomeRequest(addr string) []byte {
+func getSomeRequestByAddress(address string) []byte {
 	requestLocker.RLock()
-	requestQueue, requestOk := requestQueues[addr]
+	requestQueue, requestOk := requestQueues[address]
 	requestLocker.RUnlock()
 	var request []byte
 	if requestOk && len(*requestQueue) > 0 {
@@ -114,11 +114,16 @@ func getSomeRequest(addr string) []byte {
 		pendingRequest := getOldPending()
 		if pendingRequest != nil {
 			pendingRequest.LastTried = time.Now()
-			pendingRequest.LastNeighborAddr = addr
+			pendingRequest.LastNeighborAddr = address
 			request = pendingRequest.Hash
 		}
 	}
 	return request
+}
+
+func getSomeRequestByIPAddressWithPort(IPAddressWithPort string) []byte {
+	neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
+	return getSomeRequestByAddress(neighbor.Addr)
 }
 
 func outgoingRunner() {
@@ -137,12 +142,13 @@ func outgoingRunner() {
 	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
 
-		var request = getSomeRequest(neighbor.Addr)
+		var request = getSomeRequestByAddress(neighbor.Addr)
+		ipAddressWithPort := server.GetFormattedAddress(neighbor.IP, neighbor.Port)
 		if request != nil {
-			sendReply(getMessage(nil, request, false, neighbor.Addr, nil))
+			sendReply(getMessage(nil, request, false, ipAddressWithPort, nil))
 		} else if len(srv.Incoming) < 50 && shouldRequestTip {
 			lastTip = time.Now()
-			sendReply(getMessage(nil, nil, true, neighbor.Addr, nil))
+			sendReply(getMessage(nil, nil, true, ipAddressWithPort, nil))
 		}
 
 		server.NeighborsLock.RLock()
@@ -150,7 +156,7 @@ func outgoingRunner() {
 	server.NeighborsLock.RUnlock()
 }
 
-func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err error) {
+func requestIfMissing(hash []byte, IPAddressWithPort string, txn *badger.Txn) (has bool, err error) {
 	tx := txn
 	has = true
 	if bytes.Equal(hash, tipFastTX.Hash) {
@@ -178,11 +184,11 @@ func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err 
 			return false, err
 		}
 
-		pending := addPendingRequest(hash, timestamp, addr)
+		pending := addPendingRequest(hash, timestamp, IPAddressWithPort)
 		if pending != nil {
-			requestLocker.Lock()
-			_, neighbor := server.GetNeighborByAddress(addr)
+			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 			if neighbor != nil {
+				requestLocker.Lock()
 				queue, ok := requestQueues[neighbor.Addr]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
@@ -190,7 +196,7 @@ func requestIfMissing(hash []byte, addr string, txn *badger.Txn) (has bool, err 
 					requestQueues[neighbor.Addr] = queue
 				}
 				requestLocker.Unlock()
-				*queue <- &Request{hash, false}
+				*queue <- &Request{Requested: hash, Tip: false}
 			}
 		}
 
@@ -204,11 +210,11 @@ func sendReply(msg *Message) {
 		return
 	}
 	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
-	srv.Outgoing <- &server.Message{msg.Addr, data}
+	srv.Outgoing <- &server.Message{IPAddressWithPort: msg.IPAddressWithPort, Msg: data}
 	outgoing++
 }
 
-func getMessage(resp []byte, req []byte, tip bool, addr string, txn *badger.Txn) *Message {
+func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn *badger.Txn) *Message {
 	var hash []byte
 	if resp == nil {
 		hash, resp = getRandomTip()
@@ -253,7 +259,7 @@ func getMessage(resp []byte, req []byte, tip bool, addr string, txn *badger.Txn)
 			if pendingRequest != nil {
 				req = pendingRequest.Hash
 				pendingRequest.LastTried = time.Now()
-				pendingRequest.LastNeighborAddr = addr
+				pendingRequest.LastNeighborAddr = IPAddressWithPort
 			}
 		}
 	}
@@ -263,10 +269,10 @@ func getMessage(resp []byte, req []byte, tip bool, addr string, txn *badger.Txn)
 	if req == nil {
 		req = make([]byte, 46)
 	}
-	return &Message{&resp, &req, addr}
+	return &Message{Bytes: &resp, Requested: &req, IPAddressWithPort: IPAddressWithPort}
 }
 
-func addPendingRequest(hash []byte, timestamp int, addr string) *PendingRequest {
+func addPendingRequest(hash []byte, timestamp int, IPAddressWithPort string) *PendingRequest {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 
@@ -275,7 +281,7 @@ func addPendingRequest(hash []byte, timestamp int, addr string) *PendingRequest 
 		return nil
 	} // Avoid double-add
 
-	pendingRequest := &PendingRequest{hash, timestamp, time.Now(), addr}
+	pendingRequest := &PendingRequest{Hash: hash, Timestamp: timestamp, LastTried: time.Now(), LastNeighborAddr: IPAddressWithPort}
 	pendingRequests = append(pendingRequests, pendingRequest)
 	return pendingRequest
 }

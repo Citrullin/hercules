@@ -12,6 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var utcLocation, _ = time.LoadLocation("UTC")
+
+func init() {
+	addAPICall("getNodeInfo", getNodeInfo)
+}
+
 func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
@@ -38,9 +44,19 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"latestSolidSubtangleMilestoneIndex": sindex,
 		"neighbors":                          len(server.Neighbors),
 		"currentSnapshotTimestamp":           snapshot.CurrentTimestamp,
+		"currentSnapshotTimeHumanReadable":   getHumanReadableSnapshotTime(),
 		"isSynchronized":                     snapshot.IsSynchronized(),
 		"tips":                               len(tangle.Tips),
 		"time":                               time.Now().Unix(),
 		"duration":                           getDuration(t),
 	})
+}
+
+func getHumanReadableSnapshotTime() string {
+	if snapshot.CurrentTimestamp == 0 {
+		return ""
+	} else {
+		unitxTime := time.Unix(int64(snapshot.CurrentTimestamp), 0)
+		return unitxTime.In(utcLocation).Format(time.RFC822)
+	}
 }

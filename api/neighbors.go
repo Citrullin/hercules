@@ -10,6 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("addNeighbors", addNeighbors)
+	addAPICall("removeNeighbors", removeNeighbors)
+	addAPICall("getNeighbors", getNeighbors)
+}
+
 func addNeighbors(request Request, c *gin.Context, t time.Time) {
 	if request.Uris != nil {
 		added := 0

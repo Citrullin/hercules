@@ -2,7 +2,9 @@ package tangle
 
 import (
 	"bytes"
-	"github.com/dgraph-io/badger"
+	"sync/atomic"
+	"time"
+
 	"../convert"
 	"../crypt"
 	"../db"
@@ -11,8 +13,7 @@ import (
 	"../snapshot"
 	"../transaction"
 	"../utils"
-	"sync/atomic"
-	"time"
+	"github.com/dgraph-io/badger"
 )
 
 const P_TIP_REPLY = 25
@@ -45,9 +46,9 @@ func incomingRunner() {
 
 		if !isJustTipRequest {
 			if !crypt.IsValidPoW(tx.Hash, MWM) {
-				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: raw.Addr, Invalid: 1}
+				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
 			} else {
-				processIncomingTX(IncomingTX{tx, raw.Addr, &data})
+				processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
 				incomingProcessed++
 			}
 		}
@@ -64,14 +65,14 @@ func incomingRunner() {
 			reply, _ = db.GetBytes(db.GetByteKey(req, db.KEY_BYTES), nil)
 		}
 
-		request := getSomeRequest(raw.Addr)
+		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort)
 		// It's a specific (not tip) request that we do not have.
 		// Avoid creating a tip request on our own
 		if !isTipRequest && request == nil && reply == nil {
 			continue
 		}
 
-		sendReply(getMessage(reply, request, request == nil, raw.Addr, nil))
+		sendReply(getMessage(reply, request, request == nil, raw.IPAddressWithPort, nil))
 	}
 }
 
@@ -90,7 +91,7 @@ func processIncomingTX(incoming IncomingTX) {
 		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
 		removePendingRequest(tx.Hash)
 
-		removeTx := func () {
+		removeTx := func() {
 			logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
@@ -118,9 +119,9 @@ func processIncomingTX(incoming IncomingTX) {
 		}
 
 		if db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn) {
-			_, err := requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
+			_, err := requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort, txn)
 			_checkIncomingError(tx, err)
-			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)
+			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort, txn)
 			_checkIncomingError(tx, err)
 			err = db.Put(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
 			_checkIncomingError(tx, err)
@@ -142,9 +143,9 @@ func processIncomingTX(incoming IncomingTX) {
 				_checkIncomingError(tx, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(tx.TrunkTransaction, incoming.Addr, txn)
+			_, err = requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort, txn)
 			_checkIncomingError(tx, err)
-			_, err = requestIfMissing(tx.BranchTransaction, incoming.Addr, txn)
+			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort, txn)
 			_checkIncomingError(tx, err)
 
 			// EVENTS:
@@ -168,7 +169,7 @@ func processIncomingTX(incoming IncomingTX) {
 				Broadcast(tx.Bytes)
 			}
 
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: 1}
+			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: 1}
 			saved++
 			atomic.AddInt64(&totalTransactions, 1)
 		} else {
@@ -184,14 +185,14 @@ func processIncomingTX(incoming IncomingTX) {
 	} else {
 		if !lowEndDevice && err == badger.ErrConflict {
 			atomic.AddInt64(&totalTransactions, -1)
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Addr: incoming.Addr, New: -1}
+			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: -1}
 			processIncomingTX(incoming)
 		} else {
 			if pendingKey != nil {
 				nowUnix := time.Now().Unix()
 				db.Put(pendingKey, hash, nil, nil)
 				db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
-				addPendingRequest(hash, int(nowUnix), incoming.Addr)
+				addPendingRequest(hash, int(nowUnix), incoming.IPAddressWithPort)
 			}
 		}
 	}

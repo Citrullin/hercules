@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	addAPICall("findTransactions", findTransactions)
+}
+
 func findTransactions(request Request, c *gin.Context, t time.Time) {
 	var hashes = []string{}
 	for _, address := range request.Addresses {

@@ -4,3 +4,7 @@ build/
 pkg/
 .vscode/
 .history/
+debug
+data/*
+*.snap
+*.test

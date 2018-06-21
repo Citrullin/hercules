@@ -2,18 +2,19 @@ package main
 
 import (
 	"encoding/json"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
+
 	"./api"
 	"./db"
 	"./logs"
 	"./server"
 	"./snapshot"
 	"./tangle"
-	"os"
-	"os/signal"
-	"strings"
-	"time"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 var config *viper.Viper
