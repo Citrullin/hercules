@@ -1,40 +1,67 @@
 package convert
 
-import "unicode/utf8"
-import (
-	"math"
-)
+import "math"
 
 var TRYTES = "NOPQRSTUVWXYZ9ABCDEFGHIJKLM"
-var TRYTES_TO_TRITS = []int{
-	0, 0, 0,
-	1, 0, 0,
-	-1, 1, 0,
-	0, 1, 0,
-	1, 1, 0,
-	-1, -1, 1,
-	0, -1, 1,
-	1, -1, 1,
-	-1, 0, 1,
-	0, 0, 1,
-	1, 0, 1,
-	-1, 1, 1,
-	0, 1, 1,
-	1, 1, 1,
-	-1, -1, -1,
-	0, -1, -1,
-	1, -1, -1,
-	-1, 0, -1,
-	0, 0, -1,
-	1, 0, -1,
-	-1, 1, -1,
-	0, 1, -1,
-	1, 1, -1,
-	-1, -1, 0,
-	0, -1, 0,
-	1, -1, 0,
-	-1, 0, 0,
+var trytesToTritsMap = map[rune][]int{
+	'9': []int{0, 0, 0},
+	'A': []int{1, 0, 0},
+	'B': []int{-1, 1, 0},
+	'C': []int{0, 1, 0},
+	'D': []int{1, 1, 0},
+	'E': []int{-1, -1, 1},
+	'F': []int{0, -1, 1},
+	'G': []int{1, -1, 1},
+	'H': []int{-1, 0, 1},
+	'I': []int{0, 0, 1},
+	'J': []int{1, 0, 1},
+	'K': []int{-1, 1, 1},
+	'L': []int{0, 1, 1},
+	'M': []int{1, 1, 1},
+	'N': []int{-1, -1, -1},
+	'O': []int{0, -1, -1},
+	'P': []int{1, -1, -1},
+	'Q': []int{-1, 0, -1},
+	'R': []int{0, 0, -1},
+	'S': []int{1, 0, -1},
+	'T': []int{-1, 1, -1},
+	'U': []int{0, 1, -1},
+	'V': []int{1, 1, -1},
+	'W': []int{-1, -1, 0},
+	'X': []int{0, -1, 0},
+	'Y': []int{1, -1, 0},
+	'Z': []int{-1, 0, 0},
 }
+
+// var TRYTES_TO_TRITS = []int{
+// 	0, 0, 0,
+// 	1, 0, 0,
+// 	-1, 1, 0,
+// 	0, 1, 0,
+// 	1, 1, 0,
+// 	-1, -1, 1,
+// 	0, -1, 1,
+// 	1, -1, 1,
+// 	-1, 0, 1,
+// 	0, 0, 1,
+// 	1, 0, 1,
+// 	-1, 1, 1,
+// 	0, 1, 1,
+// 	1, 1, 1,
+// 	-1, -1, -1,
+// 	0, -1, -1,
+// 	1, -1, -1,
+// 	-1, 0, -1,
+// 	0, 0, -1,
+// 	1, 0, -1,
+// 	-1, 1, -1,
+// 	0, 1, -1,
+// 	1, 1, -1,
+// 	-1, -1, 0,
+// 	0, -1, 0,
+// 	1, -1, 0,
+// 	-1, 0, 0,
+// }
 
 func TritsToTrytes(trits []int) string {
 	l := len(trits)
@@ -50,7 +77,7 @@ func TritsToTrytes(trits []int) string {
 	trytes := ""
 
 	for i := 0; i < size; i += 1 {
-		pos := index(i*3+0) + (index(i*3 + 1))*3 + (index(i*3 + 2))*9 + 13
+		pos := index(i*3+0) + (index(i*3+1))*3 + (index(i*3+2))*9 + 13
 		trytes += string(CharCodeAt(TRYTES, pos))
 	}
 
@@ -58,30 +85,14 @@ func TritsToTrytes(trits []int) string {
 }
 
 func TrytesToTrits(trytes string) (trits []int) {
-	defer func() {
-		if r := recover(); r != nil {
-			trits = nil
-		}
-	}()
-
-	var k int
-
-	size := utf8.RuneCountInString(trytes)
-	trits = make([]int, size*3)
-
-	for i, j := 0, 0; i < size; i, j = i+1, j+3 {
-		char := int(CharCodeAt(trytes, i))
-		k = (char - 64) * 3
-
-		if k < 0 {
-			k = 0
+	for _, char := range trytes {
+		mappedTrits, charIsTryte := trytesToTritsMap[char]
+		if !charIsTryte {
+			return nil
 		}
 
-		trits[j+0] = TRYTES_TO_TRITS[k+0]
-		trits[j+1] = TRYTES_TO_TRITS[k+1]
-		trits[j+2] = TRYTES_TO_TRITS[k+2]
+		trits = append(trits, mappedTrits...)
 	}
-
 	return trits
 }
 
@@ -104,9 +115,17 @@ func CharCodeAt(s string, n int) rune {
 	return 0
 }
 
-func IsTrytes (trytes string, length int) bool {
-	if len(trytes) != length || TrytesToTrits(trytes) == nil {
+func IsTrytes(trytes string, length int) bool {
+	if len(trytes) != length {
 		return false
 	}
+
+	for _, char := range trytes {
+		_, charIsTryte := trytesToTritsMap[char]
+		if !charIsTryte {
+			return false
+		}
+	}
+
 	return true
 }
