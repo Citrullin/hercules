@@ -66,6 +66,8 @@ func trimData(timestamp int64) error {
 				dec := gob.NewDecoder(buf)
 				err := dec.Decode(&txTimestamp)
 				if err == nil {
+					// TODO: since the milestone timestamps are often zero, it might be a good idea to keep them..?
+					// Theoretically, they are not needed any longer. :-/
 					if int64(txTimestamp) <= timestamp {
 						key := db.AsKey(k, db.KEY_EVENT_TRIM_PENDING)
 						if !db.Has(key, txn) {

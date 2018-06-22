@@ -123,6 +123,13 @@ func getSomeRequestByAddress(address string) []byte {
 
 func getSomeRequestByIPAddressWithPort(IPAddressWithPort string) []byte {
 	neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
+
+	// On low-end devices, the neighbor might already have gone until the message
+	// is dequeued and processed. So, we need to check here if the neighbor is still there.
+	if neighbor == nil {
+		return nil
+	}
+
 	return getSomeRequestByAddress(neighbor.Addr)
 }
 
