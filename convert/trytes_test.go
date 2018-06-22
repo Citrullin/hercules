@@ -45,3 +45,25 @@ func TestTrytesToBytes(t *testing.T) {
 		t.Error("Bytes wrong!")
 	}
 }
+
+func TestIsTrytes(t *testing.T) {
+	trytes := "ABCDEF9"
+
+	onlyTrytes := IsTrytes(trytes, len(trytes))
+	if !onlyTrytes {
+		t.Error("Trytes were given but it detected non-trytes")
+	}
+
+	trytes = "ABCDEF8"
+	onlyTrytes = IsTrytes(trytes, len(trytes))
+	if onlyTrytes {
+		t.Error("Non-trytes were given but it detected only trytes")
+	}
+
+	trytes = "ABCDEF9"
+	onlyTrytes = IsTrytes(trytes+"RERER", len(trytes))
+	if onlyTrytes {
+		t.Error("Invalid length provided and it detected only trytes")
+	}
+
+}
