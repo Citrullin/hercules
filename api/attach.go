@@ -55,9 +55,9 @@ func startAttach(apiConfig *viper.Viper) {
     
     if usePiDiver  {
 		err := pidiver.InitPiDiver()
-		if err == nil {
+		if err != nil {
 			logs.Log.Warning("PiDiver cannot be used. Error while initialization.")
-			usePiDiver = true
+            usePiDiver = false
 		}
     }
     

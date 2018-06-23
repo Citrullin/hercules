@@ -144,10 +144,6 @@ func loadConfig() *viper.Viper {
 	return config
 }
 
-func GetConfig() *viper.Viper {
-    return config
-}
-
 func Hello() {
 	if !config.GetBool("log.hello") {
 		return
