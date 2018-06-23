@@ -35,6 +35,7 @@ var limitAccess []string
 var authEnabled = false
 var dummyHash = strings.Repeat("9", 81)
 var apiCalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
+var startModules []func(apiConfig *viper.Viper)
 
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.
@@ -47,6 +48,11 @@ func Start(apiConfig *viper.Viper) {
 	limitAccess = config.GetStringSlice("api.limitRemoteAccess")
 	logs.Log.Debug("Limited remote access to:", limitAccess)
 
+    // pass config to modules if they need it
+    for _, f := range startModules {
+        f(apiConfig)
+    }
+    
 	api = gin.Default()
 
 	username := config.GetString("api.auth.username")
@@ -136,4 +142,8 @@ func triesToAccessLimited(command string, c *gin.Context) bool {
 func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
 	caseInsensitiveApiCall := strings.ToLower(apiCall)
 	apiCalls[caseInsensitiveApiCall] = implementation
+}
+
+func addStartModule(implementation func(apiConfig *viper.Viper)) {
+    startModules = append(startModules, implementation)
 }

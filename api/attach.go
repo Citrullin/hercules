@@ -10,6 +10,9 @@ import (
 
     "../logs"
 
+//    "github.com/spf13/viper"
+
+    "github.com/spf13/viper"
     "github.com/gin-gonic/gin"
     giota "github.com/iotaledger/giota"
     pidiver "github.com/shufps/pidiver"
@@ -30,23 +33,34 @@ const (
 )
 
 var mutex = &sync.Mutex{}
+var maxMinWeightMagnitude = 14
+var maxTransactions = 5
 var usePiDiver bool = false
 
-
 func init() {
+    addStartModule(startAttach)
+    
     addAPICall("attachToTangle", attachToTangle)
     addAPICall("interruptAttachingToTangle", interruptAttachingToTangle)
+}
 
-    if config.GetBool("api.pow.usePiDiver") {
-        err := pidiver.InitPiDiver()
-        if err != nil {
-            logs.Log.Warning("Couldn't initialize PiDiver. Using giota for PoW")
-            usePiDiver = false
-        } else {
-            usePiDiver = true
-        }
+func startAttach(apiConfig *viper.Viper) {
+    maxMinWeightMagnitude = config.GetInt("api.pow.maxMinWeightMagnitude")
+    maxTransactions = config.GetInt("api.pow.maxTransactions")
+    usePiDiver = config.GetBool("api.pow.usePiDiver")
+    
+    logs.Log.Info("maxMinWeightMagnitude:", maxMinWeightMagnitude)
+    logs.Log.Info("maxTransactions:", maxTransactions)
+    logs.Log.Info("usePiDiver:", usePiDiver)
+    
+    if usePiDiver  {
+		err := pidiver.InitPiDiver()
+		if err == nil {
+			logs.Log.Warning("PiDiver cannot be used. Error while initialization.")
+			usePiDiver = true
+		}
     }
-
+    
 }
 
 func IsValidPoW(hash giota.Trits, mwm int) bool {
@@ -125,7 +139,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
     // TODO prevent DOS attacks ... What is the allowed range? 
     // IRI says CURL_HASH_LENGTH but that's too high ...
     // default for main-net is 14
-    if minWeightMagnitude > config.GetInt("api.pow.maxMinWeightMagnitude") {
+    if minWeightMagnitude > maxMinWeightMagnitude {
         ReplyError("MinWeightMagnitude too high", c)
         return
     }
@@ -134,7 +148,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
     
     // TODO how many transactions are allowed? what says IRI?
     // default for non-zero-value bundle with 5TX
-    if len(trytes) > config.GetInt("api.pow.maxTransactions") {
+    if len(trytes) > maxTransactions {
         ReplyError("Too many transactions", c)
         return
     }
@@ -184,12 +198,12 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
         var powFunc giota.PowFunc
         var pow string
-        
+
         // do pow        
         if usePiDiver {
             logs.Log.Info("[PoW] Using PiDiver")
             powFunc = pidiver.PowPiDiver
-            pow = "PiDiver"
+            pow = "FPGA (PiDiver)"
         } else {
             pow, powFunc = giota.GetBestPoW()
         }
