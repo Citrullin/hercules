@@ -54,11 +54,11 @@ func startAttach(apiConfig *viper.Viper) {
     logs.Log.Info("usePiDiver:", usePiDiver)
     
     if usePiDiver  {
-		err := pidiver.InitPiDiver()
-		if err != nil {
-			logs.Log.Warning("PiDiver cannot be used. Error while initialization.")
+        err := pidiver.InitPiDiver()
+        if err != nil {
+            logs.Log.Warning("PiDiver cannot be used. Error while initialization.")
             usePiDiver = false
-		}
+        }
     }
     
 }
@@ -72,16 +72,6 @@ func IsValidPoW(hash giota.Trits, mwm int) bool {
 	return true
 }
 
-func isValidHash(hash []rune, length int) bool {
-    if len(hash) != length {
-        return false
-    }
-    
-    if _, err := giota.ToTrytes(string(hash)); err != nil {
-        return false
-    }
-    return true
-}
 
 func toRunesCheckTrytes(s string, length int) ([]rune, error) {
     if len(s) != length {
