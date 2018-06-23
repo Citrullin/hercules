@@ -22,6 +22,10 @@ type Request struct {
 	Transactions []string
 	Trytes       []string
 	Timestamp    int
+	// for attachToTangle
+	TrunkTransaction   string
+	BranchTransaction  string
+	MinWeightMagnitude int
 }
 
 var api *gin.Engine

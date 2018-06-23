@@ -13,7 +13,12 @@
       "makeSnapshot",
       "listAllAccounts"
     ],
-    "port": 14265
+    "port": 14265,
+    "pow": {
+      "maxMinWeightMagnitude": 14,
+      "maxTransactions": 5,
+      "usePiDiver": false
+    }
   },
   "database": {
     "path": "data"
