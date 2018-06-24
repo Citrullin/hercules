@@ -36,6 +36,7 @@ var mutex = &sync.Mutex{}
 var maxMinWeightMagnitude = 0
 var maxTransactions = 0
 var usePiDiver bool = false
+var interruptAttachToTangle = false
 
 func init() {
     addStartModule(startAttach)
@@ -89,10 +90,10 @@ func toRunes(t giota.Trytes) []rune {
 }
 
 
-// No PoW method of giota supports interrupt!
-// If someone knows a good idea (perhaps running a thread and cancelling it)
-// let me know
+// interrupts not PoW itselfe (no PoW of giota support interrupts) but stops 
+// attatchToTangle after the last transaction PoWed
 func interruptAttachingToTangle(request Request, c *gin.Context, t time.Time) {
+    interruptAttachToTangle = true
     c.JSON(http.StatusOK, gin.H{
     })    
 }
@@ -104,11 +105,12 @@ func getTimestamp() int64 {
 // attachToTangle
 // do everything with trytes and save time by not convertig to trits and back
 // all constants have to be divided by 3
-// TODO perhaps both methods only should be callable from a trusted network
 func attachToTangle(request Request, c *gin.Context, t time.Time) {
     // only one attatchToTangle allowed in parallel
     mutex.Lock()
     defer mutex.Unlock()
+
+    interruptAttachToTangle = false
     
     var returnTrytes []string
     
@@ -125,19 +127,16 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
     }
     
     minWeightMagnitude := request.MinWeightMagnitude
-    
-    // TODO prevent DOS attacks ... What is the allowed range? 
-    // IRI says CURL_HASH_LENGTH but that's too high ...
-    // default for main-net is 14
+
+    // restrict minWeightMagnitude
     if minWeightMagnitude > maxMinWeightMagnitude {
         ReplyError("MinWeightMagnitude too high", c)
         return
     }
     
     trytes := request.Trytes
-    
-    // TODO how many transactions are allowed? what says IRI?
-    // default for non-zero-value bundle with 5TX
+
+    // limit number of transactions in a bundle
     if len(trytes) > maxTransactions {
         ReplyError("Too many transactions", c)
         return
@@ -158,6 +157,10 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
     var prevTransaction []rune
     
     for idx, runes := range inputRunes {
+        if interruptAttachToTangle {
+            ReplyError("attatchToTangle interrupted", c)
+            return
+        }
         timestamp := getTimestamp()
         //branch and trunk
         tmp := prevTransaction
