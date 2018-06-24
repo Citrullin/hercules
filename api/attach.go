@@ -33,8 +33,8 @@ const (
 )
 
 var mutex = &sync.Mutex{}
-var maxMinWeightMagnitude = 14
-var maxTransactions = 5
+var maxMinWeightMagnitude = 0
+var maxTransactions = 0
 var usePiDiver bool = false
 
 func init() {

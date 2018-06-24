@@ -16,7 +16,7 @@
     "port": 14265,
     "pow": {
       "maxMinWeightMagnitude": 14,
-      "maxTransactions": 5,
+      "maxTransactions": 10000,
       "usePiDiver": false
     }
   },
