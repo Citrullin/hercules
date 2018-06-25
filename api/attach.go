@@ -10,12 +10,10 @@ import (
 
     "../logs"
 
-//    "github.com/spf13/viper"
-
     "github.com/spf13/viper"
     "github.com/gin-gonic/gin"
-    giota "github.com/iotaledger/giota"
-    pidiver "github.com/shufps/pidiver"
+    "github.com/shufps/pidiver"
+    "github.com/iotaledger/giota"
 )
 
 const (
@@ -35,7 +33,7 @@ const (
 var mutex = &sync.Mutex{}
 var maxMinWeightMagnitude = 0
 var maxTransactions = 0
-var usePiDiver bool = false
+var usePiDiver = false
 var interruptAttachToTangle = false
 
 func init() {
@@ -50,9 +48,9 @@ func startAttach(apiConfig *viper.Viper) {
     maxTransactions = config.GetInt("api.pow.maxTransactions")
     usePiDiver = config.GetBool("api.pow.usePiDiver")
     
-    logs.Log.Info("maxMinWeightMagnitude:", maxMinWeightMagnitude)
-    logs.Log.Info("maxTransactions:", maxTransactions)
-    logs.Log.Info("usePiDiver:", usePiDiver)
+    logs.Log.Debug("maxMinWeightMagnitude:", maxMinWeightMagnitude)
+    logs.Log.Debug("maxTransactions:", maxTransactions)
+    logs.Log.Debug("usePiDiver:", usePiDiver)
     
     if usePiDiver  {
         err := pidiver.InitPiDiver()
@@ -64,6 +62,8 @@ func startAttach(apiConfig *viper.Viper) {
     
 }
 
+// TODO: maybe the trytes/trits/runes conversions should be ported to the version in giota library
+// The project still used home-brew conversions and types
 func IsValidPoW(hash giota.Trits, mwm int) bool {
 	for i := len(hash) - mwm; i < len(hash); i++ {
 		if hash[i] != 0 {
@@ -98,7 +98,7 @@ func interruptAttachingToTangle(request Request, c *gin.Context, t time.Time) {
     })    
 }
 
-func getTimestamp() int64 {
+func getTimestampMilliseconds() int64 {
     return time.Now().UnixNano() / (int64(time.Millisecond)/int64(time.Nanosecond))   // time.Nanosecond should always be 1 ... but if not ...^^
 }
 
@@ -155,13 +155,26 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
     }
 
     var prevTransaction []rune
+
+    var powFunc giota.PowFunc
+    var pow string
+
+    // do pow
+    if usePiDiver {
+        logs.Log.Info("[PoW] Using PiDiver")
+        powFunc = pidiver.PowPiDiver
+        pow = "FPGA (PiDiver)"
+    } else {
+        pow, powFunc = giota.GetBestPoW()
+    }
+    logs.Log.Debug("[PoW] Best method", pow)
     
     for idx, runes := range inputRunes {
         if interruptAttachToTangle {
             ReplyError("attatchToTangle interrupted", c)
             return
         }
-        timestamp := getTimestamp()
+        timestamp := getTimestampMilliseconds()
         //branch and trunk
         tmp := prevTransaction
         if len(prevTransaction) == 0 {
@@ -189,27 +202,14 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
         copy(runes[giota.AttachmentTimestampLowerBoundTrinaryOffset/3:], runesTimeStampLowerBoundary[:giota.AttachmentTimestampLowerBoundTrinarySize/3])
         copy(runes[giota.AttachmentTimestampUpperBoundTrinaryOffset/3:], runesTimeStampUpperBoundary[:giota.AttachmentTimestampUpperBoundTrinarySize/3])
 
-        var powFunc giota.PowFunc
-        var pow string
-
-        // do pow        
-        if usePiDiver {
-            logs.Log.Info("[PoW] Using PiDiver")
-            powFunc = pidiver.PowPiDiver
-            pow = "FPGA (PiDiver)"
-        } else {
-            pow, powFunc = giota.GetBestPoW()
-        }
-        logs.Log.Info("[PoW] Best method", pow)
-
         startTime := time.Now()
-        nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)   
+        nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)
         if err != nil || len(nonceTrytes) != giota.NonceTrinarySize/3 {
             ReplyError("PoW failed!", c)
             return
         }
         elapsedTime := time.Now().Sub(startTime)
-        logs.Log.Info("[PoW] Needed", elapsedTime)
+        logs.Log.Debug("[PoW] Needed", elapsedTime)
         
         // copy nonce to runes
         copy(runes[giota.NonceTrinaryOffset/3:], toRunes(nonceTrytes)[:giota.NonceTrinarySize/3])
@@ -227,14 +227,15 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
             return
         }
         
-        logs.Log.Info("[PoW] Verified!")
+        logs.Log.Debug("[PoW] Verified!")
 
-        returnTrytes[idx] = string(runes);
+        returnTrytes[idx] = string(runes)
 
-        prevTransaction = toRunes(hash);
+        prevTransaction = toRunes(hash)
     }    
 
     c.JSON(http.StatusOK, gin.H{
         "trytes":   returnTrytes,
+        "duration": getDuration(t),
     })
 }

@@ -153,6 +153,12 @@
 			"revisionTime": "2018-04-04T17:41:02Z"
 		},
 		{
+			"checksumSHA1": "hIOjQvhkYc90CTpVmL6ta7Py0ag=",
+			"path": "github.com/iotaledger/giota",
+			"revision": "c48646df86812898d8574e09d407f098613e61a7",
+			"revisionTime": "2018-06-15T16:44:11Z"
+		},
+		{
 			"checksumSHA1": "4QL83HhiXvQu+riR6/i0U1HV0eg=",
 			"path": "github.com/json-iterator/go",
 			"revision": "7cceb6c2e37f896dc3817e031f83dce25b180a8b",
@@ -205,6 +211,12 @@
 			"path": "github.com/pkg/errors",
 			"revision": "816c9085562cd7ee03e7f8188a1cfd942858cded",
 			"revisionTime": "2018-03-11T21:45:15Z"
+		},
+		{
+			"checksumSHA1": "Z2PcQ6nj22UuRloSQeQLG89Vstk=",
+			"path": "github.com/shufps/pidiver",
+			"revision": "30212ad86a46598d64b08981ac2cce79855b5434",
+			"revisionTime": "2018-06-23T10:03:48Z"
 		},
 		{
 			"checksumSHA1": "wsfbX7YxbkeBp+xm9M9nBFzrCnA=",
