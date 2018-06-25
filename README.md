@@ -60,6 +60,11 @@ export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 
 Now run `go version` to make sure that everything works and you have the correct version installed.  You may need to reboot (`sudo reboot`) for the go env variable changes to take effect.  
 
+# Install gcc
+```
+sudo apt-get install gcc
+```
+
 ### Get Hercules
 
 **Using "git clone"**
