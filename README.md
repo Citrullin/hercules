@@ -155,7 +155,7 @@ Similar to IRI, limit remote execution of certain API commands.
 
 Port the API server should listen on.
 
-#### --config="hercules.config.json" or -c=14"hercules.config.json"265
+#### --config="hercules.config.json" or -c="hercules.config.json"
 
 Path to an configuration file in JSON format.
 
