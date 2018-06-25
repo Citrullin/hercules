@@ -94,9 +94,9 @@ func UpdateHostnameAddresses() {
 			if neighbor.IP == ip {
 				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
 			} else {
-				neighbor.IP = ip
-				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", GetFormattedAddress(neighbor.IP, neighbor.Port))
+				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", GetFormattedAddress(ip, neighbor.Port))
 				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
+				neighbor.IP = ip
 			}
 		}
 	}
