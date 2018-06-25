@@ -47,11 +47,11 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 				if err != nil {
 					return err
 				}
-				if broadcast {
-					tangle.Broadcast(tx.Bytes)
-					broadcasted++
-				}
 				stored++
+			}
+			if broadcast {
+				tangle.Broadcast(tx.Bytes)
+				broadcasted++
 			}
 			return nil
 		})
