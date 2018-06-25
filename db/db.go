@@ -35,9 +35,9 @@ func Load(cfg *viper.Viper) {
 	opts.ValueDir = opts.Dir
 
 	// Source: https://github.com/dgraph-io/badger#memory-usage
+	opts.ValueLogLoadingMode = options.FileIO
+	opts.TableLoadingMode = options.FileIO
 	if config.GetBool("light") {
-		opts.ValueLogLoadingMode = options.FileIO
-		opts.TableLoadingMode = options.FileIO
 		opts.NumMemtables = 1
 		opts.NumLevelZeroTables = 1
 		opts.NumLevelZeroTablesStall = 2
