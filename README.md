@@ -240,7 +240,7 @@ We advise setting it to at least 12-24 hours on low-end devices and about a week
 for normal nodes.
 
 If the tangle is not fully synchronized, the snapshot will be skipped until the next
-`snapshots.interval` time. You cna start a snapshot anytime for any unix time in the past
+`snapshots.interval` time. You can start a snapshot anytime for any unix time in the past
 (between now and the snapshot time currently loaded in the database) using the snapshots
 API.
 
@@ -328,7 +328,7 @@ that the database does not decrease in size right after triggering or completing
 The more transactions are to be trimmed, the longer it takes.
 
 ```
-curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "getSnapshotsInfo", "timestamp": 1528560748 }' | jq
+curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "makeSnapshot", "timestamp": 1528560748 }' | jq
 ```
 
 ### Future development
