@@ -19,7 +19,8 @@
     "pow": {
       "maxMinWeightMagnitude": 14,
       "maxTransactions": 10000,
-      "usePiDiver": false
+      "usePowSrv": false,
+      "powSrvPath": "/tmp/powSrv.sock"
     }
   },
   "database": {

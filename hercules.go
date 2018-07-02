@@ -91,10 +91,11 @@ func loadConfig() *viper.Viper {
 	flag.Bool("api.debug", false, "Whether to log api access")
 	flag.StringSlice("api.limitRemoteAccess", nil, "Limit access to these commands from remote")
 
-    flag.Int("api.pow.maxMinWeightMagnitude", 14, "Maximum Min-Weight-Magnitude (Difficulty for PoW)")
-    flag.Int("api.pow.maxTransactions", 10000, "Maximum number of Transactions in Bundle (for PoW)")
-    flag.Bool("api.pow.usePiDiver", false, "Use FPGA (PiDiver) for PoW")
-    
+	flag.Int("api.pow.maxMinWeightMagnitude", 14, "Maximum Min-Weight-Magnitude (Difficulty for PoW)")
+	flag.Int("api.pow.maxTransactions", 10000, "Maximum number of Transactions in Bundle (for PoW)")
+	flag.Bool("api.pow.usePowSrv", false, "Use PowSrv (e.g. FPGA PiDiver) for PoW")
+	flag.String("api.pow.powSrvPath", "/tmp/powSrv.sock", "Unix socket path of PowSrv")
+
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 	flag.Bool("log.hello", true, "Show welcome banner")
 
