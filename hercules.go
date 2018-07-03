@@ -105,10 +105,11 @@ func loadConfig() *viper.Viper {
 	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
 	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
 	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
-	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. Minimum 3.")
-	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 6.")
+	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
+	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 3.")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
 		"makeSnapshot, getSnapshotsInfo")
+	flag.Bool("snapshots.keep", false, "Whether to keep transactions past the horizon after making a snapshot.")
 
 	flag.IntP("node.port", "u", 14600, "UDP Node port")
 	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
@@ -136,9 +137,9 @@ func loadConfig() *viper.Viper {
 	// 4. Check config for validity
 	snapshotPeriod := config.GetInt("snapshots.period")
 	snapshotInterval := config.GetInt("snapshots.interval")
-	if snapshotInterval > 0 && snapshotPeriod < 6 {
+	if snapshotInterval > 0 && snapshotPeriod < 3 {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
-			"At least 6 hours currently required to be kept.", snapshotPeriod)
+			"At least 2 hours currently required to be kept.", snapshotPeriod)
 	}
 
 	return config

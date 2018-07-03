@@ -8,13 +8,15 @@ import (
 	"../db"
 	"../logs"
 	"../server"
+	"../utils"
 	"github.com/dgraph-io/badger"
+	"github.com/lukechampine/randmap"
 )
 
 const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
-	reRequestInterval  = time.Duration(30) * time.Second
-	maxIncoming        = 200
+	reRequestInterval  = time.Duration(2) * time.Second
+	maxIncoming        = 50
 )
 
 type PendingRequest struct {
@@ -25,7 +27,7 @@ type PendingRequest struct {
 }
 
 var lastTip = time.Now()
-var pendingRequests []*PendingRequest
+var pendingRequests map[string]*PendingRequest
 var rotatePending = 0
 
 func Broadcast(data []byte) int {
@@ -35,7 +37,7 @@ func Broadcast(data []byte) int {
 	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
 
-		request := getSomeRequestByAddress(neighbor.Addr)
+		request := getSomeRequestByAddress(neighbor.Addr, false)
 		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
 		sent++
 
@@ -47,6 +49,7 @@ func Broadcast(data []byte) int {
 }
 
 func pendingOnLoad() {
+	pendingRequests = make(map[string]*PendingRequest)
 	loadPendingRequests()
 }
 
@@ -102,7 +105,7 @@ func loadPendingRequests() {
 	logs.Log.Info("Pending requests loaded", added, total)
 }
 
-func getSomeRequestByAddress(address string) []byte {
+func getSomeRequestByAddress(address string, any bool) []byte {
 	requestLocker.RLock()
 	requestQueue, requestOk := requestQueues[address]
 	requestLocker.RUnlock()
@@ -111,26 +114,28 @@ func getSomeRequestByAddress(address string) []byte {
 		request = (<-*requestQueue).Requested
 	}
 	if request == nil {
-		pendingRequest := getOldPending()
+		pendingRequest := getOldPending(address)
+		if pendingRequest == nil && any {
+			pendingRequest = getAnyRandomOldPending(address)
+		}
 		if pendingRequest != nil {
-			pendingRequest.LastTried = time.Now()
-			pendingRequest.LastNeighborAddr = address
 			request = pendingRequest.Hash
 		}
 	}
 	return request
 }
 
-func getSomeRequestByIPAddressWithPort(IPAddressWithPort string) []byte {
+func getSomeRequestByIPAddressWithPort(IPAddressWithPort string, any bool) []byte {
 	neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 
 	// On low-end devices, the neighbor might already have gone until the message
 	// is dequeued and processed. So, we need to check here if the neighbor is still there.
 	if neighbor == nil {
+		logs.Log.Debug("Neighbor gone:", IPAddressWithPort)
 		return nil
 	}
 
-	return getSomeRequestByAddress(neighbor.Addr)
+	return getSomeRequestByAddress(neighbor.Addr, any)
 }
 
 func outgoingRunner() {
@@ -149,11 +154,11 @@ func outgoingRunner() {
 	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
 
-		var request = getSomeRequestByAddress(neighbor.Addr)
+		var request = getSomeRequestByAddress(neighbor.Addr, false)
 		ipAddressWithPort := server.GetFormattedAddress(neighbor.IP, neighbor.Port)
 		if request != nil {
 			sendReply(getMessage(nil, request, false, ipAddressWithPort, nil))
-		} else if len(srv.Incoming) < 50 && shouldRequestTip {
+		} else if shouldRequestTip {
 			lastTip = time.Now()
 			sendReply(getMessage(nil, nil, true, ipAddressWithPort, nil))
 		}
@@ -262,11 +267,14 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn
 		if tip {
 			req = hash
 		} else {
-			pendingRequest := getOldPending()
+			addr := IPAddressWithPort
+			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
+			if neighbor != nil {
+				addr = neighbor.Addr
+			}
+			pendingRequest := getOldPending(addr)
 			if pendingRequest != nil {
 				req = pendingRequest.Hash
-				pendingRequest.LastTried = time.Now()
-				pendingRequest.LastNeighborAddr = IPAddressWithPort
 			}
 		}
 	}
@@ -283,60 +291,85 @@ func addPendingRequest(hash []byte, timestamp int, IPAddressWithPort string) *Pe
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 
-	var which = findPendingRequest(hash)
-	if which >= 0 {
-		return nil
-	} // Avoid double-add
+	key := string(hash)
+	pendingRequest, ok := pendingRequests[key]
 
-	pendingRequest := &PendingRequest{Hash: hash, Timestamp: timestamp, LastTried: time.Now(), LastNeighborAddr: IPAddressWithPort}
-	pendingRequests = append(pendingRequests, pendingRequest)
+	if ok {
+		return pendingRequest
+	}
+	pendingRequest = &PendingRequest{Hash: hash, Timestamp: timestamp, LastTried: time.Now(), LastNeighborAddr: IPAddressWithPort}
+	pendingRequests[key] = pendingRequest
 	return pendingRequest
 }
 
 func removePendingRequest(hash []byte) bool {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
-	var which = findPendingRequest(hash)
-	if which > -1 {
-		if which >= len(pendingRequests)-1 {
-			pendingRequests = pendingRequests[0:which]
-		} else {
-			pendingRequests = append(pendingRequests[0:which], pendingRequests[which+1:]...)
-		}
-		return true
+
+	key := string(hash)
+	_, ok := pendingRequests[key]
+
+	if ok {
+		delete(pendingRequests, key)
 	}
-	return false
+	return ok
 }
 
-func findPendingRequest(hash []byte) int {
-	for i, pendingRequest := range pendingRequests {
-		if bytes.Equal(hash, pendingRequest.Hash) {
-			return i
-		}
-	}
-	return -1
-}
-
-func getOldPending() *PendingRequest {
+func getOldPending(excludeAddress string) *PendingRequest {
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
-	sortRange := 2000
+
+	max := 5000
 	if lowEndDevice {
-		sortRange = 500
+		max = 1000
 	}
-	for i, pendingRequest := range pendingRequests {
-		if time.Now().Sub(pendingRequest.LastTried) > reRequestInterval {
-			return pendingRequest
-		}
-		if i >= sortRange {
-			return nil
+
+	l := len(pendingRequests)
+	if l < max {
+		max = l
+	}
+
+	for i := 0; i < max; i++ {
+		k := randmap.FastKey(pendingRequests)
+		v := pendingRequests[k.(string)]
+		if time.Now().Sub(v.LastTried) > reRequestInterval && v.LastNeighborAddr != excludeAddress {
+			v.LastTried = time.Now()
+			v.LastNeighborAddr = excludeAddress
+			return v
 		}
 	}
 
-	rotatePending++
-	if rotatePending > 5000 && len(pendingRequests) > sortRange {
-		pendingRequests = append(pendingRequests[sortRange:], pendingRequests[:sortRange]...)
-		rotatePending = 0
+	return nil
+}
+
+func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
+	pendingRequestLocker.RLock()
+	defer pendingRequestLocker.RUnlock()
+
+	max := 10000
+	if lowEndDevice {
+		max = 3000
 	}
+
+	l := len(pendingRequests)
+	if l < max {
+		max = l
+	}
+
+	start := utils.Random(0, max)
+
+	for i := 0; i < max; i++ {
+		if i < start {
+			continue
+		}
+		k := randmap.FastKey(pendingRequests)
+		v := pendingRequests[k.(string)]
+		if v.LastNeighborAddr != excludeAddress {
+			v.LastTried = time.Now()
+			v.LastNeighborAddr = excludeAddress
+			return v
+		}
+	}
+
 	return nil
 }

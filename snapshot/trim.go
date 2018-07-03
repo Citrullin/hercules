@@ -13,6 +13,10 @@ import (
 )
 
 func trimTXRunner() {
+	if config.GetBool("snapshots.keep") {
+		logs.Log.Notice("The trimmed transactions after the snapshots will be kept in the database.")
+		return
+	}
 	logs.Log.Debug("Loading trimmable TXs", len(edgeTransactions))
 	db.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -73,10 +77,6 @@ func trimData(timestamp int64) error {
 						if !db.Has(key, txn) {
 							txs = append(txs, key)
 							found++
-						}
-						if err != nil {
-							logs.Log.Error("Could not save pending edge transaction!")
-							return err
 						}
 					}
 				} else {

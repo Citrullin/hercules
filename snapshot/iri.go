@@ -39,7 +39,7 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
 	}
 
 	if checkDatabaseSnapshot() {
-		err = db.Put([]byte{db.KEY_SNAPSHOT_DATE}, timestamp, nil,nil)
+		SetSnapshotTimestamp(timestamp, nil)
 		logs.Log.Notice("IRI Snapshot loaded")
 	} else {
 		logs.Log.Panic("Snapshot loading failed. The database is in an unstable state!")

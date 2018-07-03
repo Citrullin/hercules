@@ -31,7 +31,7 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 		hashes = append(hashes, find(convert.TrytesToBytes(bundle)[:49], db.KEY_BUNDLE)...)
 	}
 	for _, approvee := range request.Approvees {
-		if !convert.IsTrytes(approvee, 27) {
+		if !convert.IsTrytes(approvee, 81) {
 			ReplyError("Wrong approvee trytes", c)
 			return
 		}

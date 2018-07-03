@@ -12,6 +12,7 @@ import (
 	"../server"
 	"../transaction"
 	"github.com/spf13/viper"
+	"github.com/dgraph-io/badger"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 	maxQueueSize       = 1000000
 	reportInterval     = time.Duration(60) * time.Second
 	tipRemoverInterval = time.Duration(1) * time.Minute
+	cleanupInterval    = time.Duration(10) * time.Second
 	maxTipAge          = time.Duration(1) * time.Hour
 )
 
@@ -40,8 +42,6 @@ type IncomingTX struct {
 }
 
 type RequestQueue chan *Request
-type MessageQueue chan *Message
-type TXQueue chan *IncomingTX
 
 // "constants"
 var nbWorkers = runtime.NumCPU()
@@ -69,17 +69,21 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	config = cfg
 	srv = s
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
-	requestQueues = make(map[string]*RequestQueue)
+	requestQueues = make(map[string]*RequestQueue, maxQueueSize)
 
 	lowEndDevice = config.GetBool("light")
 
 	totalTransactions = int64(db.Count(db.KEY_HASH))
 	totalConfirmations = int64(db.Count(db.KEY_CONFIRMED))
 
+	// reapplyConfirmed()
+	fingerprintsOnLoad()
 	tipOnLoad()
 	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
+	//checkConsistency(true, false)
+
 
 	// This had to be done due to the tangle split in May 2018.
 	// Might need this in the future for whatever reason?
@@ -90,6 +94,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	}
 
 	go report()
+	go cleanup()
 	logs.Log.Info("Tangle started!")
 
 	go func() {
@@ -98,4 +103,65 @@ func Start(s *server.Server, cfg *viper.Viper) {
 			time.Sleep(time.Duration(5) * time.Millisecond)
 		}
 	}()
+}
+
+func cleanup () {
+	flushTicker := time.NewTicker(cleanupInterval)
+	for range flushTicker.C {
+		cleanupFingerprints()
+	}
+}
+
+func checkConsistency (skipRequests bool, skipConfirmations bool) {
+	logs.Log.Info("Checking database consistency")
+	if !skipRequests {
+		db.RemoveAll(db.KEY_PENDING_HASH)
+		db.RemoveAll(db.KEY_PENDING_TIMESTAMP)
+	}
+	db.DB.View(func(txn *badger.Txn) (e error) {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_HASH}
+		x := 0
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := item.Key()
+			relKey := db.AsKey(key, db.KEY_RELATION)
+			relation, _ := db.GetBytes(relKey, txn)
+
+			// TODO: remove pending and pending unknown?
+
+			// Check pairs exist
+			if !skipRequests && (
+				!db.Has(db.AsKey(relation[:16], db.KEY_HASH), txn) ||
+					!db.Has(db.AsKey(relation[16:], db.KEY_HASH), txn)) {
+				txBytes, _ := db.GetBytes(db.AsKey(key, db.KEY_BYTES), txn)
+				trits := convert.BytesToTrits(txBytes)[:8019]
+				tx := transaction.TritsToFastTX(&trits, txBytes)
+				db.DB.Update(func(txn *badger.Txn) error {
+					requestIfMissing(tx.TrunkTransaction, "", txn)
+					requestIfMissing(tx.BranchTransaction, "", txn)
+					return nil
+				})
+			}
+
+			// Re-confirm children
+			if !skipConfirmations {
+				if db.Has(db.AsKey(relKey, db.KEY_CONFIRMED), txn) {
+					db.DB.Update(func(txn *badger.Txn) error {
+						confirmChild(relation[:16], txn)
+						confirmChild(relation[16:], txn)
+						return nil
+					})
+				}
+			}
+			x++
+
+			if x % 10000 == 0 {
+				logs.Log.Debug("Processed", x)
+			}
+		}
+		return nil
+	})
 }

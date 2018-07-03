@@ -42,6 +42,7 @@
     "loadIRITimestamp": 0,
     "interval": 0,
     "period": 168,
-    "enableapi": true
+    "enableapi": true,
+    "keep": false
   }
 }

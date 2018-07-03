@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"strings"
 	"github.com/dgraph-io/badger"
 	"../convert"
 	"../db"
@@ -19,6 +20,7 @@ import (
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
 const COO_ADDRESS2 = "999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+// TODO: for full-nodes this interval could be decreased for a little faster confirmations..?
 const milestoneCheckInterval = time.Duration(10) * time.Second
 const totalMilestoneCheckInterval = time.Duration(30) * time.Minute
 
@@ -63,7 +65,10 @@ func LoadMissingMilestonesFromFile(path string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
-		hash := convert.TrytesToBytes(line)[:49]
+		line = strings.TrimSpace(line)
+		hash := convert.TrytesToBytes(line)
+		if len(hash) < 49 { continue }
+		hash = hash[:49]
 		has, err := requestIfMissing(hash, "", nil)
 		if err == nil {
 			if !has {
@@ -101,7 +106,6 @@ func milestoneOnLoad() {
 
 	loadLatestMilestone()
 
-	//go startSolidMilestoneChecker()
 	go startMilestoneChecker()
 }
 
@@ -169,12 +173,13 @@ func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 }
 
 /*
-Runs checking of pending milestones. If the
+Runs checking of pending milestones.
 */
 func startMilestoneChecker() {
 	if snapshot.InProgress {
 		time.Sleep(time.Duration(5) * time.Second)
 		go startMilestoneChecker()
+		return
 	}
 	total := 0
 	db.Locker.Lock()
@@ -216,20 +221,10 @@ func startMilestoneChecker() {
 
 func checkMilestones() {
 	for {
-		stop := false
-		for !stop {
-			var pendingMilestone *PendingMilestone
-
-			select {
-			case pendingMilestone = <-pendingMilestoneQueue:
-			default:
-				stop = true
-			}
-			if stop {
-				break
-			}
-			incomingMilestone(pendingMilestone)
+		for len(pendingMilestoneQueue) > 0 {
+			incomingMilestone(<-pendingMilestoneQueue)
 		}
+
 		time.Sleep(milestoneCheckInterval)
 		if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
 			go startMilestoneChecker()
@@ -344,7 +339,7 @@ func checkMilestone(key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX,
 	checkIsLatestMilestone(milestoneIndex, tx)
 
 	// Trigger confirmations
-	err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+	err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 	if err != nil {
 		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)

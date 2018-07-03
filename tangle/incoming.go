@@ -36,20 +36,28 @@ func incomingRunner() {
 		db.Locker.Unlock()
 
 		var isJustTipRequest = bytes.Equal(data, tipBytes)
+		var hash []byte
 
 		if isJustTipRequest && utils.Random(0, 100) < P_TIP_REPLY {
 			continue
 		}
 
-		trits := convert.BytesToTrits(data)[:8019]
-		var tx = transaction.TritsToTX(&trits, data)
+		fingerprint := db.GetByteKey(data, db.KEY_FINGERPRINT)
+		if !hasFingerprint(fingerprint) {
+			trits := convert.BytesToTrits(data)[:8019]
+			var tx = transaction.TritsToTX(&trits, data)
+			hash = tx.Hash
 
-		if !isJustTipRequest {
-			if !crypt.IsValidPoW(tx.Hash, MWM) {
-				server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
-			} else {
-				processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
-				incomingProcessed++
+			if !isJustTipRequest {
+				if !crypt.IsValidPoW(tx.Hash, MWM) {
+					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
+				} else {
+					err := processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
+					if err != nil {
+						incomingProcessed++
+						addFingerprint(fingerprint)
+					}
+				}
 			}
 		}
 
@@ -59,13 +67,13 @@ func incomingRunner() {
 		}
 
 		var reply []byte = nil
-		var isTipRequest = isJustTipRequest || bytes.Equal(tx.Hash, req)
+		var isTipRequest = isJustTipRequest || (hash != nil && bytes.Equal(hash, req))
 
 		if !isTipRequest {
 			reply, _ = db.GetBytes(db.GetByteKey(req, db.KEY_BYTES), nil)
 		}
 
-		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort)
+		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort, true)
 		// It's a specific (not tip) request that we do not have.
 		// Avoid creating a tip request on our own
 		if !isTipRequest && request == nil && reply == nil {
@@ -76,7 +84,7 @@ func incomingRunner() {
 	}
 }
 
-func processIncomingTX(incoming IncomingTX) {
+func processIncomingTX(incoming IncomingTX) error {
 	tx := incoming.TX
 	var pendingMilestone *PendingMilestone
 	var hash []byte
@@ -100,7 +108,8 @@ func processIncomingTX(incoming IncomingTX) {
 			_checkIncomingError(tx, err)
 			parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
 			if err == nil {
-				db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
+				err = db.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING), txn)
+				_checkIncomingError(tx, err)
 			}
 		}
 
@@ -123,9 +132,9 @@ func processIncomingTX(incoming IncomingTX) {
 			_checkIncomingError(tx, err)
 			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort, txn)
 			_checkIncomingError(tx, err)
-			err = db.Put(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+			err = addPendingConfirmation(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 			_checkIncomingError(tx, err)
-			err = db.Put(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+			err = addPendingConfirmation(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 			_checkIncomingError(tx, err)
 			logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
 				convert.BytesToTrytes(tx.Hash)[:81], tx.Value)
@@ -154,7 +163,7 @@ func processIncomingTX(incoming IncomingTX) {
 			if db.Has(pendingConfirmationKey, txn) {
 				err = db.Remove(pendingConfirmationKey, txn)
 				_checkIncomingError(tx, err)
-				err = db.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, nil, txn)
+				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 				_checkIncomingError(tx, err)
 			}
 
@@ -196,6 +205,7 @@ func processIncomingTX(incoming IncomingTX) {
 			}
 		}
 	}
+	return err
 }
 
 func _checkIncomingError(tx *transaction.FastTX, err error) {

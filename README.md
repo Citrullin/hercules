@@ -229,6 +229,11 @@ Interval in hours, how often do make an automated snapshot. Default is zero - di
 
 How much history of tangle to keep. Value in hours. Minimal value is 6 hours.
 
+#### --snapshots.keep=true
+
+If set, the snapshots will be generated without trimming the old transactions from the database.
+That is, the database is kept without modifications.
+
 #### --snapshots.enableapi=false
 
 True by default. Enables additional API commands for the snapshots. More info below:

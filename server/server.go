@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"runtime"
 
 	"../logs"
 	"github.com/spf13/viper"
@@ -54,6 +55,7 @@ type Server struct {
 var ops uint64 = 0
 var Speed uint64 = 1
 var total uint64 = 0
+var nbWorkers = runtime.NumCPU()
 var flushTicker *time.Ticker
 var hostnameTicker *time.Ticker
 
@@ -93,7 +95,11 @@ func Create(serverConfig *viper.Viper) *Server {
 }
 
 func Start() {
-	server.listenAndReceive(1)
+	workers := 1
+	if !config.GetBool("light") {
+		workers = nbWorkers
+	}
+	server.listenAndReceive(workers)
 
 	flushTicker = time.NewTicker(flushInterval)
 	go func() {

@@ -19,6 +19,7 @@ func SaveTX(tx *transaction.FastTX, raw *[]byte, txn *badger.Txn) (e error) {
 	trunkKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH)
 	branchKey := db.GetByteKey(tx.BranchTransaction, db.KEY_HASH)
 
+	// TODO: check which of these are still needed. Maybe just bytes can be used...
 	err := db.Put(db.AsKey(key, db.KEY_HASH), tx.Hash, nil, txn)
 	_checkSaveError(tx, err)
 	err = db.Put(db.AsKey(key, db.KEY_TIMESTAMP), tx.Timestamp, nil, txn)
