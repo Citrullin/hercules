@@ -11,7 +11,9 @@
       "addNeighbors",
       "removeNeighbors",
       "makeSnapshot",
-      "listAllAccounts"
+      "listAllAccounts",
+      "attachToTangle",
+      "interruptAttachingToTangle"
     ],
     "port": 14265,
     "pow": {

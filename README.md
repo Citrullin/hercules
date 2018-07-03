@@ -60,6 +60,11 @@ export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 
 Now run `go version` to make sure that everything works and you have the correct version installed.  You may need to reboot (`sudo reboot`) for the go env variable changes to take effect.  
 
+# Install gcc
+```
+sudo apt-get install gcc
+```
+
 ### Get Hercules
 
 **Using "git clone"**
@@ -155,7 +160,7 @@ Similar to IRI, limit remote execution of certain API commands.
 
 Port the API server should listen on.
 
-#### --config="hercules.config.json" or -c=14"hercules.config.json"265
+#### --config="hercules.config.json" or -c="hercules.config.json"
 
 Path to an configuration file in JSON format.
 
@@ -235,7 +240,7 @@ We advise setting it to at least 12-24 hours on low-end devices and about a week
 for normal nodes.
 
 If the tangle is not fully synchronized, the snapshot will be skipped until the next
-`snapshots.interval` time. You cna start a snapshot anytime for any unix time in the past
+`snapshots.interval` time. You can start a snapshot anytime for any unix time in the past
 (between now and the snapshot time currently loaded in the database) using the snapshots
 API.
 
@@ -323,7 +328,7 @@ that the database does not decrease in size right after triggering or completing
 The more transactions are to be trimmed, the longer it takes.
 
 ```
-curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "getSnapshotsInfo", "timestamp": 1528560748 }' | jq
+curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "makeSnapshot", "timestamp": 1528560748 }' | jq
 ```
 
 ### Future development
