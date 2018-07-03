@@ -165,6 +165,12 @@
 			"revisionTime": "2018-06-10T09:13:47Z"
 		},
 		{
+			"checksumSHA1": "xAJpZcXDdRH4s/Tf0LmmZFRqGjE=",
+			"path": "github.com/lukechampine/randmap",
+			"revision": "9e3c222d041309b34f799305d561f5adf3fc0181",
+			"revisionTime": "2016-11-25T18:32:26Z"
+		},
+		{
 			"checksumSHA1": "AYZGozgchqe4WcKH/jCZI1flnP8=",
 			"path": "github.com/magiconair/properties",
 			"revision": "c2353362d570a7bfa228149c62842019201cfb71",
@@ -211,6 +217,12 @@
 			"path": "github.com/pkg/errors",
 			"revision": "816c9085562cd7ee03e7f8188a1cfd942858cded",
 			"revisionTime": "2018-03-11T21:45:15Z"
+		},
+		{
+			"checksumSHA1": "wkm3W4BBwdu6nDbgYUietMjhaeE=",
+			"path": "github.com/shufps/bcm2835",
+			"revision": "f7c55da42985f23fe30d04049ad77e376c238607",
+			"revisionTime": "2018-06-18T10:48:35Z"
 		},
 		{
 			"checksumSHA1": "Z2PcQ6nj22UuRloSQeQLG89Vstk=",
