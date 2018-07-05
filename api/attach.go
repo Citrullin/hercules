@@ -34,7 +34,7 @@ var mutex = &sync.Mutex{}
 var maxMinWeightMagnitude = 0
 var maxTransactions = 0
 var usePowSrv = false
-var powClient powsrv.PowClient
+var powClient *powsrv.PowClient
 var interruptAttachToTangle = false
 
 func init() {
@@ -54,13 +54,7 @@ func startAttach(apiConfig *viper.Viper) {
 	logs.Log.Debug("usePowSrv:", usePowSrv)
 
 	if usePowSrv {
-		powClient := &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 5000}
-		err := powClient.InitPow()
-		if err != nil {
-			logs.Log.Warning("powSrv cannot be used. Error while initialization.")
-			usePowSrv = false
-			powClient = nil
-		}
+		powClient = &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 5000}
 	}
 }
 
@@ -167,11 +161,6 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 		logs.Log.Info("[PoW] Using powSrv version %v", serverVersion)
 
-		err = powClient.InitPow()
-		if err != nil {
-			ReplyError("PowSrv initialization failed!", c)
-			return
-		}
 		powFunc = powClient.PowFunc
 		logs.Log.Debug("[PoW] Best method", powType)
 	} else {
