@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/iotaledger/giota"
-	"github.com/muXxer/powsrv"
+	"github.com/muxxer/powsrv"
 	"github.com/spf13/viper"
 )
 
