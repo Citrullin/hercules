@@ -4,6 +4,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -54,7 +55,7 @@ func startAttach(apiConfig *viper.Viper) {
 	logs.Log.Debug("usePowSrv:", usePowSrv)
 
 	if usePowSrv {
-		powClient = &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 5000}
+		powClient = &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
 	}
 }
 
@@ -159,7 +160,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 			return
 		}
 
-		logs.Log.Info("[PoW] Using powSrv version %v", serverVersion)
+		logs.Log.Infof("[PoW] Using powSrv version %v", serverVersion)
 
 		powFunc = powClient.PowFunc
 		logs.Log.Debug("[PoW] Best method", powType)
@@ -204,7 +205,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 		startTime := time.Now()
 		nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)
 		if err != nil || len(nonceTrytes) != giota.NonceTrinarySize/3 {
-			ReplyError("PoW failed!", c)
+			ReplyError(fmt.Sprintf("PoW failed! %v", err.Error()), c)
 			return
 		}
 		elapsedTime := time.Now().Sub(startTime)
