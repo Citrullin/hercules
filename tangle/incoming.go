@@ -100,7 +100,7 @@ func processIncomingTX(incoming IncomingTX) error {
 		removePendingRequest(tx.Hash)
 
 		removeTx := func() {
-			logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
+			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
@@ -120,8 +120,8 @@ func processIncomingTX(incoming IncomingTX) error {
 		if isOutsideOfTimeframe && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
-					snapTime, futureTime, tx.Timestamp)
+				/*logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
+				snapTime, futureTime, tx.Timestamp) */
 				removeTx()
 				return nil
 			}
@@ -136,8 +136,8 @@ func processIncomingTX(incoming IncomingTX) error {
 			_checkIncomingError(tx, err)
 			err = addPendingConfirmation(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 			_checkIncomingError(tx, err)
-			logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
-				convert.BytesToTrytes(tx.Hash)[:81], tx.Value)
+			/*logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
+			convert.BytesToTrytes(tx.Hash)[:81], tx.Value) */
 			removeTx()
 			return nil
 		}
