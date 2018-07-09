@@ -324,10 +324,9 @@ func getOldPending(excludeAddress string) *PendingRequest {
 		max = 1000
 	}
 
-	var l int
-	l = len(pendingRequests)
-	if l < max {
-		max = l
+	length := len(pendingRequests)
+	if length < max {
+		max = length
 	}
 
 	for i := 0; i < max; i++ {
@@ -352,21 +351,22 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 		max = 3000
 	}
 
-	var l int
-	l = len(pendingRequests)
-	if l < max {
-		max = l
+	length := len(pendingRequests)
+	if length < max {
+		max = length
 	}
 
-	start := utils.Random(0, max)
+	if max > 0 {
+		start := utils.Random(0, max)
 
-	for i := start; i < max; i++ {
-		k := randmap.FastKey(pendingRequests)
-		v := pendingRequests[k.(string)]
-		if v.LastNeighborAddr != excludeAddress {
-			v.LastTried = time.Now()
-			v.LastNeighborAddr = excludeAddress
-			return v
+		for i := start; i < max; i++ {
+			k := randmap.FastKey(pendingRequests)
+			v := pendingRequests[k.(string)]
+			if v.LastNeighborAddr != excludeAddress {
+				v.LastTried = time.Now()
+				v.LastNeighborAddr = excludeAddress
+				return v
+			}
 		}
 	}
 
