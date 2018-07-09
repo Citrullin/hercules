@@ -20,15 +20,6 @@ import (
 const (
 	// not defined in giota library
 	MaxTimestampValue = 3812798742493 //int64(3^27 - 1) / 2
-
-	// wth didn't they export this ...?
-	TransactionTrinarySize = giota.SignatureMessageFragmentTrinarySize + giota.AddressTrinarySize +
-		giota.ValueTrinarySize + giota.ObsoleteTagTrinarySize + giota.TimestampTrinarySize +
-		giota.CurrentIndexTrinarySize + giota.LastIndexTrinarySize + giota.BundleTrinarySize +
-		giota.TrunkTransactionTrinarySize + giota.BranchTransactionTrinarySize +
-		giota.TagTrinarySize + giota.AttachmentTimestampTrinarySize +
-		giota.AttachmentTimestampLowerBoundTrinarySize + giota.AttachmentTimestampUpperBoundTrinarySize +
-		giota.NonceTrinarySize
 )
 
 var mutex = &sync.Mutex{}
@@ -139,7 +130,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	// validate input trytes before doing PoW
 	for idx, tryte := range trytes {
-		if runes, err := toRunesCheckTrytes(tryte, TransactionTrinarySize/3); err != nil {
+		if runes, err := toRunesCheckTrytes(tryte, giota.TransactionTrinarySize/3); err != nil {
 			ReplyError("Error in Tryte input", c)
 			return
 		} else {
