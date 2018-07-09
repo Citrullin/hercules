@@ -163,7 +163,9 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 	if usePowSrv {
 		logs.Log.Debugf("[PoW] Using powSrv version \"%v\"", serverVersion)
 		logs.Log.Debugf("[PoW] Best method \"%v\"", powType)
-		logs.Log.Debugf("[PoW] Version \"%v\"", powVersion)
+		if powVersion != "" {
+			logs.Log.Debugf("[PoW] Version \"%v\"", powVersion)
+		}
 	} else {
 		logs.Log.Debugf("[PoW] Best method \"%v\"", powType)
 	}
