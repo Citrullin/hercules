@@ -76,11 +76,9 @@ func loadConfig() *viper.Viper {
 	var config = viper.New()
 
 	// 1. Set defaults
-	config.SetDefault("test", 0)
+	//config.SetDefault("test", 0)
 
 	// 2. Get command line arguments
-	flag.StringP("config", "c", "", "Config path")
-
 	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. "+
 		"Try to optimize accordingly.")
 
@@ -115,8 +113,10 @@ func loadConfig() *viper.Viper {
 	flag.IntP("node.port", "u", 14600, "UDP Node port")
 	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
 
-	flag.Parse()
 	config.BindPFlags(flag.CommandLine)
+
+	var configPath = flag.StringP("config", "c", "hercules.config.json", "Config file path")
+	flag.Parse()
 
 	// 3. Bind environment vars
 	replacer := strings.NewReplacer(".", "_")
@@ -125,13 +125,18 @@ func loadConfig() *viper.Viper {
 	config.AutomaticEnv()
 
 	// 3. Load config
-	var configPath = config.GetString("config")
-	if len(configPath) > 0 {
-		logs.Log.Infof("Loading config from: %s", configPath)
-		config.SetConfigFile(configPath)
-		err := config.ReadInConfig()
-		if err != nil {
-			logs.Log.Fatalf("Config could not be loaded from: %s", configPath)
+	if len(*configPath) > 0 {
+		_, err := os.Stat(*configPath)
+		if !flag.CommandLine.Changed("config") && os.IsNotExist(err) {
+			// Standard config file not found => skip
+			logs.Log.Info("Standard config file not found. Loading default settings.")
+		} else {
+			logs.Log.Infof("Loading config from: %s", *configPath)
+			config.SetConfigFile(*configPath)
+			err := config.ReadInConfig()
+			if err != nil {
+				logs.Log.Fatalf("Config could not be loaded from: %s", *configPath)
+			}
 		}
 	}
 
