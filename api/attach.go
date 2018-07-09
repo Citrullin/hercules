@@ -182,7 +182,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 		//attachment fields: tag and timestamps
 		//tag - copy the obsolete tag to the attachment tag field only if tag isn't set.
 		if string(runes[giota.TagTrinaryOffset/3:(giota.TagTrinaryOffset+giota.TagTrinarySize)/3]) == "999999999999999999999999999" {
-			copy(runes[giota.TagTrinarySize/3:], runes[giota.ObsoleteTagTrinaryOffset/3:(giota.ObsoleteTagTrinaryOffset+giota.ObsoleteTagTrinarySize)/3])
+			copy(runes[giota.TagTrinaryOffset/3:], runes[giota.ObsoleteTagTrinaryOffset/3:(giota.ObsoleteTagTrinaryOffset+giota.ObsoleteTagTrinarySize)/3])
 		}
 
 		runesTimeStamp := toRunes(giota.Int2Trits(timestamp, giota.AttachmentTimestampTrinarySize).Trytes())
