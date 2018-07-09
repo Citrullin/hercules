@@ -28,6 +28,11 @@ var maxTransactions = 0
 var usePowSrv = false
 var powClient *powsrv.PowClient
 var interruptAttachToTangle = false
+var powInitialized = false
+var powFunc giota.PowFunc
+var powType string
+var powVersion string
+var serverVersion string
 
 func init() {
 	addStartModule(startAttach)
@@ -140,26 +145,30 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	var prevTransaction []rune
 
-	var powFunc giota.PowFunc
-	var powType string
+	if !powInitialized {
+		if usePowSrv {
+			serverVersion, powType, powVersion, err = powClient.GetPowInfo()
+			if err != nil {
+				ReplyError(err.Error(), c)
+				return
+			}
 
-	// do pow
-	if usePowSrv {
-		serverVersion, powType, _, err := powClient.GetPowInfo()
-		if err != nil {
-			ReplyError(err.Error(), c)
-			return
+			powFunc = powClient.PowFunc
+		} else {
+			powType, powFunc = giota.GetBestPoW()
 		}
-
-		logs.Log.Infof("[PoW] Using powSrv version %v", serverVersion)
-
-		powFunc = powClient.PowFunc
-		logs.Log.Debug("[PoW] Best method", powType)
-	} else {
-		powType, powFunc = giota.GetBestPoW()
-		logs.Log.Debug("[PoW] Best method", powType)
+		powInitialized = true
 	}
 
+	if usePowSrv {
+		logs.Log.Debugf("[PoW] Using powSrv version \"%v\"", serverVersion)
+		logs.Log.Debugf("[PoW] Best method \"%v\"", powType)
+		logs.Log.Debugf("[PoW] Version \"%v\"", powVersion)
+	} else {
+		logs.Log.Debugf("[PoW] Best method \"%v\"", powType)
+	}
+
+	// do pow
 	for idx, runes := range inputRunes {
 		if interruptAttachToTangle {
 			ReplyError("attatchToTangle interrupted", c)
