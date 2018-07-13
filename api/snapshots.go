@@ -1,21 +1,22 @@
 package api
 
 import (
-	"time"
-	"runtime"
-	"net/http"
-    "io/ioutil"
-	"strings"
-	"strconv"
-	"os"
-	"path"
 	"crypto/md5"
-	"io"
 	"encoding/hex"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
 	"../logs"
 	"../snapshot"
+	"github.com/gin-gonic/gin"
 )
 
 func enableSnapshotApi(api *gin.Engine) {
@@ -47,7 +48,7 @@ func enableSnapshotApi(api *gin.Engine) {
 	api.Static("/snapshots", dir)
 }
 
-func getSnapshotsInfo (request Request, c *gin.Context, t time.Time) {
+func getSnapshotsInfo(request Request, c *gin.Context, t time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 
@@ -65,9 +66,10 @@ func getSnapshotsInfo (request Request, c *gin.Context, t time.Time) {
 					checksum, err := fileHash(path.Join(dir, name))
 					if err == nil {
 						timestamps = append(timestamps, gin.H{
-							"timestamp": timestamp,
-							"path": "/snapshots/" + name,
-							"checksum": checksum,
+							"timestamp":         timestamp,
+							"TimeHumanReadable": getHumanReadableTime(timestamp),
+							"path":              "/snapshots/" + name,
+							"checksum":          checksum,
 						})
 					}
 				}
@@ -81,15 +83,15 @@ func getSnapshotsInfo (request Request, c *gin.Context, t time.Time) {
 	unfinishedSnapshotTimestamp := snapshot.GetSnapshotLock(nil)
 
 	c.JSON(http.StatusOK, gin.H{
-		"currentSnapshotTimestamp": snapshot.CurrentTimestamp,
-		"currentSnapshotTimeHumanReadable": getHumanReadableTime(snapshot.CurrentTimestamp),
-		"isSynchronized": snapshot.IsSynchronized(),
-		"unfinishedSnapshotTimestamp": unfinishedSnapshotTimestamp,
+		"currentSnapshotTimestamp":            snapshot.CurrentTimestamp,
+		"currentSnapshotTimeHumanReadable":    getHumanReadableTime(snapshot.CurrentTimestamp),
+		"isSynchronized":                      snapshot.IsSynchronized(),
+		"unfinishedSnapshotTimestamp":         unfinishedSnapshotTimestamp,
 		"unfinishedSnapshotTimeHumanReadable": getHumanReadableTime(unfinishedSnapshotTimestamp),
-		"inProgress": snapshot.InProgress,
-		"snapshots": timestamps,
-		"time": time.Now().Unix(),
-		"duration": getDuration(t),
+		"inProgress":                          snapshot.InProgress,
+		"snapshots":                           timestamps,
+		"time":                                time.Now().Unix(),
+		"duration":                            getDuration(t),
 	})
 }
 
@@ -124,7 +126,7 @@ func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 
 	go snapshot.MakeSnapshot(request.Timestamp)
 	c.JSON(http.StatusOK, gin.H{
-		"time": time.Now().Unix(),
+		"time":     time.Now().Unix(),
 		"duration": getDuration(t),
 	})
 }
