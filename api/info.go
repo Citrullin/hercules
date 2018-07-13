@@ -53,7 +53,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 }
 
 func getHumanReadableTime(timestamp int) string {
-	if timestamp == 0 {
+	if timestamp <= 0 {
 		return ""
 	} else {
 		unitxTime := time.Unix(int64(timestamp), 0)
