@@ -11,6 +11,7 @@ import (
 	"../transaction"
 	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -42,7 +43,12 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			trits := convert.TrytesToTrits(trytes)
 			bits := convert.TrytesToBytes(trytes)[:1604]
 			tx := transaction.TritsToTX(&trits, bits)
-			// TODO: check that there is enough balance
+			balance, err := db.GetInt64(db.GetAddressKey(tx.Address, db.KEY_BALANCE), nil)
+			if err != nil || balance <= 0 || balance < tx.Value {
+				// TODO: collect values from all TXs, map to addesses and check for the whole sum
+				// This is as to prevent multiple partial transactions from the same address in the bundle
+				return errors.New("Insufficient balance")
+			}
 			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
 				err := tangle.SaveTX(tx, &bits, txn)
 				if err != nil {

@@ -233,7 +233,6 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 		}
 	}
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
-	// TODO: (OPT) investigate
 	if totalValue != 0 || !nonZero {
 		return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
 		//return nil, nil, nil

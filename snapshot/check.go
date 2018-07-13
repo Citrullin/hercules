@@ -37,6 +37,7 @@ func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 /*
 Returns whether the current tangle is synchronized
  */
+ // TODO: this check is too slow on bigger databases. The counters should be moved to memory.
 func IsSynchronized () bool {
 	return db.Count(db.KEY_PENDING_CONFIRMED) < 10 &&
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&

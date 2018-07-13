@@ -35,10 +35,9 @@ func confirmOnLoad() {
 	loadPendingConfirmations()
 	logs.Log.Infof("Loaded %v pending confirmations", len(confirmQueue))
 	go startUnknownVerificationThread()
-	// TODO: multi-thread confirm has some issues, still.
-	//for i := 0; i < nbWorkers; i++ {
+	for i := 0; i < nbWorkers; i++ {
 		go startConfirmThread()
-	//}
+	}
 }
 
 func loadPendingConfirmations() {
