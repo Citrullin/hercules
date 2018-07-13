@@ -10,10 +10,12 @@ import (
 	"bufio"
 	"io"
 	"os"
-	"github.com/pkg/errors"
-	"github.com/dgraph-io/badger"
+
 	"../logs"
 	"../db"
+
+	"github.com/dgraph-io/badger"
+	"github.com/pkg/errors"
 )
 
 /*
@@ -36,9 +38,8 @@ func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 Returns whether the current tangle is synchronized
  */
 func IsSynchronized () bool {
-	return db.LatestTransactionTimestamp > int(time.Now().Unix() - MAX_LATEST_TRANSACTION_AGE) &&
-		db.Count(db.KEY_PENDING_CONFIRMED) < 20 &&
-		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 20 &&
+	return db.Count(db.KEY_PENDING_CONFIRMED) < 10 &&
+		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 5
 }
 

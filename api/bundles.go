@@ -42,6 +42,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			trits := convert.TrytesToTrits(trytes)
 			bits := convert.TrytesToBytes(trytes)[:1604]
 			tx := transaction.TritsToTX(&trits, bits)
+			// TODO: check that there is enough balance
 			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
 				err := tangle.SaveTX(tx, &bits, txn)
 				if err != nil {
@@ -50,7 +51,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 				stored++
 			}
 			if broadcast {
-				tangle.Broadcast(tx.Bytes)
+				tangle.Broadcast(tx.Bytes, "")
 				broadcasted++
 			}
 			return nil

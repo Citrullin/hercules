@@ -15,7 +15,7 @@ import (
 
 const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
-	reRequestInterval  = time.Duration(2) * time.Second
+	reRequestInterval  = time.Duration(10) * time.Second
 	maxIncoming        = 50
 )
 
@@ -28,14 +28,18 @@ type PendingRequest struct {
 
 var lastTip = time.Now()
 var pendingRequests map[string]*PendingRequest
-var rotatePending = 0
 
-func Broadcast(data []byte) int {
+func Broadcast(data []byte, exclude string) int {
 	sent := 0
 
 	server.NeighborsLock.RLock()
 	for _, neighbor := range server.Neighbors {
 		server.NeighborsLock.RUnlock()
+
+		if neighbor.Addr == exclude {
+			server.NeighborsLock.RLock()
+			continue
+		}
 
 		request := getSomeRequestByAddress(neighbor.Addr, false)
 		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
@@ -78,7 +82,7 @@ func loadPendingRequests() {
 			dec := gob.NewDecoder(buf)
 			err := dec.Decode(&hash)
 			if err == nil {
-				timestamp, err := db.GetInt(db.AsKey(item.Key(), db.KEY_PENDING_TIMESTAMP), txn)
+				timestamp, err := db.GetInt64(db.AsKey(item.Key(), db.KEY_PENDING_TIMESTAMP), txn)
 				if err == nil {
 					for _, neighbor := range server.Neighbors {
 						queue, ok := requestQueues[neighbor.Addr]
@@ -89,7 +93,7 @@ func loadPendingRequests() {
 						}
 						*queue <- &Request{hash, false}
 					}
-					addPendingRequest(hash, timestamp, "")
+					addPendingRequest(hash, timestamp, "", false)
 					added++
 				} else {
 					logs.Log.Warning("Could not load pending Tx Timestamp")
@@ -168,35 +172,14 @@ func outgoingRunner() {
 	server.NeighborsLock.RUnlock()
 }
 
-func requestIfMissing(hash []byte, IPAddressWithPort string, txn *badger.Txn) (has bool, err error) {
-	tx := txn
+func requestIfMissing(hash []byte, IPAddressWithPort string) (has bool, err error) {
 	has = true
 	if bytes.Equal(hash, tipFastTX.Hash) {
 		return has, nil
 	}
-	if txn == nil {
-		tx = db.DB.NewTransaction(true)
-		defer func() error {
-			return tx.Commit(func(e error) {})
-		}()
-	}
 	key := db.GetByteKey(hash, db.KEY_HASH)
-	if !db.Has(key, tx) && !db.Has(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), tx) {
-		timestamp := int(time.Now().Unix())
-		err := db.Put(db.AsKey(key, db.KEY_PENDING_HASH), hash, nil, txn)
-		err2 := db.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil, txn)
-
-		if err != nil {
-			logs.Log.Error("Failed saving new TX request", err)
-			return false, err
-		}
-
-		if err2 != nil {
-			logs.Log.Error("Failed saving new TX request", err)
-			return false, err
-		}
-
-		pending := addPendingRequest(hash, timestamp, IPAddressWithPort)
+	if !db.Has(key, nil) && !db.Has(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), nil) {
+		pending := addPendingRequest(hash, 0, IPAddressWithPort, true)
 		if pending != nil {
 			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 			if neighbor != nil {
@@ -276,6 +259,12 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn
 			if pendingRequest != nil {
 				req = pendingRequest.Hash
 			}
+			if req == nil {
+				pendingRequest = getAnyRandomOldPending(addr)
+				if pendingRequest != nil {
+					req = pendingRequest.Hash
+				}
+			}
 		}
 	}
 	if req == nil {
@@ -287,7 +276,7 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn
 	return &Message{Bytes: &resp, Requested: &req, IPAddressWithPort: IPAddressWithPort}
 }
 
-func addPendingRequest(hash []byte, timestamp int, IPAddressWithPort string) *PendingRequest {
+func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, save bool) *PendingRequest {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 
@@ -297,7 +286,24 @@ func addPendingRequest(hash []byte, timestamp int, IPAddressWithPort string) *Pe
 	if ok {
 		return pendingRequest
 	}
-	pendingRequest = &PendingRequest{Hash: hash, Timestamp: timestamp, LastTried: time.Now(), LastNeighborAddr: IPAddressWithPort}
+
+	if timestamp == 0 {
+		timestamp = time.Now().Add(-reRequestInterval).Unix()
+	}
+
+	if save {
+		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
+		db.Put(key, hash, nil, nil)
+		db.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil, nil)
+	}
+
+	addr := IPAddressWithPort
+	neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
+	if neighbor != nil {
+		addr = neighbor.Addr
+	}
+
+	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now(), LastNeighborAddr: addr}
 	pendingRequests[key] = pendingRequest
 	return pendingRequest
 }
@@ -311,6 +317,9 @@ func removePendingRequest(hash []byte) bool {
 
 	if ok {
 		delete(pendingRequests, key)
+		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
+		db.Remove(key, nil)
+		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), nil)
 	}
 	return ok
 }
@@ -319,9 +328,9 @@ func getOldPending(excludeAddress string) *PendingRequest {
 	pendingRequestLocker.RLock()
 	defer pendingRequestLocker.RUnlock()
 
-	max := 5000
+	max := 1000
 	if lowEndDevice {
-		max = 1000
+		max = 200
 	}
 
 	l := len(pendingRequests)
@@ -332,8 +341,9 @@ func getOldPending(excludeAddress string) *PendingRequest {
 	for i := 0; i < max; i++ {
 		k := randmap.FastKey(pendingRequests)
 		v := pendingRequests[k.(string)]
-		if time.Now().Sub(v.LastTried) > reRequestInterval && v.LastNeighborAddr != excludeAddress {
-			v.LastTried = time.Now()
+		now := time.Now()
+		if now.Sub(v.LastTried) > reRequestInterval && v.LastNeighborAddr != excludeAddress {
+			v.LastTried = now
 			v.LastNeighborAddr = excludeAddress
 			return v
 		}
@@ -352,6 +362,9 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 	}
 
 	l := len(pendingRequests)
+	if l < 1 {
+		return nil
+	}
 	if l < max {
 		max = l
 	}

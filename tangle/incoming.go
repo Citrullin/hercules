@@ -35,12 +35,7 @@ func incomingRunner() {
 		db.Locker.Lock()
 		db.Locker.Unlock()
 
-		var isJustTipRequest = bytes.Equal(data, tipBytes)
 		var hash []byte
-
-		if isJustTipRequest && utils.Random(0, 100) < P_TIP_REPLY {
-			continue
-		}
 
 		fingerprint := db.GetByteKey(data, db.KEY_FINGERPRINT)
 		if !hasFingerprint(fingerprint) {
@@ -48,12 +43,12 @@ func incomingRunner() {
 			var tx = transaction.TritsToTX(&trits, data)
 			hash = tx.Hash
 
-			if !isJustTipRequest {
+			if !bytes.Equal(data, tipBytes) {
 				if !crypt.IsValidPoW(tx.Hash, MWM) {
 					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
 				} else {
 					err := processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
-					if err != nil {
+					if err == nil {
 						incomingProcessed++
 						addFingerprint(fingerprint)
 					}
@@ -67,16 +62,19 @@ func incomingRunner() {
 		}
 
 		var reply []byte = nil
-		var isTipRequest = isJustTipRequest || (hash != nil && bytes.Equal(hash, req))
+		var isLookingForTX = !bytes.Equal(req, tipBytes[:49]) && (hash == nil || !bytes.Equal(hash, req))
 
-		if !isTipRequest {
+		if isLookingForTX {
 			reply, _ = db.GetBytes(db.GetByteKey(req, db.KEY_BYTES), nil)
+		} else if utils.Random(0, 100) < P_TIP_REPLY {
+			// If this is a tip request, drop randomly
+			continue
 		}
 
-		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort, true)
-		// It's a specific (not tip) request that we do not have.
-		// Avoid creating a tip request on our own
-		if !isTipRequest && request == nil && reply == nil {
+		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort, false)
+		if isLookingForTX && request == nil && reply == nil {
+			// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
+			// then do not reply. If we do not have it, but have something to ask, then ask.
 			continue
 		}
 
@@ -87,20 +85,13 @@ func incomingRunner() {
 func processIncomingTX(incoming IncomingTX) error {
 	tx := incoming.TX
 	var pendingMilestone *PendingMilestone
-	var hash []byte
-	var pendingKey []byte
 	err := db.DB.Update(func(txn *badger.Txn) (e error) {
 		// TODO: catch error defer here
 		var key = db.GetByteKey(tx.Hash, db.KEY_HASH)
-		hash = tx.Hash
-
-		pendingKey = db.AsKey(key, db.KEY_PENDING_HASH)
-		db.Remove(pendingKey, txn)
-		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
 		removePendingRequest(tx.Hash)
 
 		removeTx := func() {
-			logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
+			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
@@ -120,17 +111,17 @@ func processIncomingTX(incoming IncomingTX) error {
 		if isOutsideOfTimeframe && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
 			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
 			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
-					snapTime, futureTime, tx.Timestamp)
+				//logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
+				//	snapTime, futureTime, tx.Timestamp)
 				removeTx()
 				return nil
 			}
 		}
 
 		if db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn) {
-			_, err := requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort, txn)
+			_, err := requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(tx, err)
-			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort, txn)
+			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(tx, err)
 			err = addPendingConfirmation(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 			_checkIncomingError(tx, err)
@@ -145,16 +136,15 @@ func processIncomingTX(incoming IncomingTX) error {
 		if !db.Has(key, txn) {
 			err := SaveTX(tx, incoming.Bytes, txn)
 			_checkIncomingError(tx, err)
-			db.LatestTransactionTimestamp = tx.Timestamp
 			if isMaybeMilestone(tx) {
 				trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
 				err := db.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil, txn)
 				_checkIncomingError(tx, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort, txn)
+			_, err = requestIfMissing(tx.TrunkTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(tx, err)
-			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort, txn)
+			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(tx, err)
 
 			// EVENTS:
@@ -175,7 +165,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(tx.Bytes)
+				Broadcast(tx.Bytes, incoming.IPAddressWithPort)
 			}
 
 			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: 1}
@@ -192,18 +182,10 @@ func processIncomingTX(incoming IncomingTX) error {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		if !lowEndDevice && err == badger.ErrConflict {
-			atomic.AddInt64(&totalTransactions, -1)
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: -1}
-			processIncomingTX(incoming)
-		} else {
-			if pendingKey != nil {
-				nowUnix := time.Now().Unix()
-				db.Put(pendingKey, hash, nil, nil)
-				db.Put(db.AsKey(pendingKey, db.KEY_PENDING_TIMESTAMP), nowUnix, nil, nil)
-				addPendingRequest(hash, int(nowUnix), incoming.IPAddressWithPort)
-			}
-		}
+		addPendingRequest(tx.Hash, 0, incoming.IPAddressWithPort, true)
+
+		atomic.AddInt64(&totalTransactions, -1)
+		server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: -1}
 	}
 	return err
 }

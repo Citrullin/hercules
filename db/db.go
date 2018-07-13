@@ -20,7 +20,6 @@ const (
 var DB *badger.DB
 var config *viper.Viper
 var Locker = &sync.Mutex{}
-var LatestTransactionTimestamp = 0
 
 /*
 Loads the database and configures according the the config options.
@@ -34,10 +33,10 @@ func Load(cfg *viper.Viper) {
 	opts.Dir = config.GetString("database.path")
 	opts.ValueDir = opts.Dir
 
+	opts.ValueLogLoadingMode = options.FileIO
+	opts.TableLoadingMode = options.FileIO
 	// Source: https://github.com/dgraph-io/badger#memory-usage
 	if config.GetBool("light") {
-		opts.ValueLogLoadingMode = options.FileIO
-		opts.TableLoadingMode = options.FileIO
 		opts.NumMemtables = 1
 		opts.NumLevelZeroTables = 1
 		opts.NumLevelZeroTablesStall = 2

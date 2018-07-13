@@ -35,7 +35,10 @@ func confirmOnLoad() {
 	loadPendingConfirmations()
 	logs.Log.Infof("Loaded %v pending confirmations", len(confirmQueue))
 	go startUnknownVerificationThread()
-	go startConfirmThread()
+	// TODO: multi-thread confirm has some issues, still.
+	//for i := 0; i < nbWorkers; i++ {
+		go startConfirmThread()
+	//}
 }
 
 func loadPendingConfirmations() {
@@ -71,23 +74,23 @@ func loadPendingConfirmations() {
 }
 
 func startConfirmThread() {
-	for pendingConfirmation := range confirmQueue {
-		db.Locker.Lock()
-		db.Locker.Unlock()
-		err := db.DB.Update(func(txn *badger.Txn) error {
-			return confirm(pendingConfirmation.key, txn)
-		})
-		if err != nil {
-			go func () {
-				time.Sleep(time.Second)
-				confirmQueue <- pendingConfirmation
-			}()
-		}
+	for {
 		if snapshot.InProgress {
 			time.Sleep(time.Second)
+			continue
 		} else {
 			time.Sleep(CONFIRM_CHECK_INTERVAL)
 		}
+		pendingConfirmation := <- confirmQueue
+		db.Locker.Lock()
+		db.Locker.Unlock()
+		db.DB.Update(func(txn *badger.Txn) error {
+			err := confirm(pendingConfirmation.key, txn)
+			if err != nil {
+				confirmQueue <- pendingConfirmation
+			}
+			return err
+		})
 	}
 }
 
@@ -143,7 +146,7 @@ func confirm(key []byte, txn *badger.Txn) error {
 	trits := convert.BytesToTrits(data)[:8019]
 	var tx = transaction.TritsToFastTX(&trits, data)
 
-	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) && !bytes.Equal(tx.Address, COO_ADDRESS_BYTES) {
+	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) && !isMaybeMilestonePart(tx) {
 		logs.Log.Debug("TX pending for trim, skipping",
 			tx.Timestamp, snapshot.GetSnapshotTimestamp(txn), convert.BytesToTrytes(tx.Address)[:81])
 		if false && tx.Value != 0 {

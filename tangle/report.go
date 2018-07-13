@@ -12,9 +12,13 @@ func Report() {
 	logs.Log.Debugf("SERVER I/O Q:  %v, %v \n",
 		len(srv.Incoming),
 		len(srv.Outgoing))
-	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v", totalTransactions, len(pendingRequests))
-	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v, Unknown: %v",
+	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)",
+		totalTransactions,
+		db.Count(db.KEY_PENDING_HASH),
+		len(pendingRequests))
+	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v (%v), Unknown: %v",
 		totalConfirmations,
+		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
 		len(confirmQueue),
 		db.Count(db.KEY_PENDING_CONFIRMED))
 	logs.Log.Debugf("PENDING TRIMS: %v", db.Count(db.KEY_EVENT_TRIM_PENDING))

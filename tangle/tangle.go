@@ -82,7 +82,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
-	//checkConsistency(true, false)
+	// checkConsistency(true, false)
 
 
 	// This had to be done due to the tangle split in May 2018.
@@ -100,7 +100,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	go func() {
 		for {
 			outgoingRunner()
-			time.Sleep(time.Duration(5) * time.Millisecond)
+			time.Sleep(time.Duration(2) * time.Millisecond)
 		}
 	}()
 }
@@ -140,8 +140,8 @@ func checkConsistency (skipRequests bool, skipConfirmations bool) {
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				tx := transaction.TritsToFastTX(&trits, txBytes)
 				db.DB.Update(func(txn *badger.Txn) error {
-					requestIfMissing(tx.TrunkTransaction, "", txn)
-					requestIfMissing(tx.BranchTransaction, "", txn)
+					requestIfMissing(tx.TrunkTransaction, "")
+					requestIfMissing(tx.BranchTransaction, "")
 					return nil
 				})
 			}

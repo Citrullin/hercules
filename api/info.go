@@ -38,7 +38,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"availableProcessors":                runtime.NumCPU(),
 		"currentRoutines":                    runtime.NumGoroutine(),
 		"allocatedMemory":                    stats.Sys,
-		"latestMilestone":                    convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
+		"latestMilestone":                    milestone,
 		"latestMilestoneIndex":               tangle.LatestMilestone.Index,
 		"latestSolidSubtangleMilestone":      solid,
 		"latestSolidSubtangleMilestoneIndex": sindex,

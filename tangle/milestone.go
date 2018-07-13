@@ -69,7 +69,7 @@ func LoadMissingMilestonesFromFile(path string) error {
 		hash := convert.TrytesToBytes(line)
 		if len(hash) < 49 { continue }
 		hash = hash[:49]
-		has, err := requestIfMissing(hash, "", nil)
+		has, err := requestIfMissing(hash, "")
 		if err == nil {
 			if !has {
 				//logs.Log.Warning("MISSING", line)
@@ -378,4 +378,8 @@ func isMaybeMilestone(tx *transaction.FastTX) bool {
 
 func isMaybeMilestonePair(tx *transaction.FastTX) bool {
 	return bytes.Equal(tx.Address, COO_ADDRESS2_BYTES) && tx.Value == 0
+}
+
+func isMaybeMilestonePart (tx *transaction.FastTX) bool {
+	return tx.Value == 0 && (bytes.Equal(tx.Address, COO_ADDRESS_BYTES) || bytes.Equal(tx.Address, COO_ADDRESS2_BYTES))
 }
