@@ -67,7 +67,7 @@ func getSnapshotsInfo(request Request, c *gin.Context, t time.Time) {
 					if err == nil {
 						timestamps = append(timestamps, gin.H{
 							"timestamp":         timestamp,
-							"TimeHumanReadable": getHumanReadableTime(timestamp),
+							"TimeHumanReadable": getHumanReadableTime(int(timestamp)),
 							"path":              "/snapshots/" + name,
 							"checksum":          checksum,
 						})
