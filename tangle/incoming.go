@@ -127,8 +127,8 @@ func processIncomingTX(incoming IncomingTX) error {
 			_checkIncomingError(tx, err)
 			err = addPendingConfirmation(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
 			_checkIncomingError(tx, err)
-			logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
-				convert.BytesToTrytes(tx.Hash)[:81], tx.Value)
+			/*logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
+			convert.BytesToTrytes(tx.Hash)[:81], tx.Value) */
 			removeTx()
 			return nil
 		}
