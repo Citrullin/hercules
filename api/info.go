@@ -44,7 +44,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"latestSolidSubtangleMilestoneIndex": sindex,
 		"neighbors":                          len(server.Neighbors),
 		"currentSnapshotTimestamp":           snapshot.CurrentTimestamp,
-		"currentSnapshotTimeHumanReadable":   getHumanReadableSnapshotTime(),
+		"currentSnapshotTimeHumanReadable":   getHumanReadableTime(snapshot.CurrentTimestamp),
 		"isSynchronized":                     snapshot.IsSynchronized(),
 		"tips":                               len(tangle.Tips),
 		"time":                               time.Now().Unix(),
@@ -52,11 +52,11 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 	})
 }
 
-func getHumanReadableSnapshotTime() string {
-	if snapshot.CurrentTimestamp == 0 {
+func getHumanReadableTime(timestamp int) string {
+	if timestamp == 0 {
 		return ""
 	} else {
-		unitxTime := time.Unix(int64(snapshot.CurrentTimestamp), 0)
+		unitxTime := time.Unix(int64(timestamp), 0)
 		return unitxTime.In(utcLocation).Format(time.RFC822)
 	}
 }

@@ -78,11 +78,14 @@ func getSnapshotsInfo (request Request, c *gin.Context, t time.Time) {
 	if timestamps == nil {
 		timestamps = make([]map[string]interface{}, 0)
 	}
+	unfinishedSnapshotTimestamp := snapshot.GetSnapshotLock(nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"currentSnapshotTimestamp": snapshot.CurrentTimestamp,
+		"currentSnapshotTimeHumanReadable": getHumanReadableTime(snapshot.CurrentTimestamp),
 		"isSynchronized": snapshot.IsSynchronized(),
-		"unfinishedSnapshotTimestamp": snapshot.GetSnapshotLock(nil),
+		"unfinishedSnapshotTimestamp": unfinishedSnapshotTimestamp,
+		"unfinishedSnapshotTimeHumanReadable": getHumanReadableTime(unfinishedSnapshotTimestamp),
 		"inProgress": snapshot.InProgress,
 		"snapshots": timestamps,
 		"time": time.Now().Unix(),
