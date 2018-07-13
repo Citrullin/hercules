@@ -41,7 +41,6 @@ func confirmOnLoad() {
 }
 
 func loadPendingConfirmations() {
-	logs.Log.Debug("to load:", db.Count(db.KEY_EVENT_CONFIRMATION_PENDING))
 	_ = db.DB.View(func(txn *badger.Txn) (e error) {
 		opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
@@ -96,6 +95,9 @@ func startConfirmThread() {
 func startUnknownVerificationThread() {
 	flushTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
 	for range flushTicker.C {
+		if len(confirmQueue) == 0 {
+			loadPendingConfirmations()
+		}
 		_ = db.DB.View(func(txn *badger.Txn) error {
 			opts := badger.DefaultIteratorOptions
 			it := txn.NewIterator(opts)
