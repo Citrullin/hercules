@@ -45,14 +45,14 @@ func Start(apiConfig *viper.Viper) {
 	if !config.GetBool("api.debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	limitAccess = config.GetStringSlice("api.limitRemoteAccess")
-	logs.Log.Debug("Limited remote access to:", limitAccess)
 
-    // pass config to modules if they need it
-    for _, f := range startModules {
-        f(apiConfig)
-    }
-    
+	configureLimitAccess()
+
+	// pass config to modules if they need it
+	for _, f := range startModules {
+		f(apiConfig)
+	}
+
 	api = gin.Default()
 
 	username := config.GetString("api.auth.username")
@@ -67,15 +67,14 @@ func Start(apiConfig *viper.Viper) {
 		var request Request
 		err := c.ShouldBindJSON(&request)
 		if err == nil {
-
-			if triesToAccessLimited(request.Command, c) {
+			caseInsensitiveCommand := strings.ToLower(request.Command)
+			if triesToAccessLimited(caseInsensitiveCommand, c) {
 				logs.Log.Warningf("Denying limited command request %v from remote %v",
 					request.Command, c.Request.RemoteAddr)
 				ReplyError("Limited remote command access", c)
 				return
 			}
 
-			caseInsensitiveCommand := strings.ToLower(request.Command)
 			apiCall, apiCallExists := apiCalls[caseInsensitiveCommand]
 			if apiCallExists {
 				apiCall(request, c, t)
@@ -127,12 +126,24 @@ func getDuration(t time.Time) float64 {
 	return time.Now().Sub(t).Seconds()
 }
 
-func triesToAccessLimited(command string, c *gin.Context) bool {
+func configureLimitAccess() {
+	localLimitAccess := config.GetStringSlice("api.limitRemoteAccess")
+
+	if len(localLimitAccess) > 0 {
+		for _, limitAccessEntry := range localLimitAccess {
+			limitAccess = append(limitAccess, strings.ToLower(limitAccessEntry))
+		}
+
+		logs.Log.Debug("Limited remote access to:", localLimitAccess)
+	}
+}
+
+func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 	if c.Request.RemoteAddr[:9] == "127.0.0.1" {
 		return false
 	}
-	for _, l := range limitAccess {
-		if l == command {
+	for _, caseInsensitiveLimitAccessEntry := range limitAccess {
+		if caseInsensitiveLimitAccessEntry == caseInsensitiveCommand {
 			return true
 		}
 	}
@@ -145,5 +156,5 @@ func addAPICall(apiCall string, implementation func(request Request, c *gin.Cont
 }
 
 func addStartModule(implementation func(apiConfig *viper.Viper)) {
-    startModules = append(startModules, implementation)
+	startModules = append(startModules, implementation)
 }
