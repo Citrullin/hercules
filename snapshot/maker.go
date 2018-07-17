@@ -19,7 +19,7 @@ type KeyValue struct {
 /*
 Creates a snapshot on the current tangle database.
  */
-func MakeSnapshot (timestamp int) error {
+func MakeSnapshot(timestamp int, filename string) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
 	InProgress = true
 	defer func() {
@@ -180,7 +180,7 @@ func MakeSnapshot (timestamp int) error {
 			if err != nil { return err }
 			db.RemoveAll(db.KEY_EDGE)
 			path := config.GetString("snapshots.path")
-			err = SaveSnapshot(path, timestamp)
+			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil { return err }
 			logs.Log.Info("Snapshot finished and saved in", path)
 			return nil

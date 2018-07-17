@@ -104,6 +104,7 @@ func doLoadSnapshot (path string) error{
 	rd := bufio.NewReader(f)
 	var total int64 = 0
 	var totalSpent int64 = 0
+	var firstLine = true
 	var txn = db.DB.NewTransaction(true)
 
 	for {
@@ -120,6 +121,15 @@ func doLoadSnapshot (path string) error{
 		if line == SNAPSHOT_SEPARATOR {
 			stage++
 			continue
+		}
+
+		if firstLine {
+			firstLine = false
+			tokens := strings.Split(line, ";")
+			if len(tokens) < 2 {
+				// Header
+				continue
+			}
 		}
 		if stage == 0 {
 			tokens := strings.Split(line, ";")

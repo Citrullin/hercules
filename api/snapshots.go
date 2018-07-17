@@ -16,6 +16,7 @@ import (
 
 	"../logs"
 	"../snapshot"
+	"../utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -67,7 +68,7 @@ func getSnapshotsInfo(request Request, c *gin.Context, t time.Time) {
 					if err == nil {
 						timestamps = append(timestamps, gin.H{
 							"timestamp":         timestamp,
-							"TimeHumanReadable": getHumanReadableTime(int(timestamp)),
+							"TimeHumanReadable": utils.GetHumanReadableTime(int(timestamp)),
 							"path":              "/snapshots/" + name,
 							"checksum":          checksum,
 						})
@@ -84,10 +85,10 @@ func getSnapshotsInfo(request Request, c *gin.Context, t time.Time) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"currentSnapshotTimestamp":            snapshot.CurrentTimestamp,
-		"currentSnapshotTimeHumanReadable":    getHumanReadableTime(snapshot.CurrentTimestamp),
+		"currentSnapshotTimeHumanReadable":    utils.GetHumanReadableTime(snapshot.CurrentTimestamp),
 		"isSynchronized":                      snapshot.IsSynchronized(),
 		"unfinishedSnapshotTimestamp":         unfinishedSnapshotTimestamp,
-		"unfinishedSnapshotTimeHumanReadable": getHumanReadableTime(unfinishedSnapshotTimestamp),
+		"unfinishedSnapshotTimeHumanReadable": utils.GetHumanReadableTime(unfinishedSnapshotTimestamp),
 		"inProgress":                          snapshot.InProgress,
 		"snapshots":                           timestamps,
 		"time":                                time.Now().Unix(),
@@ -124,7 +125,7 @@ func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 		return
 	}
 
-	go snapshot.MakeSnapshot(request.Timestamp)
+	go snapshot.MakeSnapshot(request.Timestamp, request.Filename)
 	c.JSON(http.StatusOK, gin.H{
 		"time":     time.Now().Unix(),
 		"duration": getDuration(t),

@@ -39,7 +39,6 @@ func StartHercules() {
 	db.Load(config)
 	srv := server.Create(config)
 
-	//snapshot.LoadAddressBytes("snapshots/1528630000.snap")
 	snapshot.Start(config)
 	tangle.Start(srv, config)
 	server.Start()
@@ -91,6 +90,8 @@ func loadConfig() *viper.Viper {
 	flag.String("database.path", "data", "Path to the database directory")
 
 	flag.String("snapshots.path", "data", "Path to the snapshots directory")
+	flag.String("snapshots.filename", "", "If set, the snapshots will be saved using this name, "+
+		"otherwise <timestamp>.snap wil be used")
 	flag.String("snapshots.loadFile", "", "Path to a snapshot file to load")
 	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
 	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")

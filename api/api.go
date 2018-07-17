@@ -22,6 +22,7 @@ type Request struct {
 	Transactions []string
 	Trytes       []string
 	Timestamp    int
+	Filename     string
 	// for attachToTangle
 	TrunkTransaction   string
 	BranchTransaction  string

@@ -156,7 +156,7 @@ func startAutosnapshots() {
 		logs.Log.Info("Starting automatic snapshot...")
 		if !InProgress {
 			timestamp := int(time.Now().Unix()) - (snapshotPeriod * 3600)
-			MakeSnapshot(timestamp)
+			MakeSnapshot(timestamp, "")
 		} else {
 			logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
 		}

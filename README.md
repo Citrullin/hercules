@@ -221,6 +221,11 @@ UDP port to be used for your Hercules node.
 
 Path where to store the snapshots.
 
+#### --snapshots.filename=""
+
+Filename to use for the generated snapshots. If this value is empty a dynamic name will be used,
+consisting of a unix timestamp: `<timestamp>.snap`
+
 #### --snapshots.loadFile="snapshots/1234567.snap"
 
 When you first start Hercules, you should load an initial
@@ -276,6 +281,16 @@ API.
 
 The snapshots are stored in the directory defined by the `snapshots.path` option.
 They are currently not auto-deleted (currently about 80MB each).
+
+If `snapshots.filename` option has been provided, it will be used as a filename for the snapshot.
+Otherwise, a dynamic `<timestamp>.snap` name will be used. You have an option to set
+another filename, when calling the API by providing `filename` property in your API request JSON:
+
+```
+curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "makeSnapshot", "timestamp": 12345, "filename": "latest.snap"}'
+```
+
+If that file already exists, it will be overwritten.
 
 ### API
 

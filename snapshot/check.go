@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"strings"
-	"path/filepath"
 	"strconv"
 	"time"
 	"bufio"
@@ -13,6 +12,7 @@ import (
 
 	"../logs"
 	"../db"
+	"../utils"
 
 	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
@@ -121,12 +121,16 @@ func checkDatabaseSnapshot () bool {
 
 func checkSnapshotFile (path string) (timestamp int64, err error) {
 	// Check timestamp
-	filename := filepath.Base(path)
-	timestamp, err = strconv.ParseInt(strings.Split(filename, ".")[0], 10, 32)
+	header, err := loadHeader(path)
 
-	if err != nil || timestamp < TIMESTAMP_MIN || timestamp > time.Now().Unix() {
-		return 0, errors.New("timestamp validation failed")
+	if err != nil {
+		return 0, err
 	}
+
+	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)",
+		header.version, utils.GetHumanReadableTime(int(header.timestamp)), header.timestamp)
+
+	timestamp = header.timestamp
 
 	current, err := db.GetInt([]byte{db.KEY_SNAPSHOT_DATE}, nil)
 	if err == nil && int64(current) > timestamp {
@@ -154,6 +158,7 @@ func checkSnapshotFileIntegrity (path string) error {
 	var checkingSpent = false
 	var total int64 = 0
 	var totalSpent int64 = 0
+	var firstLine = true
 
 	rd := bufio.NewReader(f)
 	for {
@@ -174,6 +179,10 @@ func checkSnapshotFileIntegrity (path string) error {
 				totalSpent++
 			} else {
 				tokens := strings.Split(line, ";")
+				if firstLine && len(tokens) < 2 {
+					// Header
+					continue
+				}
 				value, err := strconv.ParseInt(tokens[1], 10, 64)
 				if err != nil {
 					logs.Log.Errorf("Error parsing address value: %v => %v", tokens[1], err)
@@ -182,6 +191,7 @@ func checkSnapshotFileIntegrity (path string) error {
 				total += value
 			}
 		}
+		firstLine = false
 	}
 
 	if totalSpent < MIN_SPENT_ADDRESSES {
@@ -215,7 +225,7 @@ func checkPendingSnapshot () {
 			LoadSnapshot(filename)
 		} else {
 			logs.Log.Info("Found pending snapshot lock. Trying to continue... ", timestamp)
-			MakeSnapshot(timestamp)
+			MakeSnapshot(timestamp, "")
 		}
 	}
 }

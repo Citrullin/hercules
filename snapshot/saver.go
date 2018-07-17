@@ -16,11 +16,22 @@ import (
 	"../utils"
 )
 
-func SaveSnapshot (snapshotDir string, timestamp int) error {
+const currentHeaderVersion = "1"
+
+func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
 	utils.CreateDirectory(snapshotDir)
 
-	savepth := path.Join(snapshotDir, strconv.FormatInt(int64(timestamp), 10) + ".snap")
+
+	timestampString := strconv.FormatInt(int64(timestamp), 10)
+	if len(filename) == 0 {
+		filename = config.GetString("snapshots.filename")
+	}
+	if len(filename) == 0 {
+		filename = timestampString + ".snap"
+	}
+
+	savepth := path.Join(snapshotDir, filename)
 	pth := savepth + "_"
 	file, err := os.Create(pth)
 	if err != nil {
@@ -32,6 +43,9 @@ func SaveSnapshot (snapshotDir string, timestamp int) error {
 	w := bufio.NewWriter(file)
 
 	var lineBuffer []string
+
+	// Write header
+	fmt.Fprintln(w, currentHeaderVersion+","+timestampString)
 
 	var addToBuffer = func (line string) {
 		if lowEndDevice {
