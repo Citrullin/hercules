@@ -44,7 +44,9 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			bits := convert.TrytesToBytes(trytes)[:1604]
 			tx := transaction.TritsToTX(&trits, bits)
 
-			if tx.Value != 0 {
+			// tx.Address is the receiving address
+			// only when the transaction value is negative we should check for balance in the receiving address
+			if tx.Value < 0 {
 				balance, err := db.GetInt64(db.GetAddressKey(tx.Address, db.KEY_BALANCE), nil)
 				if err != nil {
 					addressTrytes := convert.BytesToTrytes(tx.Address)
@@ -54,7 +56,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 
 					// TODO: collect values from all TXs, map to addesses and check for the whole sum
 					// This is as to prevent multiple partial transactions from the same address in the bundle
-					return errors.Errorf("Insufficient balance. Sender address: %s Balance: %v Tx value: %v", addressTrytes, balance, tx.Value)
+					return errors.Errorf("Insufficient balance. Address: %s Balance: %v Tx value: %v", addressTrytes, balance, tx.Value)
 				}
 			}
 
@@ -72,7 +74,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			return nil
 		})
 		if err != nil {
-			logs.Log.Warning("Error while saving transaction", err)
+			logs.Log.Warning("Error while saving transaction. ", err)
 			ReplyError("Error encountered while saving a transaction", c)
 			return
 		}
