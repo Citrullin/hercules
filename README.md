@@ -60,7 +60,7 @@ export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 
 Now run `go version` to make sure that everything works and you have the correct version installed.  You may need to reboot (`sudo reboot`) for the go env variable changes to take effect.  
 
-# Install gcc
+### Install gcc
 ```
 sudo apt-get install gcc
 ```
@@ -147,18 +147,43 @@ By default, the authentication is disabled.
 
 Log each request that is made to the API. Default is off
 
-#### --api.host="127.0.0.1" or -h="127.0.0.1"
+#### --api.http.useHttp=false
+Node will NOT accept API requests using HTTP. Default is on.
 
-The host to listen to. Setting it to `127.0.0.1` will make the API only accept localhost connections.
-the default is `0.0.0.0`` which allows the API server to listen to all connections.
+#### --api.http.host="127.0.0.1" or -h="127.0.0.1"
+
+Setting it to `127.0.0.1` will make the API only accept localhost connections.
+The default is `0.0.0.0` which allows the API server to listen to connections in all networks (including internet!).
+
+#### --api.http.port=14265 or -p=14265
+
+Port the API server should listen for HTTP requests on.
+
+#### --api.https.useHttps
+Node will accept API requests using HTTPS. Default is off.
+
+#### --api.https.host="192.168.0.0"
+
+Setting it to `192.168.0.0` will make the API only accept connections from that network.
+The default is `0.0.0.0` which allows the API server to listen to connections in all networks (including internet!).
+
+#### --api.https.port=14266
+
+Port the API server should listen for HTTPS requests on.
+If you want to use port 443 you need to run the command below to allow hercules to listen on that port
+```
+sudo setcap CAP_NET_BIND_SERVICE=+eip /path/to/hercules
+```
+
+#### --api.https.certificatePath="cert.pem"
+Path to certificate file
+
+#### --api.https.privateKeyPath="key.pem"
+Path to private key used to generate the certificate file
 
 #### --api.limitRemoteAccess="getNeighbors,addNeighbors,removeNeighbors"
 
 Similar to IRI, limit remote execution of certain API commands.
-
-#### --api.port=14265 or -p=14265
-
-Port the API server should listen on.
 
 #### --config="hercules.config.json" or -c="hercules.config.json"
 

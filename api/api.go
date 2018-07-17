@@ -42,7 +42,8 @@ var startModules []func(apiConfig *viper.Viper)
 
 func Start(apiConfig *viper.Viper) {
 	config = apiConfig
-	if !config.GetBool("api.debug") {
+	isDebug := !config.GetBool("api.debug")
+	if isDebug {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -93,16 +94,46 @@ func Start(apiConfig *viper.Viper) {
 		enableSnapshotApi(api)
 	}
 
+	useHttp := config.GetBool("api.http.useHttp")
+	useHttps := config.GetBool("api.https.useHttps")
+
+	if !useHttp && !useHttps {
+		logs.Log.Fatal("Either useHttp, useHttps, or both must set to true")
+	}
+
+	if useHttp {
+		go serveHttp(api, config)
+	}
+
+	if useHttps {
+		go serveHttps(api, config)
+	}
+}
+
+func serveHttps(api *gin.Engine, config *viper.Viper) {
+	serveOnAddress := config.GetString("api.https.host") + ":" + config.GetString("api.https.port")
+	logs.Log.Info("API listening on HTTPS (" + serveOnAddress + ")")
+
+	certificatePath := config.GetString("api.https.certificatePath")
+	privateKeyPath := config.GetString("api.https.privateKeyPath")
+
+	if err := http.ListenAndServeTLS(serveOnAddress, certificatePath, privateKeyPath, api); err != nil && err != http.ErrServerClosed {
+		logs.Log.Fatal("API Server Error", err)
+	}
+}
+
+func serveHttp(api *gin.Engine, config *viper.Viper) {
+	serveOnAddress := config.GetString("api.http.host") + ":" + config.GetString("api.http.port")
+	logs.Log.Info("API listening on HTTP (" + serveOnAddress + ")")
+
 	srv = &http.Server{
-		Addr:    config.GetString("api.host") + ":" + config.GetString("api.port"),
+		Addr:    serveOnAddress,
 		Handler: api,
 	}
-	go func() {
-		// service connections
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logs.Log.Fatal("API Server Error", err)
-		}
-	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logs.Log.Fatal("API Server Error", err)
+	}
 }
 
 func End() {
