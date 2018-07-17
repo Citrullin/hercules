@@ -16,7 +16,7 @@ import (
 const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
 	reRequestInterval  = time.Duration(10) * time.Second
-	maxIncoming        = 50
+	maxIncoming        = 100
 )
 
 type PendingRequest struct {
@@ -224,7 +224,7 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn
 			}
 		}
 	}
-	// Otherwise, latest (youngest) TX
+	/*/ Otherwise, latest (youngest) TX
 	if resp == nil {
 		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, false, txn)
 		if key != nil {
@@ -236,6 +236,7 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn
 			}
 		}
 	}
+	/**/
 	// Random
 	if resp == nil {
 		resp = make([]byte, 1604)
@@ -358,7 +359,7 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 
 	max := 10000
 	if lowEndDevice {
-		max = 3000
+		max = 300
 	}
 
 	length := len(pendingRequests)

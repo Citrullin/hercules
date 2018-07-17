@@ -54,7 +54,6 @@ func Load(cfg *viper.Viper) {
 	}
 	DB = db
 	cleanupDB()
-	go periodicDatabaseCleanup()
 	logs.Log.Info("Database loaded")
 }
 
@@ -72,7 +71,7 @@ func End() {
 /*
 Runner for database garbage collection.
 */
-func periodicDatabaseCleanup() {
+func StartPeriodicDatabaseCleanup() {
 	var duration = dbCleanupInterval
 	if config.GetBool("light") {
 		duration = dbCleanupIntervalLight

@@ -15,7 +15,6 @@ import (
 	"../db"
 	"../logs"
 	"../transaction"
-	"../snapshot"
 )
 
 const COO_ADDRESS = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
@@ -176,11 +175,6 @@ func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 Runs checking of pending milestones.
 */
 func startMilestoneChecker() {
-	if snapshot.InProgress {
-		time.Sleep(time.Duration(5) * time.Second)
-		go startMilestoneChecker()
-		return
-	}
 	total := 0
 	db.Locker.Lock()
 	db.Locker.Unlock()

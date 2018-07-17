@@ -68,7 +68,7 @@ func CanSnapshot(timestamp int) bool {
 			if err != nil {
 				return err
 			}
-			if ts <= timestamp {
+			if ts > 0 && ts <= timestamp {
 				pendingConfirmationsBehindHorizon = true
 				break
 			}

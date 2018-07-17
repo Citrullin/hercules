@@ -45,6 +45,8 @@ func StartHercules() {
 	server.Start()
 	api.Start(config)
 
+	go db.StartPeriodicDatabaseCleanup()
+
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, os.Interrupt)
 	signal.Notify(ch, os.Kill)
@@ -105,7 +107,7 @@ func loadConfig() *viper.Viper {
 	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
 	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
-	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot. Minimum: 3.")
+	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot.")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
 		"makeSnapshot, getSnapshotsInfo")
 	flag.Bool("snapshots.keep", false, "Whether to keep transactions past the horizon after making a snapshot.")
@@ -141,12 +143,14 @@ func loadConfig() *viper.Viper {
 	}
 
 	// 4. Check config for validity
+	/*/
 	snapshotPeriod := config.GetInt("snapshots.period")
 	snapshotInterval := config.GetInt("snapshots.interval")
 	if snapshotInterval > 0 && snapshotPeriod < 3 {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
 			"At least 2 hours currently required to be kept.", snapshotPeriod)
 	}
+	/**/
 
 	return config
 }

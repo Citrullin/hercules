@@ -18,10 +18,16 @@ func cleanupFingerprints () {
 	fingerprintsLocker.Lock()
 	defer fingerprintsLocker.Unlock()
 
+	ttl := fingerprintTTL
+
+	if lowEndDevice {
+		ttl = ttl*6
+	}
+
 	now := time.Now()
 	var toRemove []string
 	for key, t := range fingerprints {
-		if now.Sub(t) >= fingerprintTTL {
+		if now.Sub(t) >= ttl {
 			toRemove = append(toRemove, key)
 		}
 	}

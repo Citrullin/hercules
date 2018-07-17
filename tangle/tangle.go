@@ -98,6 +98,10 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	logs.Log.Info("Tangle started!")
 
 	go func() {
+		interval := time.Duration(2) * time.Millisecond
+		if lowEndDevice {
+			interval = interval * 5
+		}
 		for {
 			outgoingRunner()
 			time.Sleep(time.Duration(2) * time.Millisecond)

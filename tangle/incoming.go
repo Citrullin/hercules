@@ -21,14 +21,14 @@ const P_BROADCAST = 10
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
+		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
+		if lowEndDevice && len(srv.Incoming) > maxIncoming * 2 {
+			continue
+		}
+
 		data := raw.Msg[:1604]
 		req := make([]byte, 49)
 		copy(req, raw.Msg[1604:1650])
-
-		if snapshot.InProgress {
-			time.Sleep(time.Duration(1) * time.Second)
-			continue
-		}
 
 		incoming++
 
@@ -164,7 +164,7 @@ func processIncomingTX(incoming IncomingTX) error {
 
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
-			if utils.Random(0, 100) < P_BROADCAST {
+			if (!lowEndDevice || len(srv.Incoming) < maxIncoming) && utils.Random(0, 100) < P_BROADCAST {
 				Broadcast(tx.Bytes, incoming.IPAddressWithPort)
 			}
 
