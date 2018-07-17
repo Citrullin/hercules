@@ -48,7 +48,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 				balance, err := db.GetInt64(db.GetAddressKey(tx.Address, db.KEY_BALANCE), nil)
 				if err != nil {
 					addressTrytes := convert.BytesToTrytes(tx.Address)
-					return errors.Errorf("Could not read address' balance. Address: %s Message: %v", addressTrytes, err)
+					return errors.Errorf("Could not read address' balance. Address: %s Message: %s", addressTrytes, err)
 				} else if balance <= 0 || balance < tx.Value {
 					addressTrytes := convert.BytesToTrytes(tx.Address)
 
