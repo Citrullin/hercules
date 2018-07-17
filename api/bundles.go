@@ -46,10 +46,14 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 
 			if tx.Value != 0 {
 				balance, err := db.GetInt64(db.GetAddressKey(tx.Address, db.KEY_BALANCE), nil)
-				if err != nil || balance <= 0 || balance < tx.Value {
+				if err != nil {
+					return errors.New("Could not read address' balance. Address: " + tx.Address + " Message: " + err)
+				} else if balance <= 0 || balance < tx.Value {
 					// TODO: collect values from all TXs, map to addesses and check for the whole sum
 					// This is as to prevent multiple partial transactions from the same address in the bundle
-					return errors.New("Insufficient balance")
+					return errors.New("Insufficient balance. Sender address: " + tx.Address 
+									+ " Balance: " + balance
+									+ " Tx value: "+ tx.Value)
 				}
 			}
 
