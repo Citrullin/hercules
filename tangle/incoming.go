@@ -196,3 +196,20 @@ func _checkIncomingError(tx *transaction.FastTX, err error) {
 		panic(err)
 	}
 }
+
+func cleanupRequestQueues() {
+	requestLocker.Lock()
+	defer requestLocker.Unlock()
+	var toRemove []string
+	for address := range requestQueues {
+		if server.GetNeighborByAddress(address) == nil {
+			logs.Log.Debug("Removing gone neighbor queue for:", address)
+			toRemove = append(toRemove, address)
+		}
+	}
+	if toRemove != nil && len(toRemove) > 0 {
+		for _, address := range toRemove {
+			delete(requestQueues, address)
+		}
+	}
+}

@@ -113,6 +113,7 @@ func cleanup () {
 	flushTicker := time.NewTicker(cleanupInterval)
 	for range flushTicker.C {
 		cleanupFingerprints()
+		cleanupRequestQueues()
 	}
 }
 
