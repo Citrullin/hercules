@@ -1,11 +1,23 @@
 {
+  "light": false,
   "api": {
+    "debug": false,
     "auth": {
       "password": null,
       "username": null
     },
-    "debug": false,
-    "host": "0.0.0.0",
+    "http" : {
+      "useHttp" : true,
+      "host": "0.0.0.0",
+      "port": 14265
+    },
+    "https" : {
+      "useHttps" : false,
+      "host": "0.0.0.0",
+      "port": 14266,
+      "certificatePath" : "cert.pem",
+      "privateKeyPath" : "key.pem"
+    },
     "limitRemoteAccess": [
       "getNeighbors",
       "addNeighbors",
@@ -15,7 +27,6 @@
       "attachToTangle",
       "interruptAttachingToTangle"
     ],
-    "port": 14265,
     "pow": {
       "maxMinWeightMagnitude": 14,
       "maxTransactions": 10000,
@@ -23,17 +34,16 @@
       "powSrvPath": "/tmp/powSrv.sock"
     }
   },
-  "database": {
-    "path": "data"
-  },
-  "light": false,
   "log": {
     "hello": true,
     "level": "INFO"
   },
   "node": {
-    "neighbors": [],
-    "port": 14600
+    "port": 14600,
+    "neighbors": []
+  },
+  "database": {
+    "path": "data"
   },
   "snapshots" : {
     "path": "snapshots",

@@ -81,20 +81,9 @@ func loadConfig() *viper.Viper {
 	//config.SetDefault("test", 0)
 
 	// 2. Get command line arguments
-	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. "+
-		"Try to optimize accordingly.")
+	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. Try to optimize accordingly.")
 
-	flag.IntP("api.port", "p", 14265, "API Port")
-	flag.StringP("api.host", "h", "0.0.0.0", "API Host")
-	flag.String("api.auth.username", "", "API Access Username")
-	flag.String("api.auth.password", "", "API Access Password")
-	flag.Bool("api.debug", false, "Whether to log api access")
-	flag.StringSlice("api.limitRemoteAccess", nil, "Limit access to these commands from remote")
-
-	flag.Int("api.pow.maxMinWeightMagnitude", 14, "Maximum Min-Weight-Magnitude (Difficulty for PoW)")
-	flag.Int("api.pow.maxTransactions", 10000, "Maximum number of Transactions in Bundle (for PoW)")
-	flag.Bool("api.pow.usePowSrv", false, "Use PowSrv (e.g. FPGA PiDiver) for PoW")
-	flag.String("api.pow.powSrvPath", "/tmp/powSrv.sock", "Unix socket path of PowSrv")
+	declareApiConfigs()
 
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 	flag.Bool("log.hello", true, "Show welcome banner")
@@ -137,7 +126,7 @@ func loadConfig() *viper.Viper {
 			config.SetConfigFile(*configPath)
 			err := config.ReadInConfig()
 			if err != nil {
-				logs.Log.Fatalf("Config could not be loaded from: %s", *configPath)
+				logs.Log.Fatalf("Config could not be loaded from: %s (%s)", *configPath, err)
 			}
 		}
 	}
@@ -153,6 +142,30 @@ func loadConfig() *viper.Viper {
 	/**/
 
 	return config
+}
+
+func declareApiConfigs() {
+	flag.Bool("api.debug", false, "Whether to log api access")
+
+	flag.String("api.auth.username", "", "API Access Username")
+	flag.String("api.auth.password", "", "API Access Password")
+
+	flag.Bool("api.http.useHttp", true, "Defines if the API will serve using HTTP protocol")
+	flag.StringP("api.http.host", "h", "0.0.0.0", "HTTP API Host")
+	flag.IntP("api.http.port", "p", 14265, "HTTP API Port")
+
+	flag.Bool("api.https.useHttps", false, "Defines if the API will serve using HTTPS protocol")
+	flag.String("api.https.host", "0.0.0.0", "HTTPS API Host")
+	flag.Int("api.https.port", 14266, "HTTPS API Port")
+	flag.String("api.https.certificatePath", "cert.pem", "Path to TLS certificate (non-encrypted)")
+	flag.String("api.https.privateKeyPath", "key.pem", "Path to private key used to isse the TLS certificate (non-encrypted)")
+
+	flag.StringSlice("api.limitRemoteAccess", nil, "Limit access to these commands from remote")
+
+	flag.Int("api.pow.maxMinWeightMagnitude", 14, "Maximum Min-Weight-Magnitude (Difficulty for PoW)")
+	flag.Int("api.pow.maxTransactions", 10000, "Maximum number of Transactions in Bundle (for PoW)")
+	flag.Bool("api.pow.usePowSrv", false, "Use PowSrv (e.g. FPGA PiDiver) for PoW")
+	flag.String("api.pow.powSrvPath", "/tmp/powSrv.sock", "Unix socket path of PowSrv")
 }
 
 func Hello() {

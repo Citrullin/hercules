@@ -42,17 +42,18 @@ var startModules []func(apiConfig *viper.Viper)
 
 func Start(apiConfig *viper.Viper) {
 	config = apiConfig
-	if !config.GetBool("api.debug") {
+	isDebug := !config.GetBool("api.debug")
+	if isDebug {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	limitAccess = config.GetStringSlice("api.limitRemoteAccess")
-	logs.Log.Debug("Limited remote access to:", limitAccess)
 
-    // pass config to modules if they need it
-    for _, f := range startModules {
-        f(apiConfig)
-    }
-    
+	configureLimitAccess()
+
+	// pass config to modules if they need it
+	for _, f := range startModules {
+		f(apiConfig)
+	}
+
 	api = gin.Default()
 
 	username := config.GetString("api.auth.username")
@@ -67,15 +68,14 @@ func Start(apiConfig *viper.Viper) {
 		var request Request
 		err := c.ShouldBindJSON(&request)
 		if err == nil {
-
-			if triesToAccessLimited(request.Command, c) {
+			caseInsensitiveCommand := strings.ToLower(request.Command)
+			if triesToAccessLimited(caseInsensitiveCommand, c) {
 				logs.Log.Warningf("Denying limited command request %v from remote %v",
 					request.Command, c.Request.RemoteAddr)
 				ReplyError("Limited remote command access", c)
 				return
 			}
 
-			caseInsensitiveCommand := strings.ToLower(request.Command)
 			apiCall, apiCallExists := apiCalls[caseInsensitiveCommand]
 			if apiCallExists {
 				apiCall(request, c, t)
@@ -94,16 +94,46 @@ func Start(apiConfig *viper.Viper) {
 		enableSnapshotApi(api)
 	}
 
+	useHttp := config.GetBool("api.http.useHttp")
+	useHttps := config.GetBool("api.https.useHttps")
+
+	if !useHttp && !useHttps {
+		logs.Log.Fatal("Either useHttp, useHttps, or both must set to true")
+	}
+
+	if useHttp {
+		go serveHttp(api, config)
+	}
+
+	if useHttps {
+		go serveHttps(api, config)
+	}
+}
+
+func serveHttps(api *gin.Engine, config *viper.Viper) {
+	serveOnAddress := config.GetString("api.https.host") + ":" + config.GetString("api.https.port")
+	logs.Log.Info("API listening on HTTPS (" + serveOnAddress + ")")
+
+	certificatePath := config.GetString("api.https.certificatePath")
+	privateKeyPath := config.GetString("api.https.privateKeyPath")
+
+	if err := http.ListenAndServeTLS(serveOnAddress, certificatePath, privateKeyPath, api); err != nil && err != http.ErrServerClosed {
+		logs.Log.Fatal("API Server Error", err)
+	}
+}
+
+func serveHttp(api *gin.Engine, config *viper.Viper) {
+	serveOnAddress := config.GetString("api.http.host") + ":" + config.GetString("api.http.port")
+	logs.Log.Info("API listening on HTTP (" + serveOnAddress + ")")
+
 	srv = &http.Server{
-		Addr:    config.GetString("api.host") + ":" + config.GetString("api.port"),
+		Addr:    serveOnAddress,
 		Handler: api,
 	}
-	go func() {
-		// service connections
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logs.Log.Fatal("API Server Error", err)
-		}
-	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logs.Log.Fatal("API Server Error", err)
+	}
 }
 
 func End() {
@@ -127,12 +157,24 @@ func getDuration(t time.Time) float64 {
 	return time.Now().Sub(t).Seconds()
 }
 
-func triesToAccessLimited(command string, c *gin.Context) bool {
+func configureLimitAccess() {
+	localLimitAccess := config.GetStringSlice("api.limitRemoteAccess")
+
+	if len(localLimitAccess) > 0 {
+		for _, limitAccessEntry := range localLimitAccess {
+			limitAccess = append(limitAccess, strings.ToLower(limitAccessEntry))
+		}
+
+		logs.Log.Debug("Limited remote access to:", localLimitAccess)
+	}
+}
+
+func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 	if c.Request.RemoteAddr[:9] == "127.0.0.1" {
 		return false
 	}
-	for _, l := range limitAccess {
-		if l == command {
+	for _, caseInsensitiveLimitAccessEntry := range limitAccess {
+		if caseInsensitiveLimitAccessEntry == caseInsensitiveCommand {
 			return true
 		}
 	}
@@ -145,5 +187,5 @@ func addAPICall(apiCall string, implementation func(request Request, c *gin.Cont
 }
 
 func addStartModule(implementation func(apiConfig *viper.Viper)) {
-    startModules = append(startModules, implementation)
+	startModules = append(startModules, implementation)
 }
