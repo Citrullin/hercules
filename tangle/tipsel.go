@@ -2,16 +2,18 @@ package tangle
 
 import (
 	"math"
+	"math/rand"
 
 	"../db"
+	"../logs"
 	"github.com/dgraph-io/badger"
-	"gitlab.com/semkodev/hercules/utils"
+	"time"
 )
 
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	tipAlpha            = 0.001
+	tipAlpha            = 0.01
 	maxTipSearchRetries = 15
 )
 
@@ -136,11 +138,15 @@ func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRati
 	}
 	for i := range weights {
 		weights[i] = math.Exp((weights[i] - highestRating) * tipAlpha)
+		//weights[i] = (highestRating - weights[i]) * tipAlpha
 		weightsSum += weights[i]
 	}
 
 	// 2. Make weighted choice
-	randomNumber := float64(utils.Random(0, int(math.Floor(weightsSum))))
+	rand.Seed(time.Now().UnixNano())
+	randomNumber := rand.Float64() * weightsSum
+
+	//randomNumber := float64(utils.Random(0, int(math.Floor(weightsSum))))
 	for i, child := range rating.Graph.Children {
 		randomNumber -= weights[i]
 		if randomNumber <= 0 {
@@ -152,9 +158,11 @@ func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRati
 }
 
 func GetTXToApprove (reference []byte, depth int) [][]byte {
+	logs.Log.Debugf("Depth: %v, Reference: %v", depth, reference)
 	// Reference:
 	reference = getReference(reference, depth)
 	if reference == nil {
+		logs.Log.Debug("Could not get reference!")
 		return nil
 	}
 
@@ -190,5 +198,6 @@ func GetTXToApprove (reference []byte, depth int) [][]byte {
 		} else {
 		}
 	}
+	logs.Log.Debug("Could not get TXs to approve!")
 	return nil
 }
