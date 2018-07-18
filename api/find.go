@@ -42,7 +42,7 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 			ReplyError("Wrong tag trytes", c)
 			return
 		}
-		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], db.KEY_APPROVEE)...)
+		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], db.KEY_TAG)...)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   hashes,
