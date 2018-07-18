@@ -13,7 +13,7 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	tipAlpha            = 0.01
+	tipAlpha            = 0.001
 	maxTipSearchRetries = 15
 )
 
@@ -22,11 +22,11 @@ const (
 type GraphNode struct {
 	Key      []byte
 	Children []*GraphNode
-	Count    int64
+	Count    int
 }
 
 type GraphRating struct {
-	Rating float64
+	Rating int
 	Graph *GraphNode
 }
 
@@ -40,7 +40,7 @@ func getReference (reference []byte, depth int) []byte {
 	return GetMilestoneKeyByIndex(LatestMilestone.Index - depth, true)
 }
 
-// 2. Build sub-graph and ratings base
+// 2. Build sub-graph
 
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
@@ -118,6 +118,23 @@ func findApprovees(key []byte) [][]byte {
 	return response
 }
 
+// 3. Calculate ratings
+
+func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
+	rating := 1
+	if graph.Children != nil {
+		for _, child := range graph.Children {
+			stringKey := string(child.Key)
+			key, seen := seenKeys[stringKey]
+			if !seen {
+				seenKeys[stringKey] = key
+				rating += calculateRating(child, seenKeys)
+			}
+		}
+	}
+	return rating
+}
+
 // 3. Walk the graph
 
 func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRating {
@@ -126,19 +143,18 @@ func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRati
 	}
 
 	// 1. Get weighted ratings
-	var highestRating float64 = 0
+	var highestRating = 0
 	var weightsSum float64 = 0
 	var weights []float64
 	for _, child := range rating.Graph.Children {
 		r := ratings[string(child.Key)].Rating
-		weights = append(weights, r)
+		weights = append(weights, float64(r))
 		if r > highestRating {
 			highestRating = r
 		}
 	}
 	for i := range weights {
-		weights[i] = math.Exp((weights[i] - highestRating) * tipAlpha)
-		//weights[i] = (highestRating - weights[i]) * tipAlpha
+		weights[i] = math.Exp((weights[i] - float64(highestRating)) * tipAlpha)
 		weightsSum += weights[i]
 	}
 
@@ -174,7 +190,8 @@ func GetTXToApprove (reference []byte, depth int) [][]byte {
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
 	for _, rating := range graphRatings {
-		rating.Rating = math.Sqrt(float64(rating.Graph.Count))
+		seenRatings := make(map[string][]byte)
+		rating.Rating = calculateRating(rating.Graph, seenRatings)
 	}
 
 	var results = make(map[string][]byte)
