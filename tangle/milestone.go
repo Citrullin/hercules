@@ -377,3 +377,39 @@ func isMaybeMilestonePair(tx *transaction.FastTX) bool {
 func isMaybeMilestonePart (tx *transaction.FastTX) bool {
 	return tx.Value == 0 && (bytes.Equal(tx.Address, COO_ADDRESS_BYTES) || bytes.Equal(tx.Address, COO_ADDRESS2_BYTES))
 }
+
+
+/**
+Returns the (hash) key for a specific milestone.
+if acceptNearest is set, the nearest, more recent milestone is returned, if the other is not found.
+ */
+func GetMilestoneKeyByIndex(index int, acceptNearest bool) []byte {
+	var milestoneKey []byte
+	currentIndex := LatestMilestone.Index + 1
+
+	_ = db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_MILESTONE}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			key := item.Key()
+			value, _ := item.Value()
+			var ms = 0
+			buf := bytes.NewBuffer(value)
+			dec := gob.NewDecoder(buf)
+			err := dec.Decode(&ms)
+			if err == nil {
+				if ms == index {
+					milestoneKey = db.AsKey(key, db.KEY_HASH)
+					break
+				} else if acceptNearest && ms < currentIndex {
+					milestoneKey = db.AsKey(key, db.KEY_HASH)
+				}
+			}
+		}
+		return nil
+	})
+	return milestoneKey
+}

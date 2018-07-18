@@ -21,6 +21,8 @@ type Request struct {
 	Approvees    []string
 	Transactions []string
 	Trytes       []string
+	Reference    string
+	Depth        int
 	Timestamp    int
 	Filename     string
 	// for attachToTangle
