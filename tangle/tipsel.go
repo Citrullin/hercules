@@ -4,10 +4,11 @@ import (
 	"math"
 	"math/rand"
 
+	"time"
+
 	"../db"
 	"../logs"
 	"github.com/dgraph-io/badger"
-	"time"
 )
 
 const (
@@ -22,32 +23,32 @@ const (
 type GraphNode struct {
 	Key      []byte
 	Children []*GraphNode
-	Count    int
+	Count    int64
 }
 
 type GraphRating struct {
 	Rating int
-	Graph *GraphNode
+	Graph  *GraphNode
 }
 
-func getReference (reference []byte, depth int) []byte {
+func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
 		key := db.GetByteKey(reference, db.KEY_HASH)
 		if db.Has(key, nil) {
 			return key
 		}
 	}
-	return GetMilestoneKeyByIndex(LatestMilestone.Index - depth, true)
+	return GetMilestoneKeyByIndex(LatestMilestone.Index-depth, true)
 }
 
 // 2. Build sub-graph
 
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
- */
-func buildGraph (reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64) *GraphNode {
+*/
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64) *GraphNode {
 	approveeKeys := findApprovees(reference)
-	graph := &GraphNode{reference,nil, 1}
+	graph := &GraphNode{reference, nil, 1}
 
 	for _, key := range approveeKeys {
 		stringKey := string(key)
@@ -69,7 +70,7 @@ func buildGraph (reference []byte, graphRatings *map[string]*GraphRating, ledger
 
 			/**/
 			ledgerStateCopy := make(map[string]int64)
-			for k2,v2 := range ledgerState {
+			for k2, v2 := range ledgerState {
 				ledgerStateCopy[k2] = v2
 			}
 			ledgerState = ledgerStateCopy
@@ -137,7 +138,7 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 
 // 3. Walk the graph
 
-func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRating {
+func walkGraph(rating *GraphRating, ratings map[string]*GraphRating) *GraphRating {
 	if rating.Graph.Children == nil {
 		return rating
 	}
@@ -173,7 +174,7 @@ func walkGraph (rating *GraphRating, ratings map[string]*GraphRating) *GraphRati
 	return nil
 }
 
-func GetTXToApprove (reference []byte, depth int) [][]byte {
+func GetTXToApprove(reference []byte, depth int) [][]byte {
 	logs.Log.Debugf("Depth: %v, Reference: %v", depth, reference)
 	// Reference:
 	reference = getReference(reference, depth)
