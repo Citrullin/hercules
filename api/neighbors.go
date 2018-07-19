@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,8 +63,20 @@ func getNeighbors(request Request, c *gin.Context, t time.Time) {
 	server.NeighborsLock.RLock()
 	defer server.NeighborsLock.RUnlock()
 
+	// Get the keys of the map to sort the neighbors
+	neighborKeys := make([]string, len(server.Neighbors))
+	i := 0
+	for key := range server.Neighbors {
+		neighborKeys[i] = key
+		i++
+	}
+	sort.Strings(neighborKeys)
+
 	var neighbors []interface{}
-	for _, neighbor := range server.Neighbors {
+
+	for _, neighborKey := range neighborKeys {
+		neighbor := server.Neighbors[neighborKey]
+
 		neighbors = append(neighbors, gin.H{
 			"address":                     neighbor.Addr,
 			"numberOfAllTransactions":     neighbor.Incoming,
