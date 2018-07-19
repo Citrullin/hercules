@@ -117,6 +117,10 @@ func createNeighbor(address string) (*Neighbor, error) {
 		return nil, err
 	}
 
+	if len(strings.Split(ip, ":")) > 1 {
+		ip = "[" + ip + "]"
+	}
+
 	neighbor := Neighbor{
 		Hostname:       hostname,
 		IP:             ip,
@@ -129,7 +133,11 @@ func createNeighbor(address string) (*Neighbor, error) {
 	}
 
 	if connectionType == UDP {
-		neighbor.UDPAddr, _ = net.ResolveUDPAddr(UDP, GetFormattedAddress(neighbor.IP, port))
+		conType := connectionType
+		neighbor.UDPAddr, err = net.ResolveUDPAddr(conType, GetFormattedAddress(neighbor.IP, port))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &neighbor, nil
