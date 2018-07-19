@@ -24,6 +24,7 @@ type GraphNode struct {
 	Key      []byte
 	Children []*GraphNode
 	Count    int64
+	Valid    bool
 }
 
 type GraphRating struct {
@@ -46,28 +47,20 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
-func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64) *GraphNode {
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64, valid bool) *GraphNode {
 	approveeKeys := findApprovees(reference)
-	graph := &GraphNode{reference, nil, 1}
+	graph := &GraphNode{reference, nil, 1, valid}
 
-	for _, key := range approveeKeys {
-		stringKey := string(key)
-		var subGraph *GraphNode
-		graphRating, ok := (*graphRatings)[stringKey]
-		if ok {
-			subGraph = graphRating.Graph
+	addr, err := db.GetBytes(db.AsKey(reference, db.KEY_ADDRESS_HASH), nil)
+	if err != nil {
+		graph.Valid = false
+	} else {
+		addrString := string(addr)
+
+		value, err := db.GetInt64(db.AsKey(reference, db.KEY_VALUE), nil)
+		if err != nil {
+			graph.Valid = false
 		} else {
-			addr, err := db.GetBytes(db.AsKey(key, db.KEY_ADDRESS_HASH), nil)
-			if err != nil {
-				continue
-			}
-			addrString := string(addr)
-
-			value, err := db.GetInt64(db.AsKey(key, db.KEY_VALUE), nil)
-			if err != nil {
-				continue
-			}
-
 			/**/
 			ledgerStateCopy := make(map[string]int64)
 			for k2, v2 := range ledgerState {
@@ -87,12 +80,24 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 
 			result := balance + value
 			if result < 0 {
-				continue
+				graph.Valid = false
 			}
 			ledgerState[addrString] = result
+		}
+	}
 
-			subGraph = buildGraph(key, graphRatings, ledgerState)
+	for _, key := range approveeKeys {
+		stringKey := string(key)
+		var subGraph *GraphNode
+		graphRating, ok := (*graphRatings)[stringKey]
+		if ok {
+			subGraph = graphRating.Graph
+		} else {
+			subGraph = buildGraph(key, graphRatings, ledgerState, graph.Valid)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
+		}
+		if !graph.Valid && subGraph.Valid {
+			subGraph.Valid = false
 		}
 		graph.Count += subGraph.Count
 		if graph.Count < 0 {
@@ -138,7 +143,7 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 
 // 3. Walk the graph
 
-func walkGraph(rating *GraphRating, ratings map[string]*GraphRating) *GraphRating {
+func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool) *GraphRating {
 	if rating.Graph.Children == nil {
 		return rating
 	}
@@ -165,21 +170,29 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating) *GraphRatin
 
 	//randomNumber := float64(utils.Random(0, int(math.Floor(weightsSum))))
 	for i, child := range rating.Graph.Children {
+		if !child.Valid {
+			continue
+		}
+		_, ignore := exclude[string(child.Key)]
+		if ignore {
+			continue
+		}
 		randomNumber -= weights[i]
 		if randomNumber <= 0 {
 			// 3. Select random child
-			return walkGraph(ratings[string(child.Key)], ratings)
+			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
+			if graph != nil {
+				return graph
+			}
 		}
 	}
 	return nil
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
-	logs.Log.Debugf("Depth: %v, Reference: %v", depth, reference)
 	// Reference:
 	reference = getReference(reference, depth)
 	if reference == nil {
-		logs.Log.Debug("Could not get reference!")
 		return nil
 	}
 
@@ -187,7 +200,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	var ledgerState = make(map[string]int64)
 	var graphRatings = make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, ledgerState)
+	graph := buildGraph(reference, &graphRatings, ledgerState, true)
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
 	for _, rating := range graphRatings {
@@ -196,9 +209,11 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	}
 
 	var results = make(map[string][]byte)
+	var exclude = make(map[string]bool)
 	for x := 0; x < maxTipSearchRetries; x += 1 {
-		r := walkGraph(graphRatings[string(reference)], graphRatings)
+		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude)
 		if r != nil {
+			exclude[string(r.Graph.Key)] = true
 			hash, err := db.GetBytes(db.AsKey(r.Graph.Key, db.KEY_HASH), nil)
 			if err != nil {
 				continue
