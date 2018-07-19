@@ -185,7 +185,7 @@ func confirm(key []byte, txn *badger.Txn) (error, bool) {
 	if err != nil {
 		return err, false
 	}
-	return nil, false
+	return nil, true
 }
 
 func confirmChild(key []byte, txn *badger.Txn) error {
