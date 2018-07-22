@@ -14,7 +14,7 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 150
+	MaxCheckDepth       = 200
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
@@ -64,7 +64,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 			graph.Valid = false
 		} else {
 			/**/
-			if !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
+			if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
 				graph.Valid = false
 			}
 			/**/
@@ -223,12 +223,10 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
 			if graph != nil {
 				return graph
-			} else {
-				return rating
 			}
 		}
 	}
-	return nil
+	return rating
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
@@ -274,6 +272,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 		} else {
 		}
 	}
-	logs.Log.Debug("Could not get TXs to approve!")
-	return nil
+
+	logs.Log.Debug("Could not get TXs to approve! Offering latest milestone...")
+	return [][]byte{LatestMilestone.TX.Hash, LatestMilestone.TX.TrunkTransaction}
 }

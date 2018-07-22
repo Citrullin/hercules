@@ -156,8 +156,8 @@ func ReplyError(message string, c *gin.Context) {
 	})
 }
 
-func getDuration(t time.Time) float64 {
-	return time.Now().Sub(t).Seconds()
+func getDuration(t time.Time) int {
+	return int(time.Now().Sub(t).Seconds())
 }
 
 func configureLimitAccess() {
