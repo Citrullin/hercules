@@ -15,7 +15,7 @@ const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
 	tipAlpha            = 0.001
-	maxTipSearchRetries = 15
+	maxTipSearchRetries = 100
 )
 
 // 1. Get reference: either one provided or latest milestone - 15 milestones back
@@ -170,6 +170,7 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 
 	//randomNumber := float64(utils.Random(0, int(math.Floor(weightsSum))))
 	for i, child := range rating.Graph.Children {
+		randomNumber -= weights[i]
 		if !child.Valid {
 			continue
 		}
@@ -177,12 +178,13 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 		if ignore {
 			continue
 		}
-		randomNumber -= weights[i]
 		if randomNumber <= 0 {
 			// 3. Select random child
 			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
 			if graph != nil {
 				return graph
+			} else {
+				return rating
 			}
 		}
 	}
