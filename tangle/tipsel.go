@@ -14,7 +14,7 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 30
+	MaxCheckDepth       = 150
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
@@ -224,6 +224,10 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 				return rating
 			}
 		}
+	}
+	_, ignore := exclude[string(rating.Graph.Key)]
+	if ignore {
+		return nil
 	}
 	return rating
 }
