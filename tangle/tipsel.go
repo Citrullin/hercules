@@ -15,6 +15,7 @@ const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
 	MaxCheckDepth       = 150
+	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
 )
@@ -143,6 +144,11 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if db.Has(db.AsKey(reference, db.KEY_MILESTONE), nil) {
 		seen[key] = true
 		return true
+	}
+	timestamp, err := db.GetInt64(db.AsKey(reference, db.KEY_TIMESTAMP), nil)
+	if err != nil || (timestamp > 0 && time.Now().Sub(time.Unix(timestamp, 0)) > MaxTipAge)     {
+		seen[key] = false
+		return false
 	}
 	rel, err := db.GetBytes(db.AsKey(reference, db.KEY_RELATION), nil)
 	if err != nil {

@@ -149,7 +149,7 @@ func confirm(key []byte, txn *badger.Txn) (error, bool) {
 		logs.Log.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
 			tx.Timestamp,
 			snapshot.GetSnapshotTimestamp(txn),
-			convert.BytesToTrytes(tx.Hash)[:81])
+			convert.BytesToTrytes(tx.Hash))
 		return nil, false
 	}
 
