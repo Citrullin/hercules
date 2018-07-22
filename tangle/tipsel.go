@@ -137,7 +137,7 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if has {
 		return answer
 	}
-	if currentDepth == maxDepth {
+	if currentDepth >= maxDepth {
 		seen[key] = false
 		return false
 	}
@@ -273,6 +273,6 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 		}
 	}
 
-	logs.Log.Debug("Could not get TXs to approve! Offering latest milestone...")
-	return [][]byte{LatestMilestone.TX.Hash, LatestMilestone.TX.TrunkTransaction}
+	logs.Log.Debug("Could not get TXs to approve")
+	return nil
 }
