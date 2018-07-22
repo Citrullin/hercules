@@ -14,6 +14,7 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
+	MaxCheckDepth       = 150
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
 )
@@ -47,7 +48,7 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
-func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64, valid bool) *GraphNode {
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64, seen map[string]bool, valid bool) *GraphNode {
 	approveeKeys := findApprovees(reference)
 	graph := &GraphNode{reference, nil, 1, valid}
 
@@ -61,6 +62,11 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		if err != nil {
 			graph.Valid = false
 		} else {
+			/**/
+			if !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
+				graph.Valid = false
+			}
+			/**/
 			/**/
 			ledgerStateCopy := make(map[string]int64)
 			for k2, v2 := range ledgerState {
@@ -93,7 +99,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		if ok {
 			subGraph = graphRating.Graph
 		} else {
-			subGraph = buildGraph(key, graphRatings, ledgerState, graph.Valid)
+			subGraph = buildGraph(key, graphRatings, ledgerState, seen, graph.Valid)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
 		}
 		if !graph.Valid && subGraph.Valid {
@@ -122,6 +128,34 @@ func findApprovees(key []byte) [][]byte {
 		return nil
 	})
 	return response
+}
+
+func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen map[string]bool) bool {
+	key := string(reference)
+	answer, has := seen[key]
+	if has {
+		return answer
+	}
+	if currentDepth == maxDepth {
+		seen[key] = false
+		return false
+	}
+	if db.Has(db.AsKey(reference, db.KEY_MILESTONE), nil) {
+		seen[key] = true
+		return true
+	}
+	rel, err := db.GetBytes(db.AsKey(reference, db.KEY_RELATION), nil)
+	if err != nil {
+		seen[key] = false
+		return false
+	}
+	trunk := db.AsKey(rel[:16], db.KEY_MILESTONE)
+	branch := db.AsKey(rel[16:], db.KEY_MILESTONE)
+	trunkOk := db.Has(trunk, nil) || hasMilestoneParent(trunk, maxDepth, currentDepth + 1, seen)
+	branchOk := db.Has(branch, nil) || hasMilestoneParent(branch, maxDepth, currentDepth + 1, seen)
+	ok := trunkOk && branchOk
+	seen[key] = ok
+	return ok
 }
 
 // 3. Calculate ratings
@@ -199,10 +233,11 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	}
 
 	// Graph:
+	var seen = make(map[string]bool)
 	var ledgerState = make(map[string]int64)
 	var graphRatings = make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, ledgerState, true)
+	graph := buildGraph(reference, &graphRatings, ledgerState, seen, true)
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
 	for _, rating := range graphRatings {
