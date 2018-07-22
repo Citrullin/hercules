@@ -82,7 +82,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	pendingOnLoad()
 	milestoneOnLoad()
 	confirmOnLoad()
-	// checkConsistency(true, false)
+	// checkConsistency(false, false)
 
 
 	// This had to be done due to the tangle split in May 2018.

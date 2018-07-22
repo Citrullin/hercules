@@ -146,12 +146,10 @@ func confirm(key []byte, txn *badger.Txn) (error, bool) {
 	var tx = transaction.TritsToFastTX(&trits, data)
 
 	if db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) && !isMaybeMilestonePart(tx) {
-		logs.Log.Debug("TX pending for trim, skipping",
-			tx.Timestamp, snapshot.GetSnapshotTimestamp(txn), convert.BytesToTrytes(tx.Address)[:81])
-		if false && tx.Value != 0 {
-			logs.Log.Errorf("TX with value %v skipped because of a trim - DB inconsistency imminent", tx.Value)
-			return errors.New("Value TX confirmation behind snapshot horizon!"), false
-		}
+		logs.Log.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
+			tx.Timestamp,
+			snapshot.GetSnapshotTimestamp(txn),
+			convert.BytesToTrytes(tx.Hash)[:81])
 		return nil, false
 	}
 

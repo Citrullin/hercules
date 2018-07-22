@@ -12,7 +12,7 @@ import (
 
 const (
 	dbCleanupInterval      = time.Duration(5) * time.Minute
-	dbCleanupIntervalLight = time.Duration(30) * time.Second
+	dbCleanupIntervalLight = time.Duration(2) * time.Minute
 )
 
 // TODO: (OPT) write tests for the database?
