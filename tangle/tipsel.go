@@ -15,7 +15,7 @@ const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
 	MaxCheckDepth       = 200
-	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
+	MaxTipAge           = MaxTipselDepth * time.Duration(60) * time.Second
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
 )
@@ -102,9 +102,6 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		} else {
 			subGraph = buildGraph(key, graphRatings, ledgerState, seen, graph.Valid)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
-		}
-		if !graph.Valid && subGraph.Valid {
-			subGraph.Valid = false
 		}
 		graph.Count += subGraph.Count
 		if graph.Count < 0 {
