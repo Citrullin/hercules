@@ -8,13 +8,15 @@ import (
 
 	"../db"
 	"../logs"
+	"../convert"
+	"../transaction"
 	"github.com/dgraph-io/badger"
 )
 
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 100
+	MaxCheckDepth       = 20
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.01
 	maxTipSearchRetries = 100
@@ -27,6 +29,7 @@ type GraphNode struct {
 	Children []*GraphNode
 	Count    int64
 	Valid    bool
+	Index    int
 }
 
 type GraphRating struct {
@@ -51,7 +54,14 @@ Creates a sub-graph structure, directly dropping contradictory transactions.
 */
 func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64, seen map[string]bool, valid bool) *GraphNode {
 	approveeKeys := findApprovees(reference)
-	graph := &GraphNode{reference, nil, 1, valid}
+	graph := &GraphNode{reference, nil, 1, valid, 999999}
+
+	txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
+	if err == nil {
+		trits := convert.BytesToTrits(txBytes)[:8019]
+		tx := transaction.TritsToFastTX(&trits, txBytes)
+		graph.Index = tx.CurrentIndex
+	}
 
 	addr, err := db.GetBytes(db.AsKey(reference, db.KEY_ADDRESS_HASH), nil)
 	if err != nil {
@@ -102,6 +112,9 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		} else {
 			subGraph = buildGraph(key, graphRatings, ledgerState, seen, graph.Valid)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
+		}
+		if !graph.Valid && subGraph.Valid {
+			subGraph.Valid = false
 		}
 		graph.Count += subGraph.Count
 		if graph.Count < 0 {
@@ -184,7 +197,11 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 
 func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool) *GraphRating {
 	if rating.Graph.Children == nil {
-		return rating
+		if rating.Graph.Index == 0 {
+			return rating
+		} else {
+			return nil
+		}
 	}
 
 	// 1. Get weighted ratings
@@ -222,16 +239,10 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
 			if graph != nil {
 				return graph
-			} else {
-				return rating
 			}
 		}
 	}
-	_, ignore := exclude[string(rating.Graph.Key)]
-	if ignore {
-		return nil
-	}
-	return rating
+	return nil
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
