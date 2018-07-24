@@ -19,7 +19,7 @@ const (
 	MaxTipselDepth      = 15
 	MaxCheckDepth       = 150
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
-	tipAlpha            = 0.01
+	tipAlpha            = 0.001
 	maxTipSearchRetries = 100
 )
 
@@ -75,13 +75,9 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		if err != nil {
 			graph.Valid = false
 		} else {
-			/**/
-			if bytes.Equal(tx.TrunkTransaction, tx.BranchTransaction) {
-				graph.Valid = false
-			} else if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
+			if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
 				graph.Valid = false
 			}
-			/**/
 			/**/
 			ledgerStateCopy := make(map[string]int64)
 			for k2, v2 := range ledgerState {
@@ -169,6 +165,9 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 	rel, err := db.GetBytes(db.AsKey(reference, db.KEY_RELATION), nil)
 	if err != nil {
 		seen[key] = false
+		return false
+	}
+	if bytes.Equal(rel[:16], rel[16:]) {
 		return false
 	}
 	trunk := db.AsKey(rel[:16], db.KEY_MILESTONE)
