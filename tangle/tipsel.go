@@ -3,6 +3,7 @@ package tangle
 import (
 	"math"
 	"math/rand"
+	"bytes"
 
 	"time"
 
@@ -57,9 +58,10 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 	graph := &GraphNode{reference, nil, 1, valid, 999999}
 
 	txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
+	var tx *transaction.FastTX
 	if err == nil {
 		trits := convert.BytesToTrits(txBytes)[:8019]
-		tx := transaction.TritsToFastTX(&trits, txBytes)
+		tx = transaction.TritsToFastTX(&trits, txBytes)
 		graph.Index = tx.CurrentIndex
 	}
 
@@ -74,7 +76,9 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 			graph.Valid = false
 		} else {
 			/**/
-			if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
+			if bytes.Equal(tx.TrunkTransaction, tx.BranchTransaction) {
+				graph.Valid = false
+			} else if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
 				graph.Valid = false
 			}
 			/**/
