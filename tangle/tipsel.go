@@ -16,7 +16,7 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 20
+	MaxCheckDepth       = 150
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.01
 	maxTipSearchRetries = 100
@@ -242,7 +242,11 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 			}
 		}
 	}
-	return nil
+	if rating.Graph.Index == 0 {
+		return rating
+	} else {
+		return nil
+	}
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
