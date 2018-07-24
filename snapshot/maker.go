@@ -207,7 +207,7 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 		key := make([]byte, 16)
 		copy(key, k[16:])
 		// Filter out unconfirmed reattachments:
-		if !db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) {
+		if !db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) || db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) {
 			continue
 		}
 
