@@ -17,9 +17,9 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 150
+	MaxCheckDepth       = 50
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
-	tipAlpha            = 0.001
+	tipAlpha            = 0.01
 	maxTipSearchRetries = 100
 )
 
@@ -148,7 +148,7 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 		return answer
 	}
 	if currentDepth >= maxDepth {
-		seen[key] = false
+		//seen[key] = false
 		return false
 	}
 	if db.Has(db.AsKey(reference, db.KEY_CONFIRMED), nil) {
@@ -168,12 +168,11 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 		return false
 	}
 	if bytes.Equal(rel[:16], rel[16:]) {
+		seen[key] = false
 		return false
 	}
-	trunk := db.AsKey(rel[:16], db.KEY_MILESTONE)
-	branch := db.AsKey(rel[16:], db.KEY_MILESTONE)
-	trunkOk := db.Has(trunk, nil) || hasMilestoneParent(trunk, maxDepth, currentDepth + 1, seen)
-	branchOk := db.Has(branch, nil) || hasMilestoneParent(branch, maxDepth, currentDepth + 1, seen)
+	trunkOk := hasMilestoneParent(db.AsKey(rel[:16], db.KEY_HASH), maxDepth, currentDepth + 1, seen)
+	branchOk := hasMilestoneParent(db.AsKey(rel[16:], db.KEY_HASH), maxDepth, currentDepth + 1, seen)
 	ok := trunkOk && branchOk
 	seen[key] = ok
 	return ok
@@ -245,11 +244,14 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 			}
 		}
 	}
+	return nil
+	/*/
 	if rating.Graph.Index == 0 {
 		return rating
 	} else {
 		return nil
 	}
+	/**/
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {

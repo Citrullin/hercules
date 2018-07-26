@@ -235,10 +235,11 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
 	if totalValue != 0 || !nonZero {
 		return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
-		//return nil, nil, nil
+		/*/
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +
 			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash)[:81])
 		return nil, nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
+		/**/
 	}
 	return txs, snapshotted, nil, nil
 }
