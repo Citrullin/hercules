@@ -17,10 +17,10 @@ import (
 const (
 	MinTipselDepth      = 2
 	MaxTipselDepth      = 15
-	MaxCheckDepth       = 50
+	MaxCheckDepth       = 150
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.001
-	maxTipSearchRetries = 40
+	maxTipSearchRetries = 20
 )
 
 // 1. Get reference: either one provided or latest milestone - 15 milestones back
@@ -197,7 +197,7 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 
 // 3. Walk the graph
 
-func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool, takeInner bool) *GraphRating {
+func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool) *GraphRating {
 	if rating.Graph.Children == nil {
 		if rating.Graph.Index == 0 {
 			return rating
@@ -238,13 +238,13 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 		}
 		if randomNumber <= 0 {
 			// 3. Select random child
-			graph := walkGraph(ratings[string(child.Key)], ratings, exclude, takeInner)
+			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
 			if graph != nil {
 				return graph
 			}
 		}
 	}
-	if takeInner && rating.Graph.Index == 0 {
+	if rating.Graph.Index == 0 {
 		return rating
 	} else {
 		return nil
@@ -274,7 +274,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	var results = make(map[string][]byte)
 	var exclude = make(map[string]bool)
 	for x := 0; x < maxTipSearchRetries; x += 1 {
-		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude, x > maxTipSearchRetries / 2)
+		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude)
 		if r != nil {
 			exclude[string(r.Graph.Key)] = true
 			hash, err := db.GetBytes(db.AsKey(r.Graph.Key, db.KEY_HASH), nil)
