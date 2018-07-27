@@ -172,68 +172,73 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	// do pow
 	for idx, runes := range inputRunes {
-		if interruptAttachToTangle {
-			ReplyError("attatchToTangle interrupted", c)
-			return
-		}
-		timestamp := getTimestampMilliseconds()
-		//branch and trunk
-		tmp := prevTransaction
-		if len(prevTransaction) == 0 {
+		var invalid = true
+		for invalid {
+			if interruptAttachToTangle {
+				ReplyError("attatchToTangle interrupted", c)
+				return
+			}
+			timestamp := getTimestampMilliseconds()
+			//branch and trunk
+			tmp := prevTransaction
+			if len(prevTransaction) == 0 {
+				tmp = trunkTransaction
+			}
+			copy(runes[giota.TrunkTransactionTrinaryOffset/3:], tmp[:giota.TrunkTransactionTrinarySize/3])
+
 			tmp = trunkTransaction
+			if len(prevTransaction) == 0 {
+				tmp = branchTransaction
+			}
+			copy(runes[giota.BranchTransactionTrinaryOffset/3:], tmp[:giota.BranchTransactionTrinarySize/3])
+
+			//attachment fields: tag and timestamps
+			//tag - copy the obsolete tag to the attachment tag field only if tag isn't set.
+			if string(runes[giota.TagTrinaryOffset/3:(giota.TagTrinaryOffset+giota.TagTrinarySize)/3]) == "999999999999999999999999999" {
+				copy(runes[giota.TagTrinaryOffset/3:], runes[giota.ObsoleteTagTrinaryOffset/3:(giota.ObsoleteTagTrinaryOffset+giota.ObsoleteTagTrinarySize)/3])
+			}
+
+			runesTimeStamp := toRunes(giota.Int2Trits(timestamp, giota.AttachmentTimestampTrinarySize).Trytes())
+			runesTimeStampLowerBoundary := toRunes(giota.Int2Trits(0, giota.AttachmentTimestampLowerBoundTrinarySize).Trytes())
+			runesTimeStampUpperBoundary := toRunes(giota.Int2Trits(MaxTimestampValue, giota.AttachmentTimestampUpperBoundTrinarySize).Trytes())
+
+			copy(runes[giota.AttachmentTimestampTrinaryOffset/3:], runesTimeStamp[:giota.AttachmentTimestampTrinarySize/3])
+			copy(runes[giota.AttachmentTimestampLowerBoundTrinaryOffset/3:], runesTimeStampLowerBoundary[:giota.AttachmentTimestampLowerBoundTrinarySize/3])
+			copy(runes[giota.AttachmentTimestampUpperBoundTrinaryOffset/3:], runesTimeStampUpperBoundary[:giota.AttachmentTimestampUpperBoundTrinarySize/3])
+
+			startTime := time.Now()
+			nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)
+			if err != nil || len(nonceTrytes) != giota.NonceTrinarySize/3 {
+				ReplyError(fmt.Sprintf("PoW failed! %v", err.Error()), c)
+				return
+			}
+			elapsedTime := time.Now().Sub(startTime)
+			logs.Log.Debug("[PoW] Needed", elapsedTime)
+
+			// copy nonce to runes
+			copy(runes[giota.NonceTrinaryOffset/3:], toRunes(nonceTrytes)[:giota.NonceTrinarySize/3])
+
+			verifyTrytes, err := giota.ToTrytes(string(runes))
+			if err != nil {
+				ReplyError("Trytes got corrupted", c)
+				return
+			}
+
+			//validate PoW - throws exception if invalid
+			hash := verifyTrytes.Hash()
+			if !IsValidPoW(hash.Trits(), minWeightMagnitude) {
+				logs.Log.Debug("Nonce verification failed. Retrying...", hash)
+				continue
+			}
+
+			invalid = false
+
+			logs.Log.Debug("[PoW] Verified!")
+
+			returnTrytes[idx] = string(runes)
+
+			prevTransaction = toRunes(hash)
 		}
-		copy(runes[giota.TrunkTransactionTrinaryOffset/3:], tmp[:giota.TrunkTransactionTrinarySize/3])
-
-		tmp = trunkTransaction
-		if len(prevTransaction) == 0 {
-			tmp = branchTransaction
-		}
-		copy(runes[giota.BranchTransactionTrinaryOffset/3:], tmp[:giota.BranchTransactionTrinarySize/3])
-
-		//attachment fields: tag and timestamps
-		//tag - copy the obsolete tag to the attachment tag field only if tag isn't set.
-		if string(runes[giota.TagTrinaryOffset/3:(giota.TagTrinaryOffset+giota.TagTrinarySize)/3]) == "999999999999999999999999999" {
-			copy(runes[giota.TagTrinaryOffset/3:], runes[giota.ObsoleteTagTrinaryOffset/3:(giota.ObsoleteTagTrinaryOffset+giota.ObsoleteTagTrinarySize)/3])
-		}
-
-		runesTimeStamp := toRunes(giota.Int2Trits(timestamp, giota.AttachmentTimestampTrinarySize).Trytes())
-		runesTimeStampLowerBoundary := toRunes(giota.Int2Trits(0, giota.AttachmentTimestampLowerBoundTrinarySize).Trytes())
-		runesTimeStampUpperBoundary := toRunes(giota.Int2Trits(MaxTimestampValue, giota.AttachmentTimestampUpperBoundTrinarySize).Trytes())
-
-		copy(runes[giota.AttachmentTimestampTrinaryOffset/3:], runesTimeStamp[:giota.AttachmentTimestampTrinarySize/3])
-		copy(runes[giota.AttachmentTimestampLowerBoundTrinaryOffset/3:], runesTimeStampLowerBoundary[:giota.AttachmentTimestampLowerBoundTrinarySize/3])
-		copy(runes[giota.AttachmentTimestampUpperBoundTrinaryOffset/3:], runesTimeStampUpperBoundary[:giota.AttachmentTimestampUpperBoundTrinarySize/3])
-
-		startTime := time.Now()
-		nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)
-		if err != nil || len(nonceTrytes) != giota.NonceTrinarySize/3 {
-			ReplyError(fmt.Sprintf("PoW failed! %v", err.Error()), c)
-			return
-		}
-		elapsedTime := time.Now().Sub(startTime)
-		logs.Log.Debug("[PoW] Needed", elapsedTime)
-
-		// copy nonce to runes
-		copy(runes[giota.NonceTrinaryOffset/3:], toRunes(nonceTrytes)[:giota.NonceTrinarySize/3])
-
-		verifyTrytes, err := giota.ToTrytes(string(runes))
-		if err != nil {
-			ReplyError("Trytes got corrupted", c)
-			return
-		}
-
-		//validate PoW - throws exception if invalid
-		hash := verifyTrytes.Hash()
-		if !IsValidPoW(hash.Trits(), minWeightMagnitude) {
-			ReplyError("Nonce verify failed", c)
-			return
-		}
-
-		logs.Log.Debug("[PoW] Verified!")
-
-		returnTrytes[idx] = string(runes)
-
-		prevTransaction = toRunes(hash)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
