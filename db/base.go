@@ -59,6 +59,7 @@ const (
 	KEY_SNAPSHOT_DATE    = byte(129) // byte -> int (timestamp)
 	KEY_SNAPSHOTTED      = byte(130) // byte -> int (timestamp)
 	KEY_EDGE             = byte(150) // byte -> int (timestamp)
+	KEY_GTTA             = byte(160) // hash -> int (timestamp)
 	KEY_TEST             = byte(187) // hash -> bool
 	KEY_OTHER            = byte(255) // XXXX -> any bytes
 )
@@ -370,6 +371,39 @@ func PickRandomKey(key byte, maxRandom int, txn *badger.Txn) []byte {
 		step++
 	}
 	return result
+}
+
+func RemoveOld(key byte, duration time.Duration) int {
+	tx := DB.NewTransaction(false)
+	defer tx.Commit(func(e error) {})
+
+	opts := badger.DefaultIteratorOptions
+	it := tx.NewIterator(opts)
+	defer it.Close()
+
+	var toDelete [][]byte
+	now := time.Now()
+
+	prefix := []byte{key}
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		value, err := item.Value()
+		if err == nil {
+			var timestamp int64
+			buf := bytes.NewBuffer(value)
+			dec := gob.NewDecoder(buf)
+			err := dec.Decode(&timestamp)
+			if err == nil && now.Sub(time.Unix(timestamp, 0)) > duration {
+				toDelete = append(toDelete, AsKey(item.Key(), key))
+			}
+		}
+	}
+
+	for _, key := range toDelete {
+		Remove(key, nil)
+	}
+
+	return len(toDelete)
 }
 
 func IncrBy(key []byte, value int64, deleteOnZero bool, txn *badger.Txn) (int64, error) {

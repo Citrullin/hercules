@@ -18,10 +18,10 @@ import (
 const (
 	MinTipselDepth      = 3
 	MaxTipselDepth      = 10
-	MaxCheckDepth       = 50
+	MaxCheckDepth       = 100
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	MaxTXAge            = time.Duration(60) * time.Second
-	tipAlpha            = 0.001
+	tipAlpha            = 0.01
 	maxTipSearchRetries = 15
 )
 
@@ -135,7 +135,7 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if currentDepth > maxDepth {
 		return false
 	}
-	if db.Has(db.AsKey(reference, db.KEY_CONFIRMED), nil) {
+	if db.Has(db.AsKey(reference, db.KEY_CONFIRMED), nil) || db.Has(db.AsKey(reference, db.KEY_GTTA), nil) {
 		seen[key] = true
 		return true
 	}
@@ -251,6 +251,7 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
 	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (
 		db.Has(db.AsKey(rating.Graph.Key, db.KEY_CONFIRMED), nil) ||
+		db.Has(db.AsKey(rating.Graph.Key, db.KEY_GTTA), nil) ||
 		isConsistent([]*GraphRating{rating}, ledgerState, transactions))
 }
 
@@ -359,6 +360,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
+					db.Put(db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix(), nil, nil)
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer
@@ -373,9 +375,11 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 }
 
 func cleanCache() {
-	if len(txCache) < 10000 {
+	if len(txCache) < 5000 {
 		return
 	}
+
+	db.RemoveOld(db.KEY_GTTA, MaxTipAge)
 	t := time.Now()
 	var toDelete []string
 	for key, value := range txCache {
