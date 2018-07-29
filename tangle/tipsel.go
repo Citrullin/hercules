@@ -16,8 +16,8 @@ import (
 
 const (
 	MinTipselDepth      = 2
-	MaxTipselDepth      = 15
-	MaxCheckDepth       = 150
+	MaxTipselDepth      = 5
+	MaxCheckDepth       = 15
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	tipAlpha            = 0.001
 	maxTipSearchRetries = 20
@@ -30,7 +30,7 @@ type GraphNode struct {
 	Children []*GraphNode
 	Count    int64
 	Valid    bool
-	Index    int
+	Tx       *transaction.FastTX
 }
 
 type GraphRating struct {
@@ -53,54 +53,29 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
-func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerState map[string]int64, seen map[string]bool, valid bool) *GraphNode {
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) *GraphNode {
 	approveeKeys := findApprovees(reference)
-	graph := &GraphNode{reference, nil, 1, valid, 999999}
+	graph := &GraphNode{reference, nil, 1, valid, nil}
 
-	txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
 	var tx *transaction.FastTX
-	if err == nil {
+	tKey := string(reference)
+	tx, ok := transactions[tKey]
+	if !ok {
+		txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
+		hash, err2 := db.GetBytes(db.AsKey(reference, db.KEY_HASH), nil)
+		if err != nil || err2 != nil {
+			graph.Valid = false
+			return graph
+		}
 		trits := convert.BytesToTrits(txBytes)[:8019]
 		tx = transaction.TritsToFastTX(&trits, txBytes)
-		graph.Index = tx.CurrentIndex
+		tx.Hash = hash
+		transactions[tKey] = tx
 	}
+	graph.Tx = tx
 
-	addr, err := db.GetBytes(db.AsKey(reference, db.KEY_ADDRESS_HASH), nil)
-	if err != nil {
+	if graph.Valid && !hasConfirmedParent(reference, MaxCheckDepth, 0, seen, transactions) {
 		graph.Valid = false
-	} else {
-		addrString := string(addr)
-
-		value, err := db.GetInt64(db.AsKey(reference, db.KEY_VALUE), nil)
-		if err != nil {
-			graph.Valid = false
-		} else {
-			if graph.Valid && !hasMilestoneParent(reference, MaxCheckDepth, 0, seen) {
-				graph.Valid = false
-			}
-			/**/
-			ledgerStateCopy := make(map[string]int64)
-			for k2, v2 := range ledgerState {
-				ledgerStateCopy[k2] = v2
-			}
-			ledgerState = ledgerStateCopy
-			/**/
-
-			balance, ok := ledgerState[addrString]
-			if !ok {
-				balance, err := db.GetInt64(db.GetAddressKey(addr, db.KEY_BALANCE), nil)
-				if err != nil {
-					balance = 0
-				}
-				ledgerState[addrString] = balance
-			}
-
-			result := balance + value
-			if result < 0 {
-				graph.Valid = false
-			}
-			ledgerState[addrString] = result
-		}
 	}
 
 	for _, key := range approveeKeys {
@@ -110,7 +85,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, ledgerS
 		if ok {
 			subGraph = graphRating.Graph
 		} else {
-			subGraph = buildGraph(key, graphRatings, ledgerState, seen, graph.Valid)
+			subGraph = buildGraph(key, graphRatings, seen, graph.Valid, ledgerState, transactions)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
 		}
 		if !graph.Valid && subGraph.Valid {
@@ -141,14 +116,13 @@ func findApprovees(key []byte) [][]byte {
 	return response
 }
 
-func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen map[string]bool) bool {
+func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen map[string]bool, transactions map[string]*transaction.FastTX) bool {
 	key := string(reference)
 	answer, has := seen[key]
 	if has {
 		return answer
 	}
-	if currentDepth >= maxDepth {
-		//seen[key] = false
+	if currentDepth > maxDepth {
 		return false
 	}
 	if db.Has(db.AsKey(reference, db.KEY_CONFIRMED), nil) {
@@ -162,18 +136,28 @@ func hasMilestoneParent(reference []byte, maxDepth int, currentDepth int, seen m
 		return false
 	}
 	/**/
-	rel, err := db.GetBytes(db.AsKey(reference, db.KEY_RELATION), nil)
-	if err != nil {
+
+	tKey := string(reference)
+	tx, ok := transactions[tKey]
+	if !ok {
+		txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
+		hash, err2 := db.GetBytes(db.AsKey(reference, db.KEY_HASH), nil)
+		if err != nil || err2 != nil {
+			return false
+		}
+		trits := convert.BytesToTrits(txBytes)[:8019]
+		tx = transaction.TritsToFastTX(&trits, txBytes)
+		tx.Hash = hash
+		transactions[tKey] = tx
+	}
+
+	if bytes.Equal(tx.TrunkTransaction, tx.BranchTransaction) {
 		seen[key] = false
 		return false
 	}
-	if bytes.Equal(rel[:16], rel[16:]) {
-		seen[key] = false
-		return false
-	}
-	trunkOk := hasMilestoneParent(db.AsKey(rel[:16], db.KEY_HASH), maxDepth, currentDepth + 1, seen)
-	branchOk := hasMilestoneParent(db.AsKey(rel[16:], db.KEY_HASH), maxDepth, currentDepth + 1, seen)
-	ok := trunkOk && branchOk
+	trunkOk := hasConfirmedParent(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH), maxDepth, currentDepth + 1, seen, transactions)
+	branchOk := hasConfirmedParent(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH), maxDepth, currentDepth + 1, seen, transactions)
+	ok = trunkOk && branchOk
 	seen[key] = ok
 	return ok
 }
@@ -195,11 +179,11 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 	return rating
 }
 
-// 3. Walk the graph
+// 4. Walk the graph
 
-func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool) *GraphRating {
+func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) *GraphRating {
 	if rating.Graph.Children == nil {
-		if rating.Graph.Index == 0 {
+		if canBeUsed(rating, ledgerState, transactions) {
 			return rating
 		} else {
 			return nil
@@ -238,16 +222,69 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 		}
 		if randomNumber <= 0 {
 			// 3. Select random child
-			graph := walkGraph(ratings[string(child.Key)], ratings, exclude)
+			graph := walkGraph(ratings[string(child.Key)], ratings, exclude, ledgerState, transactions)
 			if graph != nil {
 				return graph
 			}
 		}
 	}
-	if rating.Graph.Index == 0 {
+	if canBeUsed(rating, ledgerState, transactions) {
 		return rating
 	} else {
 		return nil
+	}
+}
+
+func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
+	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && isConsistent([]*transaction.FastTX{rating.Graph.Tx}, ledgerState, transactions)
+}
+
+func isConsistent (entryPoints []*transaction.FastTX, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
+	ledgerDiff := make(map[string]int64)
+	for _, tx := range entryPoints {
+		tx, _ := transactions[string(db.GetByteKey(tx.Hash, db.KEY_HASH))]
+		buildGraphDiff(ledgerDiff, tx, transactions)
+	}
+	var v []int64
+	for _, val := range ledgerDiff {
+		v = append(v, val)
+	}
+
+	for addrString, value := range ledgerDiff {
+		if value < 0 {
+			_, ok := ledgerState[addrString]
+			if !ok {
+				balance, err := db.GetInt64(db.GetAddressKey([]byte(addrString), db.KEY_BALANCE), nil)
+				if err != nil {
+					balance = 0
+				}
+				ledgerState[addrString] = balance
+			}
+			if ledgerState[addrString] + value < 0 {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func buildGraphDiff (ledgerDiff map[string]int64, tx *transaction.FastTX, transactions map[string]*transaction.FastTX) {
+	key := string(tx.Address)
+	balance, ok := ledgerDiff[key]
+	if !ok {
+		balance = 0
+	}
+	balance += tx.Value
+	ledgerDiff[key] = balance
+
+	ancestor, ok := transactions[string(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH))]
+	if ok {
+		buildGraphDiff(ledgerDiff, ancestor, transactions)
+	}
+	ancestor, ok = transactions[string(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH))]
+	if ok {
+		buildGraphDiff(ledgerDiff, ancestor, transactions)
 	}
 }
 
@@ -261,9 +298,10 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	// Graph:
 	var seen = make(map[string]bool)
 	var ledgerState = make(map[string]int64)
+	var transactions = make(map[string]*transaction.FastTX)
 	var graphRatings = make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, ledgerState, seen, true)
+	graph := buildGraph(reference, &graphRatings, seen, true, make(map[string]int64), transactions)
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
 	for _, rating := range graphRatings {
@@ -271,21 +309,26 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 		rating.Rating = calculateRating(rating.Graph, seenRatings)
 	}
 
-	var results = make(map[string][]byte)
+	var results = []*GraphRating{}
 	var exclude = make(map[string]bool)
 	for x := 0; x < maxTipSearchRetries; x += 1 {
-		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude)
+		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude, ledgerState, transactions)
 		if r != nil {
 			exclude[string(r.Graph.Key)] = true
-			hash, err := db.GetBytes(db.AsKey(r.Graph.Key, db.KEY_HASH), nil)
-			if err != nil {
-				continue
+			if len(results) > 0 {
+				var entries = []*transaction.FastTX{r.Graph.Tx}
+				for _, x := range results {
+					entries = append(entries, x.Graph.Tx)
+				}
+				if !isConsistent(entries, ledgerState, transactions) {
+					continue
+				}
 			}
-			results[string(hash)] = hash
+			results = append(results, r)
 			if len(results) >= 2 {
 				var answer [][]byte
-				for _, hash := range results {
-					answer = append(answer, hash)
+				for _, r := range results {
+					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer
 					}
