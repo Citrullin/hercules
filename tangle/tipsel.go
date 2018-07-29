@@ -12,15 +12,17 @@ import (
 	"../convert"
 	"../transaction"
 	"github.com/dgraph-io/badger"
+	"sync"
 )
 
 const (
-	MinTipselDepth      = 2
-	MaxTipselDepth      = 5
-	MaxCheckDepth       = 15
+	MinTipselDepth      = 3
+	MaxTipselDepth      = 10
+	MaxCheckDepth       = 50
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
+	MaxTXAge            = time.Duration(60) * time.Second
 	tipAlpha            = 0.001
-	maxTipSearchRetries = 20
+	maxTipSearchRetries = 15
 )
 
 // 1. Get reference: either one provided or latest milestone - 15 milestones back
@@ -38,6 +40,10 @@ type GraphRating struct {
 	Graph  *GraphNode
 }
 
+var gTTALocker = &sync.Mutex{}
+var txCache = make(map[string]time.Time)
+var transactions = make(map[string]*transaction.FastTX)
+
 func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
 		key := db.GetByteKey(reference, db.KEY_HASH)
@@ -53,7 +59,7 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
-func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) *GraphNode {
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, transactions map[string]*transaction.FastTX) *GraphNode {
 	approveeKeys := findApprovees(reference)
 	graph := &GraphNode{reference, nil, 1, valid, nil}
 
@@ -71,7 +77,11 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 		tx = transaction.TritsToFastTX(&trits, txBytes)
 		tx.Hash = hash
 		transactions[tKey] = tx
+		transactions[string(hash)] = tx
 	}
+	t := time.Now()
+	txCache[tKey] = t
+	txCache[string(tx.Hash)] = t
 	graph.Tx = tx
 
 	if graph.Valid && !hasConfirmedParent(reference, MaxCheckDepth, 0, seen, transactions) {
@@ -85,7 +95,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 		if ok {
 			subGraph = graphRating.Graph
 		} else {
-			subGraph = buildGraph(key, graphRatings, seen, graph.Valid, ledgerState, transactions)
+			subGraph = buildGraph(key, graphRatings, seen, graph.Valid, transactions)
 			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
 		}
 		if !graph.Valid && subGraph.Valid {
@@ -137,8 +147,7 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	}
 	/**/
 
-	tKey := string(reference)
-	tx, ok := transactions[tKey]
+	tx, ok := transactions[key]
 	if !ok {
 		txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
 		hash, err2 := db.GetBytes(db.AsKey(reference, db.KEY_HASH), nil)
@@ -148,8 +157,12 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 		trits := convert.BytesToTrits(txBytes)[:8019]
 		tx = transaction.TritsToFastTX(&trits, txBytes)
 		tx.Hash = hash
-		transactions[tKey] = tx
+		transactions[key] = tx
+		transactions[string(hash)] = tx
 	}
+	t := time.Now()
+	txCache[key] = t
+	txCache[string(tx.Hash)] = t
 
 	if bytes.Equal(tx.TrunkTransaction, tx.BranchTransaction) {
 		seen[key] = false
@@ -236,18 +249,25 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 }
 
 func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
-	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && isConsistent([]*transaction.FastTX{rating.Graph.Tx}, ledgerState, transactions)
+	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (
+		db.Has(db.AsKey(rating.Graph.Key, db.KEY_CONFIRMED), nil) ||
+		isConsistent([]*GraphRating{rating}, ledgerState, transactions))
 }
 
-func isConsistent (entryPoints []*transaction.FastTX, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
+func isConsistent (entryPoints []*GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
 	ledgerDiff := make(map[string]int64)
-	for _, tx := range entryPoints {
-		tx, _ := transactions[string(db.GetByteKey(tx.Hash, db.KEY_HASH))]
-		buildGraphDiff(ledgerDiff, tx, transactions)
+	seen := make(map[string]bool)
+	for _, r := range entryPoints {
+		tx, _ := transactions[string(r.Graph.Key)]
+		buildGraphDiff(ledgerDiff, tx, transactions, seen)
 	}
-	var v []int64
+	var total int64 = 0
 	for _, val := range ledgerDiff {
-		v = append(v, val)
+		total += val
+	}
+
+	if total != 0 {
+		return false
 	}
 
 	for addrString, value := range ledgerDiff {
@@ -269,26 +289,41 @@ func isConsistent (entryPoints []*transaction.FastTX, ledgerState map[string]int
 	return true
 }
 
-func buildGraphDiff (ledgerDiff map[string]int64, tx *transaction.FastTX, transactions map[string]*transaction.FastTX) {
-	key := string(tx.Address)
-	balance, ok := ledgerDiff[key]
-	if !ok {
-		balance = 0
-	}
-	balance += tx.Value
-	ledgerDiff[key] = balance
+func buildGraphDiff (ledgerDiff map[string]int64, tx *transaction.FastTX, transactions map[string]*transaction.FastTX, seen map[string]bool) {
+	cacheKey := string(tx.Hash)
 
-	ancestor, ok := transactions[string(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH))]
-	if ok {
-		buildGraphDiff(ledgerDiff, ancestor, transactions)
+	_, saw := seen[cacheKey]
+	if saw {
+		return
+	} else {
+		seen[cacheKey] = true
 	}
-	ancestor, ok = transactions[string(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH))]
+
+	if tx.Value != 0 {
+		key := string(tx.Address)
+		balance, ok := ledgerDiff[key]
+		if !ok {
+			balance = 0
+		}
+		balance += tx.Value
+		ledgerDiff[key] = balance
+	}
+
+	ancestor, ok := transactions[string(tx.TrunkTransaction)]
 	if ok {
-		buildGraphDiff(ledgerDiff, ancestor, transactions)
+		buildGraphDiff(ledgerDiff, ancestor, transactions, seen)
+	}
+	ancestor, ok = transactions[string(tx.BranchTransaction)]
+	if ok {
+		buildGraphDiff(ledgerDiff, ancestor, transactions, seen)
 	}
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
+	gTTALocker.Lock()
+	defer gTTALocker.Unlock()
+	defer cleanCache()
+
 	// Reference:
 	reference = getReference(reference, depth)
 	if reference == nil {
@@ -298,10 +333,10 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	// Graph:
 	var seen = make(map[string]bool)
 	var ledgerState = make(map[string]int64)
-	var transactions = make(map[string]*transaction.FastTX)
 	var graphRatings = make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, seen, true, make(map[string]int64), transactions)
+	graph := buildGraph(reference, &graphRatings, seen,true, transactions)
+
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
 	for _, rating := range graphRatings {
@@ -315,16 +350,12 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude, ledgerState, transactions)
 		if r != nil {
 			exclude[string(r.Graph.Key)] = true
-			if len(results) > 0 {
-				var entries = []*transaction.FastTX{r.Graph.Tx}
-				for _, x := range results {
-					entries = append(entries, x.Graph.Tx)
-				}
-				if !isConsistent(entries, ledgerState, transactions) {
-					continue
-				}
+			newResults := append(results, r)
+			consistent := isConsistent(newResults, ledgerState, transactions)
+			if !consistent {
+				continue
 			}
-			results = append(results, r)
+			results = newResults
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
@@ -334,10 +365,26 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 					}
 				}
 			}
-		} else {
 		}
 	}
 
 	logs.Log.Debug("Could not get TXs to approve")
 	return nil
+}
+
+func cleanCache() {
+	if len(txCache) < 10000 {
+		return
+	}
+	t := time.Now()
+	var toDelete []string
+	for key, value := range txCache {
+		if t.Sub(value) > MaxTXAge {
+			toDelete = append(toDelete, key)
+		}
+	}
+	for _, key := range toDelete {
+		delete(txCache, key)
+		delete(transactions, key)
+	}
 }
