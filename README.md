@@ -92,7 +92,7 @@ That's it! Hercules is ready to be used.
 Running Hercules can be as easy as `./hercules`. For devices with very limited, please check 
 [Running on low-end devices](#running-on-low-end-devices).
 
-Depending on your OS, you might want to create a service or a startup script to run hercules
+Depending on your OS, you might want to [create a service](https://gitlab.com/semkodev/hercules/wikis/Creating-hercules-service-on-linux-systems) or a startup script to run hercules
 in the background.
 
 You can configure Hercules using:
