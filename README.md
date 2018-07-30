@@ -257,12 +257,16 @@ Interval in hours, how often do make an automated snapshot. Default is zero - di
 
 #### --snapshots.period=168
 
-How much history of tangle to keep. Value in hours. Minimal value is 6 hours.
+How much history of tangle to keep. Value in hours. Minimal value is 12 hours.
+Lesser period increases the probability that some addresses will not be consistent with the global state.
+If your node can handle more, we suggest keeping several days or a week worth of data.
 
 #### --snapshots.keep=true
 
 If set, the snapshots will be generated without trimming the old transactions from the database.
-That is, the database is kept without modifications.
+That is, the database is kept without modifications so that transaction history is preserved.
+
+Keeping specific TXs by budle, address, tag, etc is coming soon.
 
 #### --snapshots.enableapi=false
 

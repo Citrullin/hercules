@@ -139,6 +139,7 @@ func trimTX(hashKey []byte) error {
 		db.Remove(db.AsKey(hashKey, db.KEY_CONFIRMED), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_MILESTONE), txn)
 		db.Remove(db.AsKey(hashKey, db.KEY_RELATION), txn)
+		db.Remove(db.AsKey(hashKey, db.KEY_GTTA), txn)
 		if tx != nil {
 			db.Remove(append(db.GetByteKey(tx.TrunkTransaction, db.KEY_APPROVEE), hashKey...), txn)
 			db.Remove(append(db.GetByteKey(tx.BranchTransaction, db.KEY_APPROVEE), hashKey...), txn)

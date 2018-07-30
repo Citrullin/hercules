@@ -17,8 +17,8 @@ import (
 
 const (
 	MinTipselDepth      = 3
-	MaxTipselDepth      = 10
-	MaxCheckDepth       = 100
+	MaxTipselDepth      = 7
+	MaxCheckDepth       = 25
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	MaxTXAge            = time.Duration(60) * time.Second
 	tipAlpha            = 0.01
@@ -379,7 +379,6 @@ func cleanCache() {
 		return
 	}
 
-	db.RemoveOld(db.KEY_GTTA, MaxTipAge)
 	t := time.Now()
 	var toDelete []string
 	for key, value := range txCache {

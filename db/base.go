@@ -38,6 +38,7 @@ const (
 	// PENDING + UNKNOWN CONFIRMED TRANSACTIONS
 	KEY_PENDING_TIMESTAMP = byte(30) // hash -> parent time
 	KEY_PENDING_HASH      = byte(31) // hash -> hash
+	KEY_PENDING_REQUESTS  = byte(32) // hash -> int
 	KEY_PENDING_CONFIRMED = byte(35) // hash -> parent time
 	KEY_PENDING_BUNDLE    = byte(39) // hash -> timestamp
 
@@ -54,6 +55,7 @@ const (
 	KEY_ADDRESS_BYTES    = byte(105) // address hash -> hash bytes
 	KEY_SNAPSHOT_BALANCE = byte(120) // address hash -> int64
 	KEY_SNAPSHOT_SPENT   = byte(121) // address hash -> bool
+	KEY_SNAPSHOT_CLOCK   = byte(126) // byte -> int (timestamp)
 	KEY_SNAPSHOT_LOCK    = byte(127) // byte -> int (timestamp)
 	KEY_SNAPSHOT_FILE    = byte(128) // byte -> string
 	KEY_SNAPSHOT_DATE    = byte(129) // byte -> int (timestamp)
@@ -373,7 +375,7 @@ func PickRandomKey(key byte, maxRandom int, txn *badger.Txn) []byte {
 	return result
 }
 
-func RemoveOld(key byte, duration time.Duration) int {
+func RemoveOld(key byte, timestamp int64) int {
 	tx := DB.NewTransaction(false)
 	defer tx.Commit(func(e error) {})
 
@@ -382,18 +384,17 @@ func RemoveOld(key byte, duration time.Duration) int {
 	defer it.Close()
 
 	var toDelete [][]byte
-	now := time.Now()
 
 	prefix := []byte{key}
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
 		value, err := item.Value()
 		if err == nil {
-			var timestamp int64
+			var ts int64
 			buf := bytes.NewBuffer(value)
 			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&timestamp)
-			if err == nil && now.Sub(time.Unix(timestamp, 0)) > duration {
+			err := dec.Decode(&ts)
+			if err == nil && ts < timestamp {
 				toDelete = append(toDelete, AsKey(item.Key(), key))
 			}
 		}

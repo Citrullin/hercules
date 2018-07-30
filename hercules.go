@@ -97,7 +97,9 @@ func loadConfig() *viper.Viper {
 	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
 	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
-	flag.Int("snapshots.period", 24, "How many hours of tangle data to keep after the snapshot.")
+	// Lesser period increases the probability that some addresses will not be consistent with the global state.
+	// If your node can handle more, we suggest keeping several days or a week worth of data!
+	flag.Int("snapshots.period", 168, "How many hours of tangle data to keep after the snapshot. Minimum is 12. Default = 168 (one week)")
 	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
 		"makeSnapshot, getSnapshotsInfo")
 	flag.Bool("snapshots.keep", false, "Whether to keep transactions past the horizon after making a snapshot.")
@@ -133,12 +135,12 @@ func loadConfig() *viper.Viper {
 	}
 
 	// 4. Check config for validity
-	/*/
+	/**/
 	snapshotPeriod := config.GetInt("snapshots.period")
 	snapshotInterval := config.GetInt("snapshots.interval")
-	if snapshotInterval > 0 && snapshotPeriod < 3 {
+	if snapshotInterval > 0 && snapshotPeriod < 12 {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
-			"At least 2 hours currently required to be kept.", snapshotPeriod)
+			"At least 12 hours currently required to be kept.", snapshotPeriod)
 	}
 	/**/
 

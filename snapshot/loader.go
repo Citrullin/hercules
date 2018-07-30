@@ -41,7 +41,7 @@ func LoadSnapshot (path string) error {
 	logs.Log.Debug("Saved trimmable TXs flags:", len(edgeTransactions))
 	if err != nil { return err }
 
-	err = doLoadSnapshot(path)
+	err = doLoadSnapshot(path, timestamp)
 	if err != nil { return err }
 
 	if checkDatabaseSnapshot() {
@@ -81,11 +81,11 @@ func loadSpentSnapshot(address []byte, txn *badger.Txn) error {
 	return nil
 }
 
-func loadKey(key []byte) error {
-	return db.Put(key, true, nil, nil)
+func loadKey(key []byte, timestamp int64) error {
+	return db.Put(key, timestamp, nil, nil)
 }
 
-func doLoadSnapshot (path string) error{
+func doLoadSnapshot (path string, timestamp int64) error{
 	logs.Log.Infof("Loading values from %v. It can take several minutes. Please hold...", path)
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -169,7 +169,7 @@ func doLoadSnapshot (path string) error{
 			}
 		} else {
 			key := convert.TrytesToBytes(line)[:16]
-			err = loadKey(key)
+			err = loadKey(key, timestamp)
 			if err != nil {
 				if err == badger.ErrTxnTooBig {
 					err := txn.Commit(func(e error) {})
@@ -177,7 +177,7 @@ func doLoadSnapshot (path string) error{
 						return err
 					}
 					txn = db.DB.NewTransaction(true)
-					err = loadKey(key)
+					err = loadKey(key, timestamp)
 					if err != nil { return err }
 				} else {
 					return err

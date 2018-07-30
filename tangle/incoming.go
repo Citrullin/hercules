@@ -51,6 +51,9 @@ func incomingRunner() {
 					if err == nil {
 						incomingProcessed++
 						addFingerprint(fingerprint)
+						incomingTimeLocker.Lock()
+						lastIncomingTime[raw.IPAddressWithPort] = time.Now()
+						incomingTimeLocker.Unlock()
 					}
 				}
 			}
@@ -90,12 +93,14 @@ func processIncomingTX(incoming IncomingTX) error {
 		var key = db.GetByteKey(tx.Hash, db.KEY_HASH)
 		removePendingRequest(tx.Hash)
 
+		snapTime := snapshot.GetSnapshotTimestamp(txn)
+
 		removeTx := func() {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), txn)
 			db.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
-			err := db.Put(db.AsKey(key, db.KEY_EDGE), true, nil, txn)
+			err := db.Put(db.AsKey(key, db.KEY_EDGE), int64(snapTime), nil, txn)
 			_checkIncomingError(tx, err)
 			parentKey, err := db.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING), txn)
 			if err == nil {
@@ -103,19 +108,12 @@ func processIncomingTX(incoming IncomingTX) error {
 				_checkIncomingError(tx, err)
 			}
 		}
-
-		snapTime := snapshot.GetSnapshotTimestamp(txn)
 		futureTime := int(time.Now().Add(time.Duration(2) * time.Hour).Unix())
 		maybeMilestonePair := isMaybeMilestone(tx) || isMaybeMilestonePair(tx)
 		isOutsideOfTimeframe := !maybeMilestonePair && (tx.Timestamp > futureTime || snapTime >= tx.Timestamp)
 		if isOutsideOfTimeframe && !db.Has(db.GetByteKey(tx.Bundle, db.KEY_PENDING_BUNDLE), txn) {
-			// If the bundle is still not deleted, keep this TX. It might link to a pending TX...
-			if db.CountByPrefix(db.GetByteKey(tx.Bundle, db.KEY_BUNDLE)) == 0 {
-				//logs.Log.Debugf("Got TX timestamp outside of a valid time frame (%v-%v): %v",
-				//	snapTime, futureTime, tx.Timestamp)
-				removeTx()
-				return nil
-			}
+			removeTx()
+			return nil
 		}
 
 		if db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn) {
@@ -123,12 +121,6 @@ func processIncomingTX(incoming IncomingTX) error {
 			_checkIncomingError(tx, err)
 			_, err = requestIfMissing(tx.BranchTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(tx, err)
-			err = addPendingConfirmation(db.GetByteKey(tx.TrunkTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
-			_checkIncomingError(tx, err)
-			err = addPendingConfirmation(db.GetByteKey(tx.BranchTransaction, db.KEY_EVENT_CONFIRMATION_PENDING), tx.Timestamp, txn)
-			_checkIncomingError(tx, err)
-			/*logs.Log.Debugf("Got already snapshotted TX: %v, Value: %v",
-			convert.BytesToTrytes(tx.Hash)[:81], tx.Value) */
 			removeTx()
 			return nil
 		}
@@ -199,7 +191,10 @@ func _checkIncomingError(tx *transaction.FastTX, err error) {
 
 func cleanupRequestQueues() {
 	requestLocker.Lock()
+	incomingTimeLocker.Lock()
 	defer requestLocker.Unlock()
+	defer incomingTimeLocker.Unlock()
+
 	var toRemove []string
 	for address := range requestQueues {
 		if server.GetNeighborByAddress(address) == nil {
@@ -210,6 +205,7 @@ func cleanupRequestQueues() {
 	if toRemove != nil && len(toRemove) > 0 {
 		for _, address := range toRemove {
 			delete(requestQueues, address)
+			delete(lastIncomingTime, address)
 		}
 	}
 }

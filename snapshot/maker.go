@@ -126,6 +126,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 	if err != nil { return err }
 
 	logs.Log.Debugf("Found %v value transactions. Applying to previous snapshot...", len(txs))
+	logs.Log.Notice("Applying snapshot. Critical moment. Do not turn off your computer.")
 	for _, kv := range txs {
 		var trimKey []byte
 		err := db.DB.Update(func(txn *badger.Txn) error {
@@ -150,28 +151,27 @@ func MakeSnapshot(timestamp int, filename string) error {
 		edgeTransactions <- &trimKey
 	}
 
-	err = db.RemoveAll(db.KEY_PENDING_BUNDLE)
-	if err != nil {
-		return err
-	}
-
+	db.RemoveOld(db.KEY_PENDING_BUNDLE, int64(timestamp))
 	for _, key := range toKeepBundle {
-		err := db.Put(key, true, nil, nil)
+		err := db.Put(key, timestamp, nil, nil)
 		if err != nil {
 			return err
 		}
 	}
 
+	db.RemoveOld(db.KEY_SNAPSHOTTED, int64(timestamp))
 	for _, key := range snapshotted {
-		err := db.Put(key, true, nil, nil)
+		err := db.Put(key, timestamp, nil, nil)
 		if err != nil {
 			return err
 		}
 	}
+	db.RemoveOld(db.KEY_EDGE, int64(timestamp))
 
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")
 		trimData(int64(timestamp))
+		logs.Log.Notice("Snapshot applied. Critical moment over.")
 		err = db.DB.Update(func(txn *badger.Txn) error {
 			err:= SetSnapshotTimestamp(timestamp, txn)
 			if err != nil { return err }
@@ -206,8 +206,8 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 		k := it.Item().Key()
 		key := make([]byte, 16)
 		copy(key, k[16:])
-		// Filter out unconfirmed reattachments:
-		if !db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) || db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) {
+		// Filter out unconfirmed reattachments, snapshotted txs or future snapshotted txs:
+		if !canBeSnapshotted(key, txn) {
 			continue
 		}
 
@@ -234,11 +234,11 @@ func loadAllFromBundle (bundleHash []byte, timestamp int, txn *badger.Txn) ([]Ke
 	}
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
 	if totalValue != 0 || !nonZero {
-		return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
-		/*/
+		// return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
+		/**/
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). " +
-			"The database is probably inconsistent or not in sync! %v", convert.BytesToTrytes(bundleHash)[:81])
-		return nil, nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent or not in sync!")
+			"The database is probably inconsistent, not in sync or the timestamp is too early! %v", convert.BytesToTrytes(bundleHash)[:81])
+		return nil, nil, nil, errors.New("A bundle is incomplete (non-zero sum). The database is probably inconsistent, not in sync or timestamp is too early!")
 		/**/
 	}
 	return txs, snapshotted, nil, nil

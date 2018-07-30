@@ -51,7 +51,7 @@ type FastTX struct {
 }
 
 func TritsToTX(trits *[]int, raw []byte) *FastTX {
-	return &FastTX{
+	tx := &FastTX{
 		Hash:                     convert.TritsToBytes(crypt.RunHashCurl(*trits))[:49],
 		Address:                  convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value:                    value64((*trits)[6804:6837]),
@@ -66,10 +66,14 @@ func TritsToTX(trits *[]int, raw []byte) *FastTX {
 		SignatureMessageFragment: (*trits)[:6561],
 		Bytes: raw,
 	}
+	if tx.Timestamp == 0 {
+		tx.Timestamp = tx.TXTimestamp
+	}
+	return tx
 }
 
 func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
-	return &FastTX{
+	tx := &FastTX{
 		Hash:                     nil,
 		Address:                  convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value:                    value64((*trits)[6804:6837]),
@@ -84,6 +88,10 @@ func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
 		SignatureMessageFragment: (*trits)[:6561],
 		Bytes: raw,
 	}
+	if tx.Timestamp == 0 {
+		tx.Timestamp = tx.TXTimestamp
+	}
+	return tx
 }
 
 func TrytesToObject(trytes string) *TX {

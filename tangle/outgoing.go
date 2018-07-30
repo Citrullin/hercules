@@ -17,6 +17,7 @@ const (
 	tipRequestInterval = time.Duration(200) * time.Millisecond
 	reRequestInterval  = time.Duration(10) * time.Second
 	maxIncoming        = 100
+	maxTimesRequest    = 100
 )
 
 type PendingRequest struct {
@@ -204,7 +205,18 @@ func sendReply(msg *Message) {
 	if msg == nil {
 		return
 	}
-	data := append((*msg.Bytes)[:1604], (*msg.Requested)[:46]...)
+	hash := *msg.Requested
+	data := append((*msg.Bytes)[:1604], hash[:46]...)
+
+	// Check that the neighbor is connected as is sending transactions
+	// Probably a good neighbor with transactions. Set this request as sent.
+	incomingTimeLocker.RLock()
+	lastRequestTime, ok := lastIncomingTime[msg.IPAddressWithPort]
+	incomingTimeLocker.RUnlock()
+	if ok && time.Now().Sub(lastRequestTime) < reRequestInterval {
+		db.IncrBy(db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false, nil)
+	}
+
 	srv.Outgoing <- &server.Message{IPAddressWithPort: msg.IPAddressWithPort, Msg: data}
 	outgoing++
 }
@@ -304,7 +316,7 @@ func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, s
 		addr = neighbor.Addr
 	}
 
-	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now(), LastNeighborAddr: addr}
+	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), LastNeighborAddr: addr}
 	pendingRequests[key] = pendingRequest
 	return pendingRequest
 }
@@ -343,7 +355,7 @@ func getOldPending(excludeAddress string) *PendingRequest {
 		k := randmap.FastKey(pendingRequests)
 		v := pendingRequests[k.(string)]
 		now := time.Now()
-		if now.Sub(v.LastTried) > reRequestInterval && v.LastNeighborAddr != excludeAddress {
+		if now.Sub(v.LastTried) > reRequestInterval {
 			v.LastTried = now
 			v.LastNeighborAddr = excludeAddress
 			return v
@@ -382,4 +394,55 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 	}
 
 	return nil
+}
+
+/**
+After a certain amount of requests of specific hash from the neighbors,
+if the TX is not received, the requests is deleted. This is probably a fake
+or invalid spam referenced by trunk/branch of a transaction. Just ignore.
+ */
+func cleanupStalledRequests() {
+	pendingRequestLocker.Lock()
+	defer pendingRequestLocker.Unlock()
+
+	var toRemove [][]byte
+	db.DB.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		prefix := []byte{db.KEY_PENDING_REQUESTS}
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			v, _ := item.Value()
+			var times int
+			buf := bytes.NewBuffer(v)
+			dec := gob.NewDecoder(buf)
+			err := dec.Decode(&times)
+			if err == nil && times > maxTimesRequest {
+				toRemove = append(toRemove, db.AsKey(item.Key(), db.KEY_PENDING_REQUESTS))
+			}
+		}
+		return nil
+	})
+	for _, key := range toRemove {
+		var hash []byte
+		err := db.DB.Update(func(txn *badger.Txn) error {
+			err := db.Remove(key, txn)
+			if err != nil { return err }
+			k := db.AsKey(key, db.KEY_PENDING_HASH)
+			hash, err = db.GetBytes(k , txn)
+			if err == nil {
+				err = db.Remove(db.AsKey(key, db.KEY_PENDING_HASH), txn)
+				if err != nil { return err }
+				err = db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
+				if err != nil { return err }
+				err = db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
+				if err != nil { return err }
+			}
+			return nil
+		})
+		if err == nil && hash != nil {
+			delete(pendingRequests, string(hash))
+		}
+	}
 }

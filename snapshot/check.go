@@ -229,3 +229,12 @@ func checkPendingSnapshot () {
 		}
 	}
 }
+
+/*
+Returns whether a transaction from the database can be snapshotted
+ */
+func canBeSnapshotted (key []byte, txn *badger.Txn) bool {
+	return db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) &&
+		!db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) &&
+		!db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn)
+}
