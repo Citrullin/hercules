@@ -18,7 +18,7 @@ import (
 const (
 	MinTipselDepth      = 3
 	MaxTipselDepth      = 7
-	MaxCheckDepth       = 25
+	MaxCheckDepth       = 70
 	MaxTipAge           = MaxTipselDepth * time.Duration(40) * time.Second
 	MaxTXAge            = time.Duration(60) * time.Second
 	tipAlpha            = 0.01
@@ -163,6 +163,11 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	t := time.Now()
 	txCache[key] = t
 	txCache[string(tx.Hash)] = t
+
+	if tx.AttachmentTimestamp == 0 && !isMaybeMilestonePair(tx) {
+		seen[key] = false
+		return false
+	}
 
 	if bytes.Equal(tx.TrunkTransaction, tx.BranchTransaction) {
 		seen[key] = false

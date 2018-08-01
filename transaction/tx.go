@@ -40,6 +40,7 @@ type FastTX struct {
 	Value                    int64
 	Timestamp                int
 	TXTimestamp              int
+	AttachmentTimestamp      int
 	CurrentIndex             int
 	TrunkTransaction         []byte
 	BranchTransaction        []byte
@@ -56,6 +57,7 @@ func TritsToTX(trits *[]int, raw []byte) *FastTX {
 		Address:                  convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value:                    value64((*trits)[6804:6837]),
 		Timestamp:                int(value64((*trits)[7857:7884]) / 1000),
+		AttachmentTimestamp:      int(value64((*trits)[7857:7884]) / 1000),
 		TXTimestamp:              value((*trits)[6966:6993]),
 		CurrentIndex:             value((*trits)[6993:7020]),
 		TrunkTransaction:         convert.TritsToBytes((*trits)[7290:7533])[:49],
@@ -78,6 +80,7 @@ func TritsToFastTX(trits *[]int, raw []byte) *FastTX {
 		Address:                  convert.TritsToBytes((*trits)[6561:6804])[:49],
 		Value:                    value64((*trits)[6804:6837]),
 		Timestamp:                int(value64((*trits)[7857:7884]) / 1000),
+		AttachmentTimestamp:      int(value64((*trits)[7857:7884]) / 1000),
 		TXTimestamp:              value((*trits)[6966:6993]),
 		CurrentIndex:             value((*trits)[6993:7020]),
 		TrunkTransaction:         convert.TritsToBytes((*trits)[7290:7533])[:49],
