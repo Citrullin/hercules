@@ -213,7 +213,7 @@ func ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod int) {
 				// TODO Get snapshot from synced hercules neighbor
 			}
 		} else {
-			timeLeftToSnapshotSeconds = timestampDifference - snapshotInterval
+			timeLeftToSnapshotSeconds = timestampDifference - snapshotIntervalSeconds
 		}
 	}
 }
