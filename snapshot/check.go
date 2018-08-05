@@ -1,17 +1,17 @@
 package snapshot
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/gob"
-	"strings"
-	"strconv"
-	"time"
-	"bufio"
 	"io"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
-	"../logs"
 	"../db"
+	"../logs"
 	"../utils"
 
 	"github.com/dgraph-io/badger"
@@ -20,7 +20,7 @@ import (
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
- */
+*/
 func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 	current := GetSnapshotTimestamp(txn)
 	return timestamp > current
@@ -28,7 +28,7 @@ func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
- */
+*/
 func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 	current := GetSnapshotTimestamp(txn)
 	return timestamp >= current
@@ -36,9 +36,9 @@ func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
 
 /*
 Returns whether the current tangle is synchronized
- */
- // TODO: this check is too slow on bigger databases. The counters should be moved to memory.
-func IsSynchronized () bool {
+*/
+// TODO: this check is too slow on bigger databases. The counters should be moved to memory.
+func IsSynchronized() bool {
 	return db.Count(db.KEY_PENDING_CONFIRMED) < 10 &&
 		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&
 		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 5
@@ -47,7 +47,7 @@ func IsSynchronized () bool {
 /*
 Checks outstanding pending confirmations that node is beyond the snapshot horizon.
 This is just an additional measure to prevent tangle inconsistencies.
- */
+*/
 func CanSnapshot(timestamp int) bool {
 	pendingConfirmationsBehindHorizon := false
 	err := db.DB.View(func(txn *badger.Txn) error {
@@ -78,7 +78,7 @@ func CanSnapshot(timestamp int) bool {
 	return err == nil && !pendingConfirmationsBehindHorizon
 }
 
-func checkDatabaseSnapshot () bool {
+func checkDatabaseSnapshot() bool {
 	logs.Log.Info("Checking database snapshot integrity")
 	var total int64 = 0
 
@@ -108,7 +108,9 @@ func checkDatabaseSnapshot () bool {
 		}
 		return nil
 	})
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	if total == TOTAL_IOTAS {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true
@@ -119,18 +121,17 @@ func checkDatabaseSnapshot () bool {
 	}
 }
 
-func checkSnapshotFile (path string) (timestamp int64, err error) {
+func checkSnapshotFile(path string) (timestamp int64, err error) {
 	// Check timestamp
-	header, err := loadHeader(path)
+	header, err := LoadHeader(path)
 
 	if err != nil {
 		return 0, err
 	}
 
-	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)",
-		header.version, utils.GetHumanReadableTime(int(header.timestamp)), header.timestamp)
+	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)", header.Version, utils.GetHumanReadableTime(int(header.Timestamp)), header.Timestamp)
 
-	timestamp = header.timestamp
+	timestamp = header.Timestamp
 
 	current, err := db.GetInt([]byte{db.KEY_SNAPSHOT_DATE}, nil)
 	if err == nil && int64(current) > timestamp {
@@ -142,12 +143,14 @@ func checkSnapshotFile (path string) (timestamp int64, err error) {
 	}
 
 	err = checkSnapshotFileIntegrity(path)
-	if err != nil { return 0, err }
+	if err != nil {
+		return 0, err
+	}
 
 	return timestamp, nil
 }
 
-func checkSnapshotFileIntegrity (path string) error {
+func checkSnapshotFileIntegrity(path string) error {
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		logs.Log.Fatalf("open file error: %v", err)
@@ -212,8 +215,8 @@ Checks if there is a snapshot lock present.
 Yes:
 If lock file is present, run LoadSnapshot.
 Otherwise run MakeSnapshot.
- */
-func checkPendingSnapshot () {
+*/
+func checkPendingSnapshot() {
 	timestamp, filename := IsLocked(nil)
 	if timestamp >= 0 {
 		if len(filename) > 0 {
@@ -232,8 +235,8 @@ func checkPendingSnapshot () {
 
 /*
 Returns whether a transaction from the database can be snapshotted
- */
-func canBeSnapshotted (key []byte, txn *badger.Txn) bool {
+*/
+func canBeSnapshotted(key []byte, txn *badger.Txn) bool {
 	return db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) &&
 		!db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) &&
 		!db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn)

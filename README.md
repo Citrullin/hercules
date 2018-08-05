@@ -310,7 +310,7 @@ be posted in the project wiki.
 #### Getting snapshots info
 
 ```
-curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/json'   -H 'X-IOTA-API-Version: 1'   -d '{"command": "getSnapshotsInfo"}' | jq
+curl http://localhost:14265/snapshots -X POST -H 'Content-Type: application/json' -H 'X-IOTA-API-Version: 1' -d '{"command": "getSnapshotsInfo"}' | jq
 
 {
   "currentSnapshotTimestamp": 1528908287,
@@ -330,6 +330,28 @@ curl http://localhost:14265/snapshots   -X POST   -H 'Content-Type: application/
     }
   ],
   "time": 1528991928,
+  "unfinishedSnapshotTimestamp": -1
+}
+```
+
+You can also request only the latest snapshot available from a node with:
+``` 
+curl http://localhost:14265/snapshots -X POST -H 'Content-Type: application/json' -H 'X-IOTA-API-Version: 1' -d '{"command": "getLatestSnapshotInfo"}' | jq 
+
+{
+  "currentSnapshotTimeHumanReadable": "29 Jul 18 23:03 UTC",
+  "currentSnapshotTimestamp": 1532905403,
+  "duration": 134,
+  "inProgress": false,
+  "isSynchronized": true,
+  "latestSnapshot": {
+    "TimeHumanReadable": "30 Jul 18 12:36 UTC",
+    "checksum": "38748c56b5f55db1129918deb8d930d4",
+    "path": "/snapshots/1532954172.snap",
+    "timestamp": 1532954172
+  },
+  "time": 1533424644,
+  "unfinishedSnapshotTimeHumanReadable": "",
   "unfinishedSnapshotTimestamp": -1
 }
 ```

@@ -35,7 +35,7 @@ func trimTXRunner() {
 	logs.Log.Debug("Loaded trimmable TXs", len(edgeTransactions))
 	for hashKey := range edgeTransactions {
 		db.Locker.Lock()
-		db.Locker.Unlock()
+		db.Locker.Unlock() // should this be unlocked?
 		if InProgress {
 			time.Sleep(time.Duration(1) * time.Second)
 			continue
