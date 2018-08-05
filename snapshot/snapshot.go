@@ -5,6 +5,7 @@ import (
 
 	"../db"
 	"../logs"
+	"../utils"
 	"github.com/dgraph-io/badger"
 	"github.com/spf13/viper"
 )
@@ -37,14 +38,22 @@ func Start(cfg *viper.Viper) {
 	CurrentTimestamp = GetSnapshotTimestamp(nil)
 	logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
 
-	// LoadIRISnapshot("snapshotMainnet.txt", "previousEpochsSpentAddresses.txt", 1525017600)
-	// LoadAddressBytes("snapshotMainnet.txt")
-
+	// Does this need to be done before snapshot is loaded/made ?
 	go trimTXRunner()
 
+	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
-	go startAutosnapshots()
 
+	snapshotPeriod := config.GetInt("snapshots.period")
+	snapshotInterval := config.GetInt("snapshots.interval")
+	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
+
+	go startAutosnapshots(snapshotInterval, snapshotPeriod)
+
+	loadSnapshotFiles()
+}
+
+func loadSnapshotFiles() {
 	snapshotToLoad := config.GetString("snapshots.loadFile")
 	iri1 := config.GetString("snapshots.loadIRIFile")
 	iri2 := config.GetString("snapshots.loadIRISpentFile")
@@ -143,23 +152,73 @@ func GetSnapshotFileLock(txn *badger.Txn) string {
 /*
 Starts a periodic snapshot runner
 */
-func startAutosnapshots() {
-	snapshotPeriod := config.GetInt("snapshots.period")
-	snapshotInterval := config.GetInt("snapshots.interval")
-	if snapshotInterval == 0 {
+func startAutosnapshots(snapshotInterval, snapshotPeriod int) {
+	if snapshotInterval <= 0 {
 		return
 	}
-	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.",
-		snapshotInterval, snapshotPeriod)
+
+	// Allows hercules to carry time left to snapshots through hercules restarts
+	if timeLeftToSnapshotSeconds > 0 {
+		snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
+		snapshotTimeHumanReadable := utils.GetHumanReadableTime(snapshotTimestamp)
+		logs.Log.Infof("The next automatic snapshot will be done at '%s', keeping the past %v hours.", snapshotTimeHumanReadable)
+
+		t := time.NewTicker(time.Duration(timeLeftToSnapshotSeconds) * time.Second)
+		<-t.C // Waits until it ticks
+
+		MakeSnapshot(snapshotTimestamp, "")
+	}
+
+	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.", snapshotInterval, snapshotPeriod)
+
 	ticker := time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
 	for range ticker.C {
+
 		logs.Log.Info("Starting automatic snapshot...")
 		if !InProgress {
-			timestamp := int(time.Now().Unix()) - (snapshotPeriod * 3600)
-			MakeSnapshot(timestamp, "")
+			snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
+			MakeSnapshot(snapshotTimestamp, "")
 		} else {
 			logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
 		}
+
+	}
+}
+
+var timeLeftToSnapshotSeconds = 0
+
+/*
+When a snapshot is missing:
+- If node is synced: Makes a snapshot when last snapshot made is older than the snapshotPeriod
+- If node is not synced: TODO Get snapshot from synced hercules neighbor
+*/
+func ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod int) {
+	if snapshotInterval <= 0 || CurrentTimestamp <= 0 {
+		return
 	}
 
+	testNextSnapshotTimeStamp := getNextSnapshotTimestamp(snapshotPeriod)
+	snapshotMissingSuspicion := CurrentTimestamp < testNextSnapshotTimeStamp
+	if snapshotMissingSuspicion {
+		timestampDifference := testNextSnapshotTimeStamp - CurrentTimestamp
+
+		snapshotIntervalSeconds := snapshotInterval * 3600
+		snapshotMissing := timestampDifference >= snapshotIntervalSeconds
+		if snapshotMissing {
+			if IsSynchronized() {
+				logs.Log.Warningf("Last snapshot was created before the configured snapshot interval: Every %v hours. Making a new snapshot. This can take a few minutes.", snapshotInterval)
+				MakeSnapshot(testNextSnapshotTimeStamp, "")
+			} else {
+				logs.Log.Warningf("Last snapshot is older than expected (more than %v hours) and node is not synced.", snapshotInterval)
+				// TODO Get snapshot from synced hercules neighbor
+			}
+		} else {
+			timeLeftToSnapshotSeconds = timestampDifference - snapshotInterval
+		}
+	}
+}
+
+func getNextSnapshotTimestamp(snapshotPeriod int) int {
+	snapshotPeriodSeconds := snapshotPeriod * 3600
+	return int(time.Now().Unix()) - snapshotPeriodSeconds
 }

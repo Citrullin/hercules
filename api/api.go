@@ -45,8 +45,7 @@ var startModules []func(apiConfig *viper.Viper)
 
 func Start(apiConfig *viper.Viper) {
 	config = apiConfig
-	isDebug := !config.GetBool("api.debug")
-	if isDebug {
+	if !config.GetBool("api.debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -75,8 +74,7 @@ func Start(apiConfig *viper.Viper) {
 		if err == nil {
 			caseInsensitiveCommand := strings.ToLower(request.Command)
 			if triesToAccessLimited(caseInsensitiveCommand, c) {
-				logs.Log.Warningf("Denying limited command request %v from remote %v",
-					request.Command, c.Request.RemoteAddr)
+				logs.Log.Warningf("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
 				ReplyError("Limited remote command access", c)
 				return
 			}
@@ -99,18 +97,18 @@ func Start(apiConfig *viper.Viper) {
 		enableSnapshotApi(api)
 	}
 
-	useHttp := config.GetBool("api.http.useHttp")
-	useHttps := config.GetBool("api.https.useHttps")
+	useHTTP := config.GetBool("api.http.useHttp")
+	useHTTPS := config.GetBool("api.https.useHttps")
 
-	if !useHttp && !useHttps {
+	if !useHTTP && !useHTTPS {
 		logs.Log.Fatal("Either useHttp, useHttps, or both must set to true")
 	}
 
-	if useHttp {
+	if useHTTP {
 		go serveHttp(api, config)
 	}
 
-	if useHttps {
+	if useHTTPS {
 		go serveHttps(api, config)
 	}
 }
@@ -203,8 +201,8 @@ func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 }
 
 func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
-	caseInsensitiveApiCall := strings.ToLower(apiCall)
-	apiCalls[caseInsensitiveApiCall] = implementation
+	caseInsensitiveAPICall := strings.ToLower(apiCall)
+	apiCalls[caseInsensitiveAPICall] = implementation
 }
 
 func addStartModule(implementation func(apiConfig *viper.Viper)) {

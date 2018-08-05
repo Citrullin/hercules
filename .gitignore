@@ -8,3 +8,4 @@ data/*
 *.snap
 *.test
 *.pem
+*.exe

@@ -13,12 +13,11 @@ import (
 )
 
 type SnapshotHeader struct {
-	version int64
-	timestamp int64
+	Version   int64
+	Timestamp int64
 }
 
-
-func loadHeader(path string) (*SnapshotHeader, error) {
+func LoadHeader(path string) (*SnapshotHeader, error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		logs.Log.Fatalf("open file error: %v", err)
@@ -38,7 +37,7 @@ func loadHeader(path string) (*SnapshotHeader, error) {
 		if err != nil || timestamp < TIMESTAMP_MIN || timestamp > time.Now().Unix() {
 			return nil, errors.New("no header found and filename seems not to be a timestamp")
 		}
-		return &SnapshotHeader{0,timestamp}, nil
+		return &SnapshotHeader{0, timestamp}, nil
 	}
 
 	version, err := strconv.ParseInt(tokens[0], 10, 32)
