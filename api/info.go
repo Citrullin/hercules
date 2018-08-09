@@ -32,7 +32,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		sindex = index
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"appName":                            "CarrIOTA Hercules Go",
+		"appName":                            "Deviota Hercules Go",
 		"appVersion":                         "0.1.0",
 		"availableProcessors":                runtime.NumCPU(),
 		"currentRoutines":                    runtime.NumGoroutine(),

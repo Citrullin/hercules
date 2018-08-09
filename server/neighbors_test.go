@@ -12,7 +12,7 @@ import (
 
 var expectedConnectionType = "udp"
 var expectedIdentifier = "77.55.235.204"
-var expectedHostname = "field.carriota.com"
+var expectedHostname = "field.deviota.com"
 var expectedPort = "443"
 var invalidConnectionType = "tcp"
 

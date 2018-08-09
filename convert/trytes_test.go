@@ -21,8 +21,8 @@ func TestTrytesToTrits2(t *testing.T) {
 }
 
 func TestTrytesToTrits3(t *testing.T) {
-	expected := "99CARRIOTA9FIELD9DONATION99"
-	trits := TrytesToTrits("99CARRIOTA9FIELD9DONATION99")
+	expected := "99DEVIOTA9FIELD9DONATION99"
+	trits := TrytesToTrits("99DEVIOTA9FIELD9DONATION99")
 	result := TritsToTrytes(trits)
 	if result != expected {
 		t.Error("Trits wrong!")
@@ -38,8 +38,8 @@ func TestTritsToTrytes(t *testing.T) {
 }
 
 func TestTrytesToBytes(t *testing.T) {
-	expected := "99CARRIOTA9FIELD9DONATION99"
-	b := TrytesToBytes("99CARRIOTA9FIELD9DONATION99")[:16]
+	expected := "99DEVIOTA9FIELD9DONATION99"
+	b := TrytesToBytes("99DEVIOTA9FIELD9DONATION99")[:16]
 	result := BytesToTrytes(b)
 	if result != expected {
 		t.Error("Bytes wrong!")

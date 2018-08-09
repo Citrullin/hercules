@@ -1,4 +1,4 @@
-# CarrIOTA Hercules
+# Deviota Hercules
 
 Hercules is a lightweight alternative to IOTA's IRI. The main advantage is that it compiles
 to native code and does not need Java Virtual Machine, which considerably decreases the amount
@@ -19,7 +19,7 @@ space available on your drive. We suggest at least 1GB per day of stored tangle 
 THis value might increase as transaction speed changes in the future.
 The compiled Hercules binary is just 20MB.
 
-Regarding RAM: we officially support devices with at least 1GB RAM. For anything below 2-3GB, please 
+Regarding RAM: we officially support devices with at least 1GB RAM. For anything below 2-3GB, please
 make sure to use the `light` option when starting hercules.
 
 Hercules communicates over UDP with other IRI and Hercules nodes. This means that if you are
@@ -58,9 +58,10 @@ export GOPATH=$HOME/go
 export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 ```
 
-Now run `go version` to make sure that everything works and you have the correct version installed.  You may need to reboot (`sudo reboot`) for the go env variable changes to take effect.  
+Now run `go version` to make sure that everything works and you have the correct version installed. You may need to reboot (`sudo reboot`) for the go env variable changes to take effect.
 
 ### Install gcc
+
 ```
 sudo apt-get install gcc
 ```
@@ -74,11 +75,13 @@ cd $HOME
 git clone https://gitlab.com/semkodev/hercules.git
 cd hercules
 ```
+
 This will download and place the hercules source files in `$HOME` (/home/your_user_name).
 
 ## Building hercules
 
 If you want to build Hercules in a different directory you just need to change the path in the commands below:
+
 ```
 go get -d ./...
 mkdir build
@@ -89,7 +92,7 @@ That's it! Hercules is ready to be used.
 
 ## Running hercules
 
-Running Hercules can be as easy as `./hercules`. For devices with very limited, please check 
+Running Hercules can be as easy as `./hercules`. For devices with very limited, please check
 [Running on low-end devices](#running-on-low-end-devices).
 
 Depending on your OS, you might want to [create a service](https://gitlab.com/semkodev/hercules/wikis/Creating-hercules-service-on-linux-systems) or a startup script to run hercules
@@ -148,6 +151,7 @@ By default, the authentication is disabled.
 Log each request that is made to the API. Default is off
 
 #### --api.http.useHttp=false
+
 Node will NOT accept API requests using HTTP. Default is on.
 
 #### --api.http.host="127.0.0.1" or -h="127.0.0.1"
@@ -160,6 +164,7 @@ The default is `0.0.0.0` which allows the API server to listen to connections in
 Port the API server should listen for HTTP requests on.
 
 #### --api.https.useHttps
+
 Node will accept API requests using HTTPS. Default is off.
 
 #### --api.https.host="192.168.0.0"
@@ -171,14 +176,17 @@ The default is `0.0.0.0` which allows the API server to listen to connections in
 
 Port the API server should listen for HTTPS requests on.
 If you want to use port 443 you need to run the command below to allow hercules to listen on that port
+
 ```
 sudo setcap CAP_NET_BIND_SERVICE=+eip /path/to/hercules
 ```
 
 #### --api.https.certificatePath="cert.pem"
+
 Path to certificate file
 
 #### --api.https.privateKeyPath="key.pem"
+
 Path to private key used to generate the certificate file
 
 #### --api.limitRemoteAccess="getNeighbors,addNeighbors,removeNeighbors"
@@ -215,7 +223,7 @@ Static neighbors to connect to. Each neighbor consists of an IP address and an *
 
 #### --node.port=14600 or -u=14600
 
-UDP port to be used for your Hercules node. 
+UDP port to be used for your Hercules node.
 
 #### --snapshots.path="snapshots"
 
@@ -344,7 +352,7 @@ and download the correct snapshot for a new node from a set of public nodes that
 create snapshots for specific points in time.
 
 When there is a snapshot in progress, `inProgress` will be true and `unfinishedSnapshotTimestamp`
-will be set to the snapshot time that is being generated. 
+will be set to the snapshot time that is being generated.
 
 If only `unfinishedSnapshotTimestamp` is set while `inProgress` is false, it can mean two things:
 
@@ -436,13 +444,13 @@ Our RPi's run on and off for a month now using a Samsung SD Card without any iss
 
 ## API documentation
 
-The complete API will be described in the wiki. It is very similar to 
+The complete API will be described in the wiki. It is very similar to
 the official IOTA API so that the official IOTA Wallet can use a Hercules node
 without noticing any difference.
 
 Biggest changes are the snapshot API described above and the `listAllAccounts` command,
 which is a little CPU-intensive and simply dumps all non-zero accounts with their
-respective balances. Feel free to try it out, but make sure to close it for public access. 
+respective balances. Feel free to try it out, but make sure to close it for public access.
 
 ## Pending: Roadmap
 
@@ -476,8 +484,8 @@ AAJXXFJUEQHKPYIOUIUO9FWCMOAFBZAZPXIFRI9FLDQZJGHQENG9HNMODUZJCHR9RHHUSBHWJELGRDOW
 
 Hercules was created and is maintained by [SemkoDev](https://semkodev.com)
 
-* **Roman Semko** - *SemkoDev* - (https://www.twitter.com/romansemko)
-* **Vitaly Semko** - *SemkoDev* - (https://www.twitter.com/dev_wit)
+- **Roman Semko** - _SemkoDev_ - (https://www.twitter.com/romansemko)
+- **Vitaly Semko** - _SemkoDev_ - (https://www.twitter.com/dev_wit)
 
 ## License
 

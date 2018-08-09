@@ -1,9 +1,9 @@
-              "CarrIOTA Hercules"
+              "Deviota Hercules"
             by SemkoDev GbR
 
 ---
 
-"CarrIOTA Hercules" is a free software developed by:
+"Deviota Hercules" is a free software developed by:
 
 SemkoDev GbR with  
 Anne Kathrin Semko, Vitaly Semko Androsenko, Roman Semko Androsenko  
@@ -36,7 +36,7 @@ If you wish to discuss a commercial license, please contact SemkoDev GbR.
 
 ---
 
-You can find the licenses of CarrIOTA Hercules dependencies in the corresponding
+You can find the licenses of Deviota Hercules dependencies in the corresponding
 folder(s) within the project.
 
 ---
