@@ -174,8 +174,8 @@ func declareLogConfigs() {
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 
 	flag.String("log.logFile", "hercules.log", "Path to file where log files are saved")
-	flag.Int32("log.maxLogFileSize", 10, "Maximum size in mega bytes for log files. Default is 10MB")
-	flag.Int32("log.maxLogFilesToKeep", 1, "Maximum amount of log files to keep when a new file is created. Default is 2 files")
+	flag.Int32("log.maxLogFileSize", 10, "Maximum size in megabytes for log files. Default is 10MB")
+	flag.Int32("log.maxLogFilesToKeep", 1, "Maximum amount of log files to keep when a new file is created. Default is 1 file")
 
 	flag.String("log.criticalErrorsLogFile", "herculesCriticalErrors.log", "Path to file where critical error messages are saved")
 }
