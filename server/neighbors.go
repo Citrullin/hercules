@@ -71,8 +71,8 @@ func RemoveNeighbor(address string) error {
 }
 
 func TrackNeighbor(msg *NeighborTrackingMessage) {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
+	NeighborsLock.RLock()
+	defer NeighborsLock.RUnlock()
 
 	neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
 	if neighborExists {
@@ -83,16 +83,16 @@ func TrackNeighbor(msg *NeighborTrackingMessage) {
 }
 
 func GetNeighborByAddress(address string) *Neighbor {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
+	NeighborsLock.RLock()
+	defer NeighborsLock.RUnlock()
 
 	_, neighbor := checkNeighbourExistsByAddress(address)
 	return neighbor
 }
 
 func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
+	NeighborsLock.RLock()
+	defer NeighborsLock.RUnlock()
 
 	_, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 	return neighbor
@@ -117,6 +117,9 @@ func (nb *Neighbor) GetPreferredIP() string {
 }
 
 func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
+	NeighborsLock.Lock()
+	defer NeighborsLock.Unlock()
+
 	if nb.IPAddressWithPort != ipAddressWithPort {
 		for _, knownIP := range nb.KnownIPs {
 			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)

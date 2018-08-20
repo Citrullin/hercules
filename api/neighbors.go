@@ -61,7 +61,6 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 
 func getNeighbors(request Request, c *gin.Context, t time.Time) {
 	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
 
 	// Get the keys of the map to sort the neighbors
 	neighborKeys := make([]string, len(server.Neighbors))
@@ -84,6 +83,7 @@ func getNeighbors(request Request, c *gin.Context, t time.Time) {
 			"numberOfNewTransactions":     neighbor.New,
 			"connectionType":              neighbor.ConnectionType})
 	}
+	server.NeighborsLock.RUnlock()
 
 	if neighbors == nil {
 		neighbors = make([]interface{}, 0)

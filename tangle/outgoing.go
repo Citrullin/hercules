@@ -33,21 +33,18 @@ func Broadcast(data []byte, exclude string) int {
 	sent := 0
 
 	server.NeighborsLock.RLock()
+	defer server.NeighborsLock.RUnlock()
+
 	for _, neighbor := range server.Neighbors {
-		server.NeighborsLock.RUnlock()
 
 		if neighbor.Addr == exclude {
-			server.NeighborsLock.RLock()
 			continue
 		}
 
 		request := getSomeRequestByAddress(neighbor.Addr, false)
 		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
 		sent++
-
-		server.NeighborsLock.RLock()
 	}
-	server.NeighborsLock.RUnlock()
 
 	return sent
 }
@@ -151,9 +148,9 @@ func outgoingRunner() {
 	}
 
 	server.NeighborsLock.RLock()
-	for _, neighbor := range server.Neighbors {
-		server.NeighborsLock.RUnlock()
+	defer server.NeighborsLock.RUnlock()
 
+	for _, neighbor := range server.Neighbors {
 		var request = getSomeRequestByAddress(neighbor.Addr, false)
 		ipAddressWithPort := server.GetFormattedAddress(neighbor.IP, neighbor.Port)
 		if request != nil {
@@ -162,10 +159,7 @@ func outgoingRunner() {
 			lastTip = time.Now()
 			sendReply(getMessage(nil, nil, true, ipAddressWithPort, nil))
 		}
-
-		server.NeighborsLock.RLock()
 	}
-	server.NeighborsLock.RUnlock()
 }
 
 func requestIfMissing(hash []byte, IPAddressWithPort string) (has bool, err error) {

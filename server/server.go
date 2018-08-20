@@ -213,13 +213,16 @@ func (server Server) receive() {
 		if !neighborExists {
 			// Check all known addresses => slower
 			neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
+
+			NeighborsLock.RUnlock()
+
 			if neighborExists {
 				// If the neighbor was found now, the preferred IP is wrong => Update it!
 				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
 			}
+		} else {
+			NeighborsLock.RUnlock()
 		}
-
-		NeighborsLock.RUnlock()
 
 		if neighborExists {
 			handleMessage(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
