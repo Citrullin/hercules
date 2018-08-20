@@ -37,6 +37,7 @@
   "log": {
     "hello": true,
     "level": "INFO",
+    "useRollingLogFile" : false,
     "logFile": "hercules.log",
     "maxLogFileSize": 10,
     "maxLogFilesToKeep": 1,

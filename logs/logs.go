@@ -1,6 +1,8 @@
 package logs
 
 import (
+	"os"
+
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -15,28 +17,37 @@ func Setup() {
 
 func SetConfig(config *viper.Viper) {
 
-	normalUsageRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
-		Filename:   config.GetString("log.logFile"),
-		MaxSize:    config.GetInt("log.maxLogFileSize"), // megabytes
-		MaxBackups: config.GetInt("log.maxLogFilesToKeep"),
-		Compress:   true, // disabled by default
-	}, "", 0)
+	consoleBackEnd := logging.NewLogBackend(os.Stdout, "", 0)
 
-	errorRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
-		Filename:   config.GetString("log.criticalErrorsLogFile"),
-		MaxSize:    1, // megabytes
-		MaxBackups: 1,
-	}, "", 0)
-
-	// Only critical error messages should be sent to errorRollingLogBackEndLeveled
-	errorRollingLogBackEndLeveled := logging.AddModuleLevel(errorRollingLogBackEnd)
-	errorRollingLogBackEndLeveled.SetLevel(logging.CRITICAL, "")
-
-	logging.SetBackend(normalUsageRollingLogBackEnd, errorRollingLogBackEndLeveled)
+	logToFilesEnabled := config.GetBool("log.useRollingLogFile")
 
 	level, err := logging.LogLevel(config.GetString("log.level"))
 	if err == nil {
 		logging.SetLevel(level, "hercules")
+
+		if logToFilesEnabled {
+			normalUsageRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
+				Filename:   config.GetString("log.logFile"),
+				MaxSize:    config.GetInt("log.maxLogFileSize"), // megabytes
+				MaxBackups: config.GetInt("log.maxLogFilesToKeep"),
+				Compress:   true, // disabled by default
+			}, "", 0)
+
+			errorRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
+				Filename:   config.GetString("log.criticalErrorsLogFile"),
+				MaxSize:    1, // megabytes
+				MaxBackups: 1,
+			}, "", 0)
+
+			// Only critical error messages should be sent to errorRollingLogBackEndLeveled
+			errorRollingLogBackEndLeveled := logging.AddModuleLevel(errorRollingLogBackEnd)
+			errorRollingLogBackEndLeveled.SetLevel(logging.CRITICAL, "")
+
+			logging.SetBackend(consoleBackEnd, normalUsageRollingLogBackEnd, errorRollingLogBackEndLeveled)
+		} else {
+			logging.SetBackend(consoleBackEnd)
+		}
+
 	} else {
 		Log.Warningf("Could not set log level to %v: %v", config.GetString("level"), err)
 		Log.Warning("Using default log level")

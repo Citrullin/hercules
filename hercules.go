@@ -173,6 +173,7 @@ func declareLogConfigs() {
 	flag.Bool("log.hello", true, "Show welcome banner")
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 
+	flag.Bool("log.useRollingLogFile", false, "Enable save log messages to rolling log files")
 	flag.String("log.logFile", "hercules.log", "Path to file where log files are saved")
 	flag.Int32("log.maxLogFileSize", 10, "Maximum size in megabytes for log files. Default is 10MB")
 	flag.Int32("log.maxLogFilesToKeep", 1, "Maximum amount of log files to keep when a new file is created. Default is 1 file")
