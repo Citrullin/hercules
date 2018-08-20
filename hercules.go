@@ -173,9 +173,11 @@ func declareLogConfigs() {
 	flag.Bool("log.hello", true, "Show welcome banner")
 	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 
-	flag.String("log.logFile", "hercules.log", "Path where log files are saved in.")
+	flag.String("log.logFile", "hercules.log", "Path to file where log files are saved")
 	flag.Int32("log.maxLogFileSize", 300, "Maximum size in mega bytes for log files. Default is 300MB")
 	flag.Int32("log.maxLogFilesToKeep", 2, "Maximum amount of log files to keep when a new file is created. Default is 2 files")
+
+	flag.String("log.criticalErrorsLogFile", "herculesCriticalErrors.log", "Path to file where critical error messages are saved")
 }
 
 func Hello() {
