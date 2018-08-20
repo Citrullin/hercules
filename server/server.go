@@ -56,6 +56,7 @@ type Server struct {
 }
 
 var ops uint64 = 0
+var oops uint64 = 0
 var Speed uint64 = 1
 var total uint64 = 0
 var nbWorkers = runtime.NumCPU()
@@ -63,7 +64,7 @@ var flushTicker *time.Ticker
 var hostnameTicker *time.Ticker
 
 //var nbWorkers = runtime.NumCPU()
-var mq messageQueue
+//var mq messageQueue
 var NeighborTrackingQueue neighborTrackingQueue
 var NeighborsLock sync.RWMutex
 var server *Server
@@ -74,7 +75,7 @@ var ended = false
 
 func Create(serverConfig *viper.Viper) *Server {
 	config = serverConfig
-	mq = make(messageQueue, maxQueueSize)
+	//mq = make(messageQueue, maxQueueSize)
 	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
@@ -114,6 +115,7 @@ func Start() {
 			atomic.AddUint64(&total, ops)
 			atomic.StoreUint64(&Speed, ops+1)
 			atomic.StoreUint64(&ops, 0)
+			atomic.StoreUint64(&oops, 0)
 		}
 	}()
 
@@ -159,6 +161,8 @@ func (neighbor Neighbor) Write(msg *Message) {
 	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
 	if err != nil {
 		logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
+	} else {
+		atomic.AddUint64(&oops, 1)
 	}
 }
 
@@ -173,6 +177,7 @@ func (server Server) Write(msg *Message) {
 	}
 }
 
+/*
 func (mq messageQueue) enqueue(m *Message) {
 	mq <- m
 }
@@ -182,10 +187,10 @@ func (mq messageQueue) dequeue() {
 		handleMessage(m)
 	}
 }
-
+*/
 func (server Server) listenAndReceive(maxWorkers int) error {
 	for i := 0; i < maxWorkers; i++ {
-		go mq.dequeue()
+		//go mq.dequeue()
 		go server.receive()
 	}
 	return nil
@@ -217,7 +222,7 @@ func (server Server) receive() {
 		NeighborsLock.RUnlock()
 
 		if neighborExists {
-			mq.enqueue(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
+			handleMessage(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
 		} else {
 			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
 		}
@@ -232,5 +237,5 @@ func handleMessage(msg *Message) {
 }
 
 func report() {
-	logs.Log.Debugf("Incoming TX/s: %.2f\n", float64(ops))
+	logs.Log.Debugf("Incoming TX/s: %d, Outgoing TX/s: %d\n", ops, oops)
 }
