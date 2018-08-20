@@ -95,7 +95,7 @@ func UpdateHostnameAddresses() {
 				logs.Log.Debugf("IP address for '%v' is up-to-date ('%v')", neighbor.Hostname, neighbor.IP)
 			} else {
 				neighbor.UDPAddr, _ = net.ResolveUDPAddr("udp", GetFormattedAddress(ip, neighbor.Port))
-				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, ip, neighbor.IP)
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", neighbor.Hostname, neighbor.IP, ip)
 				neighbor.IP = ip
 			}
 		}
@@ -115,10 +115,6 @@ func createNeighbor(address string) (*Neighbor, error) {
 	ip, hostname, err := getIPAndHostname(identifier)
 	if err != nil {
 		return nil, err
-	}
-
-	if len(strings.Split(ip, ":")) > 1 {
-		ip = "[" + ip + "]"
 	}
 
 	neighbor := Neighbor{
@@ -202,7 +198,12 @@ func getIPAndHostname(identifier string) (ip string, hostname string, err error)
 	}
 	addressFound := len(addresses) > 0
 	if addressFound {
-		return addresses[0], identifier, nil
+		ip = addresses[0]
+		if len(strings.Split(ip, ":")) > 1 {
+			ip = "[" + ip + "]"
+		}
+
+		return ip, identifier, nil
 	}
 
 	return "", "", errors.New("Could not resolve a hostname for " + identifier)
