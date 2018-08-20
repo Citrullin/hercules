@@ -32,15 +32,16 @@ func AddNeighbor(address string) error {
 		return err
 	}
 
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
+	NeighborsLock.RLock()
 	neighborExists, _ := checkNeighbourExists(neighbor)
+	NeighborsLock.RUnlock()
 	if neighborExists {
 		return errors.New("Neighbor already exists")
 	}
 
+	NeighborsLock.Lock()
 	Neighbors[neighbor.IPAddressWithPort] = neighbor
+	NeighborsLock.Unlock()
 
 	logAddNeighbor(neighbor)
 
@@ -58,12 +59,13 @@ func logAddNeighbor(neighbor *Neighbor) {
 }
 
 func RemoveNeighbor(address string) error {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
+	NeighborsLock.RLock()
 	neighborExists, neighbor := checkNeighbourExistsByAddress(address)
+	NeighborsLock.RUnlock()
 	if neighborExists {
+		NeighborsLock.Lock()
 		delete(Neighbors, neighbor.IPAddressWithPort)
+		NeighborsLock.Unlock()
 		return nil
 	}
 
@@ -117,20 +119,20 @@ func (nb *Neighbor) GetPreferredIP() string {
 }
 
 func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
 
 	if nb.IPAddressWithPort != ipAddressWithPort {
 		for _, knownIP := range nb.KnownIPs {
 			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
 			if knownIPWithPort == ipAddressWithPort {
-				delete(Neighbors, nb.IPAddressWithPort)
 				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
+				NeighborsLock.Lock()
+				delete(Neighbors, nb.IPAddressWithPort)
+				nb.IPAddressWithPort = ipAddressWithPort
+				Neighbors[nb.IPAddressWithPort] = nb
+				NeighborsLock.Unlock()
 				nb.PreferIPv6 = knownIP.IsIPv6()
 				nb.IP = knownIP.String()
-				nb.IPAddressWithPort = ipAddressWithPort
 				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
-				Neighbors[nb.IPAddressWithPort] = nb
 				return true
 			}
 		}
@@ -139,12 +141,10 @@ func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed b
 }
 
 func UpdateHostnameAddresses() {
-	NeighborsLock.Lock()
-	defer NeighborsLock.Unlock()
-
 	var neighborsToRemove []string
 	var neighborsToAdd []*Neighbor
 
+	NeighborsLock.RLock()
 	for _, neighbor := range Neighbors {
 		isRegisteredWithHostname := len(neighbor.Hostname) > 0
 		if isRegisteredWithHostname {
@@ -167,7 +167,10 @@ func UpdateHostnameAddresses() {
 			}
 		}
 	}
+	NeighborsLock.RUnlock()
 
+	NeighborsLock.Lock()
+	defer NeighborsLock.Unlock()
 	for _, neighbor := range neighborsToRemove {
 		delete(Neighbors, neighbor)
 	}
