@@ -31,6 +31,8 @@ type Neighbor struct {
 	New               int
 	Invalid           int
 	ConnectionType    string // Formatted like: udp
+	PreferIPv6        bool
+	KnownIPs          []*IPAddress
 }
 
 type Message struct {
@@ -133,7 +135,7 @@ func Start() {
 			}
 			if len(msg.IPAddressWithPort) > 0 {
 				NeighborsLock.RLock()
-				neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort)
+				neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
 				NeighborsLock.RUnlock()
 				if neighborExists {
 					neighbor.Write(msg)
@@ -199,9 +201,21 @@ func (server Server) receive() {
 			continue
 		}
 		ipAddressWithPort := addr.String() // Format <ip>:<port>
+
 		NeighborsLock.RLock()
-		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort)
+
+		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+		if !neighborExists {
+			// Check all known addresses => slower
+			neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
+			if neighborExists {
+				// If the neighbor was found now, the preferred IP is wrong => Update it!
+				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+			}
+		}
+
 		NeighborsLock.RUnlock()
+
 		if neighborExists {
 			mq.enqueue(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
 		} else {

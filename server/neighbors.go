@@ -8,6 +8,23 @@ import (
 	"../logs"
 )
 
+type IPAddress struct {
+	ip string
+}
+
+func (i *IPAddress) IsIPv6() bool {
+	return len(strings.Split(i.ip, ":")) > 1
+}
+
+func (i *IPAddress) String() string {
+	if i.IsIPv6() {
+		// IPv6
+		return "[" + i.ip + "]"
+	} else {
+		return i.ip
+	}
+}
+
 func AddNeighbor(address string) error {
 	neighbor, err := createNeighbor(address)
 
@@ -57,7 +74,7 @@ func TrackNeighbor(msg *NeighborTrackingMessage) {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort)
+	neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
 	if neighborExists {
 		neighbor.Incoming += msg.Incoming
 		neighbor.New += msg.New
@@ -77,8 +94,45 @@ func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
 	NeighborsLock.Lock()
 	defer NeighborsLock.Unlock()
 
-	_, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort)
+	_, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 	return neighbor
+}
+
+func GetPreferredIP(knownIPs []*IPAddress, preferIPv6 bool) string {
+	for _, ip := range knownIPs {
+		if ip.IsIPv6() == preferIPv6 {
+			return ip.String() // Returns IPv4 if IPv6 is not preferred, or IPv6 if otherwise
+		}
+	}
+
+	if len(knownIPs) > 0 {
+		return knownIPs[0].String() // Returns first IP if nothing preferred was found
+	}
+
+	return ""
+}
+
+func (nb *Neighbor) GetPreferredIP() string {
+	return GetPreferredIP(nb.KnownIPs, nb.PreferIPv6)
+}
+
+func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
+	if nb.IPAddressWithPort != ipAddressWithPort {
+		for _, knownIP := range nb.KnownIPs {
+			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
+			if knownIPWithPort == ipAddressWithPort {
+				delete(Neighbors, nb.IPAddressWithPort)
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
+				nb.PreferIPv6 = knownIP.IsIPv6()
+				nb.IP = knownIP.String()
+				nb.IPAddressWithPort = ipAddressWithPort
+				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
+				Neighbors[nb.IPAddressWithPort] = nb
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func UpdateHostnameAddresses() {
@@ -92,7 +146,8 @@ func UpdateHostnameAddresses() {
 		isRegisteredWithHostname := len(neighbor.Hostname) > 0
 		if isRegisteredWithHostname {
 			identifier, _ := getIdentifierAndPort(neighbor.Addr)
-			ip, _, _ := getIPAndHostname(identifier)
+			neighbor.KnownIPs, _, _ = getIPsAndHostname(identifier)
+			ip := neighbor.GetPreferredIP()
 			ipAddressWithPort := GetFormattedAddress(ip, neighbor.Port)
 
 			if neighbor.IPAddressWithPort == ipAddressWithPort {
@@ -129,10 +184,12 @@ func createNeighbor(address string) (*Neighbor, error) {
 		return nil, errors.New("This protocol is not supported yet")
 	}
 
-	ip, hostname, err := getIPAndHostname(identifier)
+	ips, hostname, err := getIPsAndHostname(identifier)
 	if err != nil {
 		return nil, err
 	}
+
+	ip := GetPreferredIP(ips, false)
 
 	neighbor := Neighbor{
 		Hostname:          hostname,
@@ -144,6 +201,8 @@ func createNeighbor(address string) (*Neighbor, error) {
 		Incoming:          0,
 		New:               0,
 		Invalid:           0,
+		PreferIPv6:        false,
+		KnownIPs:          ips,
 	}
 
 	if connectionType == UDP {
@@ -201,34 +260,29 @@ func getIdentifierAndPort(address string) (identifier string, port string) {
 	return identifier, port
 }
 
-func getIPAndHostname(identifier string) (ip string, hostname string, err error) {
-
+func getIPsAndHostname(identifier string) (ips []*IPAddress, hostname string, err error) {
 	addr := net.ParseIP(identifier)
 	isIPFormat := addr != nil
 	if isIPFormat {
-		return addr.String(), "", nil // leave hostname empty when its in IP format
+		return []*IPAddress{&IPAddress{addr.String()}}, "", nil // leave hostname empty when its in IP format
 	}
 
 	// Probably domain name. Check it
 	addresses, err := net.LookupHost(identifier)
 	if err != nil {
-		return "", "", errors.New("Could not process look up for " + identifier)
+		return nil, "", errors.New("Could not process look up for " + identifier)
 	}
 
 	addressFound := len(addresses) > 0
 	if addressFound {
-		for i, addr := range addresses {
-			logs.Log.Errorf("Found addr nr :%d for %v (%v)", i, identifier, addr)
-		}
-		ip = addresses[0]
-		if len(strings.Split(ip, ":")) > 1 {
-			ip = "[" + ip + "]"
+		for _, addr := range addresses {
+			ips = append(ips, &IPAddress{addr})
 		}
 
-		return ip, identifier, nil
+		return ips, identifier, nil
 	}
 
-	return "", "", errors.New("Could not resolve a hostname for " + identifier)
+	return nil, "", errors.New("Could not resolve a hostname for " + identifier)
 }
 
 func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbor *Neighbor) {
@@ -243,8 +297,20 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	return false, nil
 }
 
-func checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort string) (neighborExists bool, neighbor *Neighbor) {
+func checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort string, checkAllKnownAddresses bool) (neighborExists bool, neighbor *Neighbor) {
 	neighbor, neighborExists = Neighbors[ipAddressWithPort]
+
+	if !neighborExists && checkAllKnownAddresses {
+		// Neighbor not found in Neighbors map, maybe another known address fits
+		for _, candidateNeighbor := range Neighbors {
+			for _, knownIP := range candidateNeighbor.KnownIPs {
+				knownIPWithPort := GetFormattedAddress(knownIP.String(), candidateNeighbor.Port)
+				if knownIPWithPort == ipAddressWithPort {
+					return true, candidateNeighbor
+				}
+			}
+		}
+	}
 	return
 }
 
