@@ -214,8 +214,12 @@ func getIPAndHostname(identifier string) (ip string, hostname string, err error)
 	if err != nil {
 		return "", "", errors.New("Could not process look up for " + identifier)
 	}
+
 	addressFound := len(addresses) > 0
 	if addressFound {
+		for i, addr := range addresses {
+			logs.Log.Errorf("Found addr nr :%d for %v (%v)", i, identifier, addr)
+		}
 		ip = addresses[0]
 		if len(strings.Split(ip, ":")) > 1 {
 			ip = "[" + ip + "]"
