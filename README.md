@@ -217,6 +217,10 @@ Sets, what log levels should be logged. Anything above the given level
 will be logged. Possible values: `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
 `INFO` and `DEBUG`. For more information, set this to DEBUG.
 
+#### --log.useRollingLogFile
+
+Enable save log messages to rolling log files
+
 #### --log.logFile="hercules.log" 
 
 Path to file where log files are saved
