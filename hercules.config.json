@@ -36,7 +36,11 @@
   },
   "log": {
     "hello": true,
-    "level": "INFO"
+    "level": "INFO",
+    "logFile": "hercules.log",
+    "maxLogFileSize": 10,
+    "maxLogFilesToKeep": 1,
+    "criticalErrorLogFile" : "herculesCriticalErrors.log"
   },
   "node": {
     "port": 14600,

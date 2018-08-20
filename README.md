@@ -217,6 +217,22 @@ Sets, what log levels should be logged. Anything above the given level
 will be logged. Possible values: `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
 `INFO` and `DEBUG`. For more information, set this to DEBUG.
 
+#### --log.logFile="hercules.log" 
+
+Path to file where log files are saved
+
+#### --log.maxLogFileSize=10
+
+Maximum size in megabytes for log files. Default is 10MB
+
+#### --log.maxLogFilesToKeep=1
+
+Maximum amount of log files to keep when a new file is created. Default is 1 file
+
+#### --log.criticalErrorsLogFile="herculesCriticalErrors.log"
+
+Path to file where critical error messages are saved
+
 #### --node.neighbors="0.0.0.0:14600,1.1.1.1:14600" or -n="0.0.0.0:14600,1.1.1.1:14600"
 
 Static neighbors to connect to. Each neighbor consists of an IP address and an **UDP** port.
