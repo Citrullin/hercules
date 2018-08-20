@@ -99,7 +99,7 @@ func TestAddNeighbor(t *testing.T) {
 
 }
 
-func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
+func TestCheckNeighbourExistsByIPAddressWithPort(t *testing.T) {
 	restartConfig()
 
 	Neighbors = make(map[string]*Neighbor)
@@ -129,7 +129,7 @@ func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
 
 		ipWithPort := GetFormattedAddress(ip, port)
 
-		neighborsExists, neighbor := checkNeighbourExistsByIPAddress(ipWithPort)
+		neighborsExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipWithPort)
 		if !neighborsExists {
 			t.Error("Neighbor does NOT exist!")
 		} else {

@@ -2,10 +2,10 @@ package server
 
 import (
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
-	"runtime"
 
 	"../logs"
 	"github.com/spf13/viper"
@@ -21,24 +21,25 @@ const (
 )
 
 type Neighbor struct {
-	Hostname       string // Formatted like: <domainname> (Empty if its IP address)
-	Addr           string // Formatted like: <ip>:<port> OR <domainname>:<port>
-	IP             string // Formatted like: XXX.XXX.XXX.XXX OR [x:x:x:...] (IPv6)
-	Port           string // Also saved separately from Addr for performance reasons
-	UDPAddr        *net.UDPAddr
-	Incoming       int
-	New            int
-	Invalid        int
-	ConnectionType string // Formatted like: udp
+	Hostname          string // Formatted like: <domainname> (Empty if its IP address)
+	Addr              string // Formatted like: <ip>:<port> OR <domainname>:<port>
+	IP                string // Formatted like: XXX.XXX.XXX.XXX (IPv4) OR [x:x:x:...] (IPv6)
+	Port              string // Also saved separately from Addr for performance reasons
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
+	UDPAddr           *net.UDPAddr
+	Incoming          int
+	New               int
+	Invalid           int
+	ConnectionType    string // Formatted like: udp
 }
 
 type Message struct {
-	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX OR [x:x:x:...]:x (IPv6)
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
 	Msg               []byte
 }
 
 type NeighborTrackingMessage struct {
-	IPAddressWithPort string
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
 	Incoming          int
 	New               int
 	Invalid           int
@@ -132,7 +133,7 @@ func Start() {
 			}
 			if len(msg.IPAddressWithPort) > 0 {
 				NeighborsLock.RLock()
-				neighborExists, neighbor := checkNeighbourExistsByIPAddress(msg.IPAddressWithPort)
+				neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort)
 				NeighborsLock.RUnlock()
 				if neighborExists {
 					neighbor.Write(msg)
@@ -199,12 +200,12 @@ func (server Server) receive() {
 		}
 		ipAddressWithPort := addr.String() // Format <ip>:<port>
 		NeighborsLock.RLock()
-		neighborExists, _ := checkNeighbourExistsByIPAddress(ipAddressWithPort)
+		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort)
 		NeighborsLock.RUnlock()
 		if neighborExists {
 			mq.enqueue(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
 		} else {
-			//logs.Log.Warning("Received from an unknown neighbor", address)
+			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
 		}
 		time.Sleep(1)
 	}
