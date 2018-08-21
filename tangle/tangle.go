@@ -114,8 +114,8 @@ func cleanup() {
 	if lowEndDevice {
 		interval *= 3
 	}
-	flushTicker := time.NewTicker(interval)
-	for range flushTicker.C {
+	cleanupTicker := time.NewTicker(interval)
+	for range cleanupTicker.C {
 		cleanupFingerprints()
 		cleanupRequestQueues()
 		cleanupStalledRequests()

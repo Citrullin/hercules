@@ -62,8 +62,8 @@ func loadTips() {
 }
 
 func startTipRemover() {
-	flushTicker := time.NewTicker(tipRemoverInterval)
-	for range flushTicker.C {
+	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
+	for range tipRemoverTicker.C {
 		logs.Log.Warning("Tips remover starting... Total tips:", len(Tips))
 		var toRemove []*Tip
 		TipsLock.Lock()

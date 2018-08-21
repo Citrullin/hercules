@@ -86,8 +86,8 @@ func startConfirmThread() {
 }
 
 func startUnknownVerificationThread() {
-	flushTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
-	for range flushTicker.C {
+	removeOrphanedPendingTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
+	for range removeOrphanedPendingTicker.C {
 		db.Singleton.View(func(tx db.Transaction) error {
 			var toRemove [][]byte
 			tx.ForPrefix([]byte{db.KEY_PENDING_CONFIRMED}, false, func(key, _ []byte) (bool, error) {

@@ -32,8 +32,8 @@ func Report() {
 
 func report() {
 	Report()
-	flushTicker := time.NewTicker(reportInterval)
-	for range flushTicker.C {
+	tangleReportTicker := time.NewTicker(reportInterval)
+	for range tangleReportTicker.C {
 		Report()
 	}
 }

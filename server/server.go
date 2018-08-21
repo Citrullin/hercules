@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	flushInterval           = time.Duration(1) * time.Second
+	reportInterval          = time.Duration(1) * time.Second
 	hostnameRefreshInterval = time.Duration(300) * time.Second
 	maxQueueSize            = 1000000
 	UDPPacketSize           = 1650
@@ -55,27 +55,22 @@ type Server struct {
 	Outgoing messageQueue
 }
 
-var ops uint64 = 0
-var oops uint64 = 0
-var Speed uint64 = 1
-var total uint64 = 0
+var incTxPerSec uint64
+var outTxPerSec uint64
+var totalIncTx uint64
 var nbWorkers = runtime.NumCPU()
-var flushTicker *time.Ticker
-var hostnameTicker *time.Ticker
-
-//var nbWorkers = runtime.NumCPU()
-//var mq messageQueue
+var reportTicker *time.Ticker
+var hostnameRefreshTicker *time.Ticker
 var NeighborTrackingQueue neighborTrackingQueue
-var NeighborsLock = &sync.RWMutex{}
 var server *Server
 var config *viper.Viper
 var Neighbors map[string]*Neighbor
+var NeighborsLock = &sync.RWMutex{}
 var connection net.PacketConn
 var ended = false
 
 func Create(serverConfig *viper.Viper) *Server {
 	config = serverConfig
-	//mq = make(messageQueue, maxQueueSize)
 	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
@@ -105,23 +100,22 @@ func Start() {
 	}
 	server.listenAndReceive(workers)
 
-	flushTicker = time.NewTicker(flushInterval)
+	reportTicker = time.NewTicker(reportInterval)
 	go func() {
-		for range flushTicker.C {
+		for range reportTicker.C {
 			if ended {
 				break
 			}
 			report()
-			atomic.AddUint64(&total, ops)
-			atomic.StoreUint64(&Speed, ops+1)
-			atomic.StoreUint64(&ops, 0)
-			atomic.StoreUint64(&oops, 0)
+			atomic.AddUint64(&totalIncTx, incTxPerSec)
+			atomic.StoreUint64(&incTxPerSec, 0)
+			atomic.StoreUint64(&outTxPerSec, 0)
 		}
 	}()
 
-	hostnameTicker = time.NewTicker(hostnameRefreshInterval)
+	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
 	go func() {
-		for range hostnameTicker.C {
+		for range hostnameRefreshTicker.C {
 			if ended {
 				break
 			}
@@ -153,8 +147,8 @@ func End() {
 	ended = true
 	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
-	atomic.AddUint64(&total, ops)
-	logs.Log.Debugf("Total iTXs %d\n", total)
+	atomic.AddUint64(&totalIncTx, incTxPerSec)
+	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
 }
 
 func (neighbor Neighbor) Write(msg *Message) {
@@ -162,7 +156,7 @@ func (neighbor Neighbor) Write(msg *Message) {
 	if err != nil {
 		logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
 	} else {
-		atomic.AddUint64(&oops, 1)
+		atomic.AddUint64(&outTxPerSec, 1)
 	}
 }
 
@@ -177,20 +171,8 @@ func (server Server) Write(msg *Message) {
 	}
 }
 
-/*
-func (mq messageQueue) enqueue(m *Message) {
-	mq <- m
-}
-
-func (mq messageQueue) dequeue() {
-	for m := range mq {
-		handleMessage(m)
-	}
-}
-*/
 func (server Server) listenAndReceive(maxWorkers int) error {
 	for i := 0; i < maxWorkers; i++ {
-		//go mq.dequeue()
 		go server.receive()
 	}
 	return nil
@@ -236,9 +218,9 @@ func (server Server) receive() {
 func handleMessage(msg *Message) {
 	server.Incoming <- msg
 	NeighborTrackingQueue <- &NeighborTrackingMessage{IPAddressWithPort: msg.IPAddressWithPort, Incoming: 1}
-	atomic.AddUint64(&ops, 1)
+	atomic.AddUint64(&incTxPerSec, 1)
 }
 
 func report() {
-	logs.Log.Debugf("Incoming TX/s: %d, Outgoing TX/s: %d\n", ops, oops)
+	logs.Log.Debugf("Incoming TX/s: %d, Outgoing TX/s: %d\n", incTxPerSec, outTxPerSec)
 }
