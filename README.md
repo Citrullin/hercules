@@ -146,6 +146,11 @@ Set username and password for basic http authentication when accessing the API.
 Both have to be set for the authentication to work.
 By default, the authentication is disabled.
 
+#### --api.cors.setAllowOriginToAll
+
+Defines if the CORS Header 'Access-Control-Allow-Origin' is set to '*'.
+By default, this option is enabled. Otherwise it is not set at all.
+
 #### --api.debug
 
 Log each request that is made to the API. Default is off

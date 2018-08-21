@@ -6,6 +6,9 @@
       "password": null,
       "username": null
     },
+    "cors": {
+      "setAllowOriginToAll": true
+    },
     "http" : {
       "useHttp" : true,
       "host": "0.0.0.0",

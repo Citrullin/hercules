@@ -64,7 +64,7 @@ func Start(apiConfig *viper.Viper) {
 		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
 	}
 
-	api.Use(CORSMiddleware())
+	api.Use(CORSMiddleware(config.GetBool("api.cors.setAllowOriginToAll")))
 
 	api.POST("/", func(c *gin.Context) {
 		t := time.Now()
@@ -113,9 +113,11 @@ func Start(apiConfig *viper.Viper) {
 	}
 }
 
-func CORSMiddleware() gin.HandlerFunc {
+func CORSMiddleware(setAllowOriginToAll bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		if setAllowOriginToAll {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-IOTA-API-Version")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
