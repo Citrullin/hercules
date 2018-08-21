@@ -134,7 +134,7 @@ func Start() {
 				neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
 				NeighborsLock.RUnlock()
 				if neighborExists {
-					neighbor.Write(msg)
+					go neighbor.Write(msg)
 				}
 			} else {
 				server.Write(msg)
@@ -166,7 +166,7 @@ func (server Server) Write(msg *Message) {
 
 	for _, neighbor := range Neighbors {
 		if neighbor != nil {
-			neighbor.Write(msg)
+			go neighbor.Write(msg)
 		}
 	}
 }
