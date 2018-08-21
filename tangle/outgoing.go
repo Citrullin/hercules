@@ -154,12 +154,11 @@ func outgoingRunner() {
 
 	for _, neighbor := range server.Neighbors {
 		var request = getSomeRequestByAddress(neighbor.Addr, false)
-		ipAddressWithPort := server.GetFormattedAddress(neighbor.IP, neighbor.Port)
 		if request != nil {
-			sendReply(getMessage(nil, request, false, ipAddressWithPort, nil))
+			sendReply(getMessage(nil, request, false, neighbor.IPAddressWithPort, nil))
 		} else if shouldRequestTip {
 			lastTip = time.Now()
-			sendReply(getMessage(nil, nil, true, ipAddressWithPort, nil))
+			sendReply(getMessage(nil, nil, true, neighbor.IPAddressWithPort, nil))
 		}
 	}
 }
