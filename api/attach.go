@@ -22,7 +22,7 @@ const (
 	MaxTimestampValue = 3812798742493 //int64(3^27 - 1) / 2
 )
 
-var mutex = &sync.Mutex{}
+var powLock = &sync.Mutex{}
 var maxMinWeightMagnitude = 0
 var maxTransactions = 0
 var usePowSrv = false
@@ -96,8 +96,8 @@ func getTimestampMilliseconds() int64 {
 // all constants have to be divided by 3
 func attachToTangle(request Request, c *gin.Context, t time.Time) {
 	// only one attatchToTangle allowed in parallel
-	mutex.Lock()
-	defer mutex.Unlock()
+	powLock.Lock()
+	defer powLock.Unlock()
 
 	interruptAttachToTangle = false
 

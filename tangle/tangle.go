@@ -51,11 +51,10 @@ var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 
 var srv *server.Server
 var config *viper.Viper
-var lastIncomingTime map[string]time.Time
-var requestQueues map[string]*RequestQueue
-var incomingTimeLocker = &sync.RWMutex{}
-var requestLocker = &sync.RWMutex{}
-var pendingRequestLocker = &sync.RWMutex{}
+var LastIncomingTime map[string]time.Time
+var LastIncomingTimeLock = &sync.RWMutex{}
+var RequestQueues map[string]*RequestQueue
+var RequestQueuesLock = &sync.RWMutex{}
 
 var lowEndDevice = false
 var totalTransactions int64 = 0
@@ -70,8 +69,8 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	config = cfg
 	srv = s
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
-	requestQueues = make(map[string]*RequestQueue, maxQueueSize)
-	lastIncomingTime = make(map[string]time.Time)
+	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
+	LastIncomingTime = make(map[string]time.Time)
 
 	lowEndDevice = config.GetBool("light")
 

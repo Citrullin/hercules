@@ -42,7 +42,7 @@ var COO_ADDRESS2_BYTES = convert.TrytesToBytes(COO_ADDRESS2)[:49]
 
 var pendingMilestoneQueue PendingMilestoneQueue
 var LatestMilestone Milestone
-var MilestoneLocker = &sync.Mutex{}
+var LatestMilestoneLock = &sync.Mutex{}
 
 // TODO: remove this? Or add an API interface?
 func LoadMissingMilestonesFromFile(path string) error {
@@ -134,9 +134,9 @@ func loadLatestMilestone() {
 
 			trits := convert.BytesToTrits(txBytes)[:8019]
 			tx := transaction.TritsToTX(&trits, txBytes)
-			MilestoneLocker.Lock()
+			LatestMilestoneLock.Lock()
 			LatestMilestone = Milestone{tx, ms}
-			MilestoneLocker.Unlock()
+			LatestMilestoneLock.Unlock()
 			latest = ms
 
 			return true, nil
@@ -146,16 +146,16 @@ func loadLatestMilestone() {
 }
 
 func getLatestMilestone() *Milestone {
-	MilestoneLocker.Lock()
-	defer MilestoneLocker.Unlock()
+	LatestMilestoneLock.Lock()
+	defer LatestMilestoneLock.Unlock()
 	return &LatestMilestone
 }
 
 func checkIsLatestMilestone(index int, tx *transaction.FastTX) bool {
 	milestone := getLatestMilestone()
 	if milestone.Index < index {
-		MilestoneLocker.Lock()
-		defer MilestoneLocker.Unlock()
+		LatestMilestoneLock.Lock()
+		defer LatestMilestoneLock.Unlock()
 		// Add milestone hash:
 		trits := convert.BytesToTrits(tx.Bytes)[:8019]
 		tx = transaction.TritsToTX(&trits, tx.Bytes)

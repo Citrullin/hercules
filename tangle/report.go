@@ -15,7 +15,7 @@ func Report() {
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)",
 		totalTransactions,
 		db.Singleton.CountKeyCategory(db.KEY_PENDING_HASH),
-		len(pendingRequests))
+		len(PendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v (%v), Unknown: %v",
 		totalConfirmations,
 		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING),

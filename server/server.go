@@ -66,7 +66,7 @@ var hostnameTicker *time.Ticker
 //var nbWorkers = runtime.NumCPU()
 //var mq messageQueue
 var NeighborTrackingQueue neighborTrackingQueue
-var NeighborsLock sync.RWMutex
+var NeighborsLock = &sync.RWMutex{}
 var server *Server
 var config *viper.Viper
 var Neighbors map[string]*Neighbor
