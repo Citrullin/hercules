@@ -104,7 +104,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 		}
 		for {
 			outgoingRunner()
-			time.Sleep(time.Duration(2) * time.Millisecond)
+			time.Sleep(interval)
 		}
 	}()
 }
