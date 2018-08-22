@@ -23,7 +23,8 @@ func SetConfig(config *viper.Viper) {
 
 	level, err := logging.LogLevel(config.GetString("log.level"))
 	if err == nil {
-		logging.SetLevel(level, "hercules")
+		consoleBackEndLeveled := logging.AddModuleLevel(consoleBackEnd)
+		consoleBackEndLeveled.SetLevel(level, "hercules")
 
 		if logToFilesEnabled {
 			normalUsageRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
@@ -32,6 +33,8 @@ func SetConfig(config *viper.Viper) {
 				MaxBackups: config.GetInt("log.maxLogFilesToKeep"),
 				Compress:   true, // disabled by default
 			}, "", 0)
+			normalUsageRollingLogBackEndLeveled := logging.AddModuleLevel(normalUsageRollingLogBackEnd)
+			normalUsageRollingLogBackEndLeveled.SetLevel(level, "hercules")
 
 			errorRollingLogBackEnd := logging.NewLogBackend(&lumberjack.Logger{
 				Filename:   config.GetString("log.criticalErrorsLogFile"),
@@ -41,11 +44,11 @@ func SetConfig(config *viper.Viper) {
 
 			// Only critical error messages should be sent to errorRollingLogBackEndLeveled
 			errorRollingLogBackEndLeveled := logging.AddModuleLevel(errorRollingLogBackEnd)
-			errorRollingLogBackEndLeveled.SetLevel(logging.CRITICAL, "")
+			errorRollingLogBackEndLeveled.SetLevel(logging.CRITICAL, "hercules")
 
-			logging.SetBackend(consoleBackEnd, normalUsageRollingLogBackEnd, errorRollingLogBackEndLeveled)
+			logging.SetBackend(consoleBackEndLeveled, normalUsageRollingLogBackEndLeveled, errorRollingLogBackEndLeveled)
 		} else {
-			logging.SetBackend(consoleBackEnd)
+			logging.SetBackend(consoleBackEndLeveled)
 		}
 
 	} else {
