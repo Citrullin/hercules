@@ -171,7 +171,7 @@ func declareApiConfigs() {
 
 func declareLogConfigs() {
 	flag.Bool("log.hello", true, "Show welcome banner")
-	flag.String("log.level", "data", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
+	flag.String("log.level", "INFO", "DEBUG, INFO, NOTICE, WARNING, ERROR or CRITICAL")
 
 	flag.Bool("log.useRollingLogFile", false, "Enable save log messages to rolling log files")
 	flag.String("log.logFile", "hercules.log", "Path to file where log files are saved")
