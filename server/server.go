@@ -194,7 +194,8 @@ func (server Server) receive() {
 		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 		if !neighborExists {
 			// Check all known addresses => slower
-			neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
+			var neighbor *Neighbor
+			neighborExists, neighbor = checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
 
 			NeighborsLock.RUnlock()
 
