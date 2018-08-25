@@ -106,30 +106,23 @@ func (bt *BadgerTransaction) RemoveKeyCategory(keyCategory byte) error {
 }
 
 func (bt *BadgerTransaction) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) int {
-	opts := badger.DefaultIteratorOptions
-	it := bt.txn.NewIterator(opts)
-	defer it.Close()
-
 	var keys [][]byte
-
-	prefix := []byte{keyCategory}
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
+	bt.forPrefix([]byte{keyCategory}, true, func(item *badger.Item) {
 		value, err := item.Value()
 		if err != nil {
-			continue
+			return
 		}
 
 		var ts int64
 		buf := bytes.NewBuffer(value)
 		dec := gob.NewDecoder(buf)
 		if err := dec.Decode(&ts); err != nil {
-			continue
+			return
 		}
 		if ts < timestamp {
 			keys = append(keys, AsKey(item.Key(), keyCategory))
 		}
-	}
+	})
 
 	for _, key := range keys {
 		bt.Remove(key)
@@ -139,12 +132,20 @@ func (bt *BadgerTransaction) RemoveKeysFromCategoryBefore(keyCategory byte, time
 }
 
 func (bt *BadgerTransaction) RemovePrefix(prefix []byte) error {
-	keys := bt.keysByPrefix(prefix)
+	keys := [][]byte{}
+	bt.forPrefix(prefix, false, func(item *badger.Item) {
+		itemKey := item.Key()
+		key := make([]byte, len(itemKey))
+		copy(key, itemKey)
+		keys = append(keys, key)
+	})
+
 	for _, key := range keys {
 		if err := bt.Remove(key); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -153,16 +154,10 @@ func (bt *BadgerTransaction) CountKeyCategory(keyCategory byte) int {
 }
 
 func (bt *BadgerTransaction) CountPrefix(prefix []byte) int {
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := bt.txn.NewIterator(opts)
-	defer it.Close()
-
 	count := 0
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	bt.forPrefix(prefix, false, func(item *badger.Item) {
 		count++
-	}
-
+	})
 	return count
 }
 
@@ -186,19 +181,13 @@ func (bt *BadgerTransaction) Commit() error {
 	return bt.txn.Commit(func(e error) {})
 }
 
-func (bt *BadgerTransaction) keysByPrefix(prefix []byte) [][]byte {
-	opts := badger.DefaultIteratorOptions
-	opts.PrefetchValues = false
-	it := bt.txn.NewIterator(opts)
+func (bt *BadgerTransaction) forPrefix(prefix []byte, prefetchValues bool, fn func(*badger.Item)) {
+	options := badger.DefaultIteratorOptions
+	options.PrefetchValues = prefetchValues
+	it := bt.txn.NewIterator(options)
 	defer it.Close()
 
-	keys := [][]byte{}
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		itemKey := it.Item().Key()
-		key := make([]byte, len(itemKey))
-		copy(key, itemKey)
-		keys = append(keys, key)
+		fn(it.Item())
 	}
-
-	return keys
 }
