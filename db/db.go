@@ -24,7 +24,7 @@ var Locker = &sync.Mutex{}
 /*
 Loads the database and configures according the the config options.
 */
-func Load(cfg *viper.Viper) {
+func xLoad(cfg *viper.Viper) {
 	logs.Log.Info("Loading database")
 
 	config = cfg

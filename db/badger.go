@@ -7,17 +7,25 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/spf13/viper"
 
 	"../logs"
 )
+
+func init() {
+	implementations["badger"] = NewBadger
+}
 
 type Badger struct {
 	db     *badger.DB
 	locker sync.Mutex
 }
 
-func NewBadger(path string, light bool) (*Badger, error) {
-	logs.Log.Info("Loading database")
+func NewBadger(config *viper.Viper) (Interface, error) {
+	path := config.GetString("database.path")
+	light := config.GetBool("light")
+
+	logs.Log.Info("Loading database at %s", path)
 
 	opts := badger.DefaultOptions
 	opts.Dir = path
