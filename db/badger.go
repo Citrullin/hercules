@@ -75,6 +75,109 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	return bt.GetBytes(key)
 }
 
+func (b *Badger) GetBytesRaw(key []byte) ([]byte, error) {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.GetBytesRaw(key)
+}
+
+func (b *Badger) Has(key []byte) bool {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.Has(key)
+}
+
+func (b *Badger) Put(key []byte, value interface{}, ttl *time.Duration) error {
+	return b.update(func(bt *BadgerTransaction) error {
+		return bt.Put(key, value, ttl)
+	})
+}
+
+func (b *Badger) Get(key []byte, value interface{}) error {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.Get(key, value)
+}
+
+func (b *Badger) GetString(key []byte) (string, error) {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.GetString(key)
+}
+
+func (b *Badger) GetInt(key []byte) (int, error) {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.GetInt(key)
+}
+
+func (b *Badger) GetBool(key []byte) (bool, error) {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.GetBool(key)
+}
+
+func (b *Badger) GetInt64(key []byte) (int64, error) {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.GetInt64(key)
+}
+
+func (b *Badger) Remove(key []byte) error {
+	return b.update(func(bt *BadgerTransaction) error {
+		return bt.Remove(key)
+	})
+}
+
+func (b *Badger) RemoveKeyCategory(keyCategory byte) error {
+	return b.update(func(bt *BadgerTransaction) error {
+		return bt.RemoveKeyCategory(keyCategory)
+	})
+}
+
+func (b *Badger) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) (count int) {
+	b.update(func(bt *BadgerTransaction) error {
+		count = bt.RemoveKeysFromCategoryBefore(keyCategory, timestamp)
+		return nil
+	})
+	return
+}
+
+func (b *Badger) RemovePrefix(prefix []byte) error {
+	return b.update(func(bt *BadgerTransaction) error {
+		return bt.RemovePrefix(prefix)
+	})
+}
+
+func (b *Badger) CountKeyCategory(keyCategory byte) int {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.CountKeyCategory(keyCategory)
+}
+
+func (b *Badger) CountPrefix(prefix []byte) int {
+	bt := b.NewTransaction(false)
+	defer bt.Discard()
+
+	return bt.CountPrefix(prefix)
+}
+
+func (b *Badger) IncrementBy(key []byte, delta int64, deleteOnZero bool) (value int64, err error) {
+	err = b.update(func(bt *BadgerTransaction) error {
+		value, err = bt.IncrementBy(key, delta, deleteOnZero)
+		return err
+	})
+	return
+}
+
 func (b *Badger) update(fn func(*BadgerTransaction) error) error {
 	return b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
