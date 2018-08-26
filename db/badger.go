@@ -14,37 +14,47 @@ import (
 
 func init() {
 	implementations["badger"] = NewBadger
+	implementations["badger-low-memory"] = NewBadgerLowMemory
 }
 
 type Badger struct {
-	db     *badger.DB
-	locker sync.Mutex
+	db            *badger.DB
+	locker        sync.Mutex
+	cleanUpTicker *time.Ticker
 }
 
 func NewBadger(config *viper.Viper) (Interface, error) {
+	// TODO: remove the light switch
+	if config.GetBool("light") {
+		return NewBadgerLowMemory(config)
+	}
+	return newBadger(config, badger.DefaultOptions, 5*time.Minute)
+}
+
+func NewBadgerLowMemory(config *viper.Viper) (Interface, error) {
+	// Source: https://github.com/dgraph-io/badger#memory-usage
+	opts := badger.DefaultOptions
+	opts.NumMemtables = 1
+	opts.NumLevelZeroTables = 1
+	opts.NumLevelZeroTablesStall = 2
+	opts.NumCompactors = 1
+	opts.MaxLevels = 5
+	opts.LevelOneSize = 256 << 18
+	opts.MaxTableSize = 64 << 18
+	opts.ValueLogFileSize = 1 << 25
+	opts.ValueLogMaxEntries = 250000
+	return newBadger(config, opts, 2*time.Minute)
+}
+
+func newBadger(config *viper.Viper, opts badger.Options, cleanUpInterval time.Duration) (Interface, error) {
 	path := config.GetString("database.path")
-	light := config.GetBool("light")
 
 	logs.Log.Info("Loading database at %s", path)
 
-	opts := badger.DefaultOptions
 	opts.Dir = path
 	opts.ValueDir = path
-
 	opts.ValueLogLoadingMode = options.FileIO
 	opts.TableLoadingMode = options.FileIO
-	// Source: https://github.com/dgraph-io/badger#memory-usage
-	if light {
-		opts.NumMemtables = 1
-		opts.NumLevelZeroTables = 1
-		opts.NumLevelZeroTablesStall = 2
-		opts.NumCompactors = 1
-		opts.MaxLevels = 5
-		opts.LevelOneSize = 256 << 18
-		opts.MaxTableSize = 64 << 18
-		opts.ValueLogFileSize = 1 << 25
-		opts.ValueLogMaxEntries = 250000
-	}
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -52,8 +62,13 @@ func NewBadger(config *viper.Viper) (Interface, error) {
 	}
 	logs.Log.Info("Database loaded")
 
-	b := &Badger{db: db}
+	b := &Badger{db: db, cleanUpTicker: time.NewTicker(cleanUpInterval)}
 	b.cleanUp()
+	go func() {
+		for range b.cleanUpTicker.C {
+			cleanupDB()
+		}
+	}()
 	return b, nil
 }
 
@@ -61,6 +76,7 @@ func NewBadger(config *viper.Viper) (Interface, error) {
 // This is useful to allow running database processes to finished, but
 // deny locking of new tasks.
 func (b *Badger) Close() error {
+	b.cleanUpTicker.Stop()
 	b.locker.Lock()
 	time.Sleep(5 * time.Second)
 	return b.db.Close()
