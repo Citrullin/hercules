@@ -1,5 +1,5 @@
 package db
 
-import "fmt"
+import "errors"
 
-var ErrTransactionTooBig = fmt.Errorf("transaction too big")
+var ErrTransactionTooBig = errors.New("transaction too big")
