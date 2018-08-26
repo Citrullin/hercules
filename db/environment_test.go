@@ -1,8 +1,6 @@
 package db_test
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -16,13 +14,10 @@ type environment struct {
 	tearDown func()
 }
 
-func setUpTestEnvironment(tb testing.TB) *environment {
-	path, err := ioutil.TempDir("", "badger")
-	require.NoError(tb, err)
+type setUpFunc func() (*viper.Viper, func())
 
-	config := viper.New()
-	config.Set("database.type", "badger")
-	config.Set("database.path", path)
+func setUpTestEnvironment(tb testing.TB, setUpFn setUpFunc) *environment {
+	config, tearDownFn := setUpFn()
 
 	db, err := db.Load(config)
 	require.NoError(tb, err)
@@ -30,7 +25,7 @@ func setUpTestEnvironment(tb testing.TB) *environment {
 	return &environment{
 		db: db,
 		tearDown: func() {
-			require.NoError(tb, os.RemoveAll(path))
+			tearDownFn()
 		},
 	}
 }
