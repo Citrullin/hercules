@@ -2,8 +2,6 @@ package snapshot
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/gob"
 	"io"
 	"os"
 	"strconv"
@@ -14,23 +12,22 @@ import (
 	"../logs"
 	"../utils"
 
-	"github.com/dgraph-io/badger"
 	"github.com/pkg/errors"
 )
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
-	current := GetSnapshotTimestamp(txn)
+func IsNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+	current := GetSnapshotTimestamp(tx)
 	return timestamp > current
 }
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsEqualOrNewerThanSnapshot(timestamp int, txn *badger.Txn) bool {
-	current := GetSnapshotTimestamp(txn)
+func IsEqualOrNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+	current := GetSnapshotTimestamp(tx)
 	return timestamp >= current
 }
 
@@ -39,9 +36,9 @@ Returns whether the current tangle is synchronized
 */
 // TODO: this check is too slow on bigger databases. The counters should be moved to memory.
 func IsSynchronized() bool {
-	return db.Count(db.KEY_PENDING_CONFIRMED) < 10 &&
-		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&
-		db.Count(db.KEY_EVENT_MILESTONE_PENDING) < 5
+	return db.Singleton.CountKeyCategory(db.KEY_PENDING_CONFIRMED) < 10 &&
+		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&
+		db.Singleton.CountKeyCategory(db.KEY_EVENT_MILESTONE_PENDING) < 5
 }
 
 /*
@@ -49,68 +46,13 @@ Checks outstanding pending confirmations that node is beyond the snapshot horizo
 This is just an additional measure to prevent tangle inconsistencies.
 */
 func CanSnapshot(timestamp int) bool {
-	pendingConfirmationsBehindHorizon := false
-	err := db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_EVENT_CONFIRMATION_PENDING}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			v, err := it.Item().Value()
-			if err != nil {
-				return err
-			}
-			var ts = 0
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err = dec.Decode(&ts)
-			if err != nil {
-				return err
-			}
-			if ts > 0 && ts <= timestamp {
-				pendingConfirmationsBehindHorizon = true
-				break
-			}
-		}
-		return nil
-	})
-	return err == nil && !pendingConfirmationsBehindHorizon
+	return !db.Singleton.HasKeysFromCategoryBefore(db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
 }
 
 func checkDatabaseSnapshot() bool {
 	logs.Log.Info("Checking database snapshot integrity")
-	var total int64 = 0
 
-	err := db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_SNAPSHOT_BALANCE}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			v, err := it.Item().Value()
-			if err == nil {
-				var value int64 = 0
-				buf := bytes.NewBuffer(v)
-				dec := gob.NewDecoder(buf)
-				err := dec.Decode(&value)
-				if err == nil {
-					total += value
-				} else {
-					logs.Log.Error("Could not parse a snapshot value from database!")
-					return err
-				}
-			} else {
-				logs.Log.Error("Could not read a snapshot value from database!")
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return false
-	}
+	total := db.Singleton.SumInt64FromCategory(db.KEY_SNAPSHOT_BALANCE)
 	if total == TOTAL_IOTAS {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true
@@ -133,7 +75,7 @@ func checkSnapshotFile(path string) (timestamp int64, err error) {
 
 	timestamp = header.Timestamp
 
-	current, err := db.GetInt([]byte{db.KEY_SNAPSHOT_DATE}, nil)
+	current, err := db.Singleton.GetInt([]byte{db.KEY_SNAPSHOT_DATE})
 	if err == nil && int64(current) > timestamp {
 		logs.Log.Errorf(
 			"The current snapshot (%v) is more recent than the one being loaded (%v)!",
@@ -236,8 +178,8 @@ func checkPendingSnapshot() {
 /*
 Returns whether a transaction from the database can be snapshotted
 */
-func canBeSnapshotted(key []byte, txn *badger.Txn) bool {
-	return db.Has(db.AsKey(key, db.KEY_CONFIRMED), txn) &&
-		!db.Has(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING), txn) &&
-		!db.Has(db.AsKey(key, db.KEY_SNAPSHOTTED), txn)
+func canBeSnapshotted(key []byte, tx db.Transaction) bool {
+	return tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) &&
+		!tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) &&
+		!tx.HasKey(db.AsKey(key, db.KEY_SNAPSHOTTED))
 }

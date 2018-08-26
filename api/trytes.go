@@ -6,7 +6,6 @@ import (
 
 	"../convert"
 	"../db"
-	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,13 +15,13 @@ func init() {
 
 func getTrytes(request Request, c *gin.Context, t time.Time) {
 	var trytes []interface{}
-	_ = db.DB.View(func(txn *badger.Txn) error {
+	db.Singleton.View(func(tx db.Transaction) error {
 		for _, hash := range request.Hashes {
 			if !convert.IsTrytes(hash, 81) {
 				ReplyError("Wrong hash trytes", c)
 				return nil
 			}
-			b, err := db.GetBytes(db.GetByteKey(convert.TrytesToBytes(hash)[:49], db.KEY_BYTES), txn)
+			b, err := tx.GetBytes(db.GetByteKey(convert.TrytesToBytes(hash)[:49], db.KEY_BYTES))
 			if err == nil {
 				trytes = append(trytes, convert.BytesToTrytes(b)[:2673])
 			} else {

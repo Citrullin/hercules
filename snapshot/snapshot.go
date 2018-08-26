@@ -6,7 +6,6 @@ import (
 	"../db"
 	"../logs"
 	"../utils"
-	"github.com/dgraph-io/badger"
 	"github.com/spf13/viper"
 )
 
@@ -72,8 +71,8 @@ func loadSnapshotFiles() {
 /*
 Sets the current snapshot date in the database
 */
-func SetSnapshotTimestamp(timestamp int, txn *badger.Txn) error {
-	err := db.Put(keySnapshotDate, timestamp, nil, txn)
+func SetSnapshotTimestamp(timestamp int, tx db.Transaction) error {
+	err := tx.Put(keySnapshotDate, timestamp, nil)
 	if err == nil {
 		CurrentTimestamp = timestamp
 	}
@@ -84,39 +83,39 @@ func SetSnapshotTimestamp(timestamp int, txn *badger.Txn) error {
 Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
 */
-func IsLocked(txn *badger.Txn) (timestamp int, filename string) {
-	return GetSnapshotLock(txn), GetSnapshotFileLock(txn)
+func IsLocked(tx db.Transaction) (timestamp int, filename string) {
+	return GetSnapshotLock(tx), GetSnapshotFileLock(tx)
 }
 
 /*
 Creates a snapshot lock in the database
 */
-func Lock(timestamp int, filename string, txn *badger.Txn) error {
+func Lock(timestamp int, filename string, tx db.Transaction) error {
 	InProgress = true
-	err := db.Put(keySnapshotLock, timestamp, nil, txn)
+	err := tx.Put(keySnapshotLock, timestamp, nil)
 	if err != nil {
 		return err
 	}
-	return db.Put(keySnapshotFile, filename, nil, txn)
+	return tx.Put(keySnapshotFile, filename, nil)
 }
 
 /*
 Removes a snapshot lock in the database
 */
-func Unlock(txn *badger.Txn) error {
+func Unlock(tx db.Transaction) error {
 	InProgress = false
-	err := db.Remove(keySnapshotLock, txn)
+	err := tx.Remove(keySnapshotLock)
 	if err != nil {
 		return err
 	}
-	return db.Remove(keySnapshotFile, txn)
+	return tx.Remove(keySnapshotFile)
 }
 
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotLock(txn *badger.Txn) int {
-	timestamp, err := db.GetInt(keySnapshotLock, txn)
+func GetSnapshotLock(tx db.Transaction) int {
+	timestamp, err := tx.GetInt(keySnapshotLock)
 	if err != nil {
 		return -1
 	}
@@ -126,12 +125,12 @@ func GetSnapshotLock(txn *badger.Txn) int {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotTimestamp(txn *badger.Txn) int {
+func GetSnapshotTimestamp(tx db.Transaction) int {
 	if CurrentTimestamp > 0 {
 		return CurrentTimestamp
 	}
 
-	timestamp, err := db.GetInt(keySnapshotDate, txn)
+	timestamp, err := tx.GetInt(keySnapshotDate)
 	if err != nil {
 		return -1
 	}
@@ -141,8 +140,8 @@ func GetSnapshotTimestamp(txn *badger.Txn) int {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotFileLock(txn *badger.Txn) string {
-	filename, err := db.GetString(keySnapshotFile, txn)
+func GetSnapshotFileLock(tx db.Transaction) string {
+	filename, err := tx.GetString(keySnapshotFile)
 	if err != nil {
 		return ""
 	}

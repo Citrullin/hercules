@@ -9,7 +9,6 @@ import (
 	"../logs"
 	"../server"
 	"../utils"
-	"github.com/dgraph-io/badger"
 	"github.com/lukechampine/randmap"
 )
 
@@ -62,49 +61,45 @@ func loadPendingRequests() {
 	// TODO: if pending is pending for too long, remove it from the loop?
 	logs.Log.Info("Loading pending requests")
 
-	db.Locker.Lock()
-	defer db.Locker.Unlock()
+	db.Singleton.Lock()
+	defer db.Singleton.Unlock()
 	requestLocker.Lock()
 	defer requestLocker.Unlock()
 
 	total := 0
 	added := 0
 
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_PENDING_HASH}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			v, _ := item.Value()
-			var hash []byte
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&hash)
-			if err == nil {
-				timestamp, err := db.GetInt64(db.AsKey(item.Key(), db.KEY_PENDING_TIMESTAMP), txn)
-				if err == nil {
-					for _, neighbor := range server.Neighbors {
-						queue, ok := requestQueues[neighbor.Addr]
-						if !ok {
-							q := make(RequestQueue, maxQueueSize)
-							queue = &q
-							requestQueues[neighbor.Addr] = queue
-						}
-						*queue <- &Request{hash, false}
-					}
-					addPendingRequest(hash, timestamp, "", false)
-					added++
-				} else {
-					logs.Log.Warning("Could not load pending Tx Timestamp")
-				}
-			} else {
-				logs.Log.Warning("Could not load pending Tx Hash")
-			}
+	db.Singleton.View(func(tx db.Transaction) error {
+		return tx.ForPrefix([]byte{db.KEY_PENDING_HASH}, true, func(key, value []byte) (bool, error) {
 			total++
-		}
-		return nil
+
+			var hash []byte
+
+			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&hash); err != nil {
+				logs.Log.Warning("Could not load pending Tx Hash")
+				return true, nil
+			}
+
+			timestamp, err := tx.GetInt64(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			if err != nil {
+				logs.Log.Warning("Could not load pending Tx Timestamp")
+				return true, nil
+			}
+
+			for _, neighbor := range server.Neighbors {
+				queue, ok := requestQueues[neighbor.Addr]
+				if !ok {
+					q := make(RequestQueue, maxQueueSize)
+					queue = &q
+					requestQueues[neighbor.Addr] = queue
+				}
+				*queue <- &Request{hash, false}
+			}
+			addPendingRequest(hash, timestamp, "", false)
+			added++
+
+			return true, nil
+		})
 	})
 
 	logs.Log.Info("Pending requests loaded", added, total)
@@ -179,7 +174,7 @@ func requestIfMissing(hash []byte, IPAddressWithPort string) (has bool, err erro
 		return has, nil
 	}
 	key := db.GetByteKey(hash, db.KEY_HASH)
-	if !db.Has(key, nil) && !db.Has(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), nil) {
+	if !db.Singleton.HasKey(key) && !db.Singleton.HasKey(db.AsKey(key, db.KEY_PENDING_TIMESTAMP)) {
 		pending := addPendingRequest(hash, 0, IPAddressWithPort, true)
 		if pending != nil {
 			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
@@ -214,14 +209,14 @@ func sendReply(msg *Message) {
 	lastRequestTime, ok := lastIncomingTime[msg.IPAddressWithPort]
 	incomingTimeLocker.RUnlock()
 	if ok && time.Now().Sub(lastRequestTime) < reRequestInterval {
-		db.IncrBy(db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false, nil)
+		db.Singleton.IncrementBy(db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false)
 	}
 
 	srv.Outgoing <- &server.Message{IPAddressWithPort: msg.IPAddressWithPort, Msg: data}
 	outgoing++
 }
 
-func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, txn *badger.Txn) *Message {
+func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, tx db.Transaction) *Message {
 	var hash []byte
 	if resp == nil {
 		hash, resp = getRandomTip()
@@ -306,8 +301,8 @@ func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, s
 
 	if save {
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
-		db.Put(key, hash, nil, nil)
-		db.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil, nil)
+		db.Singleton.Put(key, hash, nil)
+		db.Singleton.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil)
 	}
 
 	addr := IPAddressWithPort
@@ -331,8 +326,8 @@ func removePendingRequest(hash []byte) bool {
 	if ok {
 		delete(pendingRequests, key)
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
-		db.Remove(key, nil)
-		db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), nil)
+		db.Singleton.Remove(key)
+		db.Singleton.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
 	}
 	return ok
 }
@@ -400,45 +395,52 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 After a certain amount of requests of specific hash from the neighbors,
 if the TX is not received, the requests is deleted. This is probably a fake
 or invalid spam referenced by trunk/branch of a transaction. Just ignore.
- */
+*/
 func cleanupStalledRequests() {
 	pendingRequestLocker.Lock()
 	defer pendingRequestLocker.Unlock()
 
 	var toRemove [][]byte
-	db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_PENDING_REQUESTS}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			v, _ := item.Value()
+	db.Singleton.View(func(tx db.Transaction) error {
+		return tx.ForPrefix([]byte{db.KEY_PENDING_REQUESTS}, true, func(key, value []byte) (bool, error) {
 			var times int
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&times)
-			if err == nil && times > maxTimesRequest {
-				toRemove = append(toRemove, db.AsKey(item.Key(), db.KEY_PENDING_REQUESTS))
+			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&times); err != nil {
+				return true, nil
 			}
-		}
-		return nil
+			if times > maxTimesRequest {
+				toRemove = append(toRemove, db.AsKey(key, db.KEY_PENDING_REQUESTS))
+			}
+			return true, nil
+		})
 	})
+
 	for _, key := range toRemove {
 		var hash []byte
-		err := db.DB.Update(func(txn *badger.Txn) error {
-			err := db.Remove(key, txn)
-			if err != nil { return err }
-			k := db.AsKey(key, db.KEY_PENDING_HASH)
-			hash, err = db.GetBytes(k , txn)
-			if err == nil {
-				err = db.Remove(db.AsKey(key, db.KEY_PENDING_HASH), txn)
-				if err != nil { return err }
-				err = db.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), txn)
-				if err != nil { return err }
-				err = db.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED), txn)
-				if err != nil { return err }
+		err := db.Singleton.Update(func(tx db.Transaction) error {
+			if err := tx.Remove(key); err != nil {
+				return err
 			}
+			k := db.AsKey(key, db.KEY_PENDING_HASH)
+
+			err := error(nil)
+			hash, err = tx.GetBytes(k)
+			if err != nil {
+				return nil
+			}
+
+			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_HASH))
+			if err != nil {
+				return err
+			}
+			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			if err != nil {
+				return err
+			}
+			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
+			if err != nil {
+				return err
+			}
+
 			return nil
 		})
 		if err == nil && hash != nil {

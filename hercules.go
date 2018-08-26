@@ -36,15 +36,15 @@ func main() {
 
 func StartHercules() {
 	logs.Log.Info("Starting Hercules. Please wait...")
-	db.Load(config)
+	if err := db.LoadSingleton(config); err != nil {
+		logs.Log.Fatal(err)
+	}
 	srv := server.Create(config)
 
 	snapshot.Start(config)
 	tangle.Start(srv, config)
 	server.Start()
 	api.Start(config)
-
-	go db.StartPeriodicDatabaseCleanup()
 
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, os.Interrupt)
@@ -59,7 +59,9 @@ func StartHercules() {
 		}()
 		go api.End()
 		go server.End()
-		db.End()
+		if err := db.Singleton.Close(); err != nil {
+			logs.Log.Fatal(err)
+		}
 	}
 }
 

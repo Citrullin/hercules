@@ -8,7 +8,7 @@ import (
 
 var Singleton Interface
 
-func LoadGlobal(config *viper.Viper) error {
+func LoadSingleton(config *viper.Viper) error {
 	database, err := Load(config)
 	if err != nil {
 		return err

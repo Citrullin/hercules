@@ -1,18 +1,18 @@
 package tangle
 
 import (
+	"bytes"
 	"math"
 	"math/rand"
-	"bytes"
 
 	"time"
 
+	"sync"
+
+	"../convert"
 	"../db"
 	"../logs"
-	"../convert"
 	"../transaction"
-	"github.com/dgraph-io/badger"
-	"sync"
 )
 
 const (
@@ -47,7 +47,7 @@ var transactions = make(map[string]*transaction.FastTX)
 func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
 		key := db.GetByteKey(reference, db.KEY_HASH)
-		if db.Has(key, nil) {
+		if db.Singleton.HasKey(key) {
 			return key
 		}
 	}
@@ -67,8 +67,8 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 	tKey := string(reference)
 	tx, ok := transactions[tKey]
 	if !ok {
-		txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
-		hash, err2 := db.GetBytes(db.AsKey(reference, db.KEY_HASH), nil)
+		txBytes, err := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_BYTES))
+		hash, err2 := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_HASH))
 		if err != nil || err2 != nil {
 			graph.Valid = false
 			return graph
@@ -112,16 +112,11 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 
 func findApprovees(key []byte) [][]byte {
 	var response [][]byte
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := db.AsKey(key, db.KEY_APPROVEE)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			response = append(response, db.AsKey(it.Item().Key()[16:], db.KEY_HASH))
-		}
-		return nil
+	db.Singleton.View(func(tx db.Transaction) error {
+		return tx.ForPrefix([]byte{db.KEY_APPROVEE}, false, func(key, _ []byte) (bool, error) {
+			response = append(response, db.AsKey(key[16:], db.KEY_HASH))
+			return true, nil
+		})
 	})
 	return response
 }
@@ -135,7 +130,7 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if currentDepth > maxDepth {
 		return false
 	}
-	if db.Has(db.AsKey(reference, db.KEY_CONFIRMED), nil) || db.Has(db.AsKey(reference, db.KEY_GTTA), nil) {
+	if db.Singleton.HasKey(db.AsKey(reference, db.KEY_CONFIRMED)) || db.Singleton.HasKey(db.AsKey(reference, db.KEY_GTTA)) {
 		seen[key] = true
 		return true
 	}
@@ -149,8 +144,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 
 	tx, ok := transactions[key]
 	if !ok {
-		txBytes, err := db.GetBytes(db.AsKey(reference, db.KEY_BYTES), nil)
-		hash, err2 := db.GetBytes(db.AsKey(reference, db.KEY_HASH), nil)
+		txBytes, err := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_BYTES))
+		hash, err2 := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_HASH))
 		if err != nil || err2 != nil {
 			return false
 		}
@@ -173,8 +168,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 		seen[key] = false
 		return false
 	}
-	trunkOk := hasConfirmedParent(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH), maxDepth, currentDepth + 1, seen, transactions)
-	branchOk := hasConfirmedParent(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH), maxDepth, currentDepth + 1, seen, transactions)
+	trunkOk := hasConfirmedParent(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH), maxDepth, currentDepth+1, seen, transactions)
+	branchOk := hasConfirmedParent(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH), maxDepth, currentDepth+1, seen, transactions)
 	ok = trunkOk && branchOk
 	seen[key] = ok
 	return ok
@@ -254,13 +249,12 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 }
 
 func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
-	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (
-		db.Has(db.AsKey(rating.Graph.Key, db.KEY_CONFIRMED), nil) ||
-		db.Has(db.AsKey(rating.Graph.Key, db.KEY_GTTA), nil) ||
+	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (db.Singleton.HasKey(db.AsKey(rating.Graph.Key, db.KEY_CONFIRMED)) ||
+		db.Singleton.HasKey(db.AsKey(rating.Graph.Key, db.KEY_GTTA)) ||
 		isConsistent([]*GraphRating{rating}, ledgerState, transactions))
 }
 
-func isConsistent (entryPoints []*GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
+func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
 	ledgerDiff := make(map[string]int64)
 	seen := make(map[string]bool)
 	for _, r := range entryPoints {
@@ -280,13 +274,13 @@ func isConsistent (entryPoints []*GraphRating, ledgerState map[string]int64, tra
 		if value < 0 {
 			_, ok := ledgerState[addrString]
 			if !ok {
-				balance, err := db.GetInt64(db.GetAddressKey([]byte(addrString), db.KEY_BALANCE), nil)
+				balance, err := db.Singleton.GetInt64(db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
 				if err != nil {
 					balance = 0
 				}
 				ledgerState[addrString] = balance
 			}
-			if ledgerState[addrString] + value < 0 {
+			if ledgerState[addrString]+value < 0 {
 				return false
 			}
 		}
@@ -295,7 +289,7 @@ func isConsistent (entryPoints []*GraphRating, ledgerState map[string]int64, tra
 	return true
 }
 
-func buildGraphDiff (ledgerDiff map[string]int64, tx *transaction.FastTX, transactions map[string]*transaction.FastTX, seen map[string]bool) {
+func buildGraphDiff(ledgerDiff map[string]int64, tx *transaction.FastTX, transactions map[string]*transaction.FastTX, seen map[string]bool) {
 	cacheKey := string(tx.Hash)
 
 	_, saw := seen[cacheKey]
@@ -341,7 +335,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 	var ledgerState = make(map[string]int64)
 	var graphRatings = make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, seen,true, transactions)
+	graph := buildGraph(reference, &graphRatings, seen, true, transactions)
 
 	graphRatings[string(reference)] = &GraphRating{0, graph}
 
@@ -365,7 +359,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
-					db.Put(db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix(), nil, nil)
+					db.Singleton.Put(db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix(), nil)
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer

@@ -43,7 +43,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		require.NoError(t,
 			e.db.PutBytes(testKey, testValue, nil))
 
-		assert.True(t, e.db.Has(testKey))
+		assert.True(t, e.db.HasKey(testKey))
 	})
 
 	t.Run("Put", func(t *testing.T) {
@@ -81,7 +81,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		require.NoError(t,
 			e.db.Remove(testKey))
 
-		assert.False(t, e.db.Has(testKey))
+		assert.False(t, e.db.HasKey(testKey))
 	})
 
 	t.Run("RemovePrefix", func(t *testing.T) {
@@ -94,8 +94,8 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		require.NoError(t,
 			e.db.RemovePrefix([]byte("aa")))
 
-		assert.True(t, e.db.Has([]byte("abc")))
-		assert.False(t, e.db.Has([]byte("aac")))
+		assert.True(t, e.db.HasKey([]byte("abc")))
+		assert.False(t, e.db.HasKey([]byte("aac")))
 	})
 
 	t.Run("RemoveKeysFromCategoryBefore", func(t *testing.T) {
@@ -107,7 +107,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 
 		assert.Equal(t, 1, e.db.RemoveKeysFromCategoryBefore(db.KEY_EDGE, 2000))
 
-		assert.False(t, e.db.Has(key))
+		assert.False(t, e.db.HasKey(key))
 	})
 
 	t.Run("CountPrefix", func(t *testing.T) {

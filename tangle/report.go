@@ -14,20 +14,20 @@ func Report() {
 		len(srv.Outgoing))
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)",
 		totalTransactions,
-		db.Count(db.KEY_PENDING_HASH),
+		db.Singleton.CountKeyCategory(db.KEY_PENDING_HASH),
 		len(pendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v (%v), Unknown: %v",
 		totalConfirmations,
-		db.Count(db.KEY_EVENT_CONFIRMATION_PENDING),
+		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING),
 		len(confirmQueue),
-		db.Count(db.KEY_PENDING_CONFIRMED))
-	logs.Log.Debugf("PENDING TRIMS: %v", db.Count(db.KEY_EVENT_TRIM_PENDING))
+		db.Singleton.CountKeyCategory(db.KEY_PENDING_CONFIRMED))
+	logs.Log.Debugf("PENDING TRIMS: %v", db.Singleton.CountKeyCategory(db.KEY_EVENT_TRIM_PENDING))
 	logs.Log.Infof("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
 		LatestMilestone.Index,
-		db.Count(db.KEY_MILESTONE),
-		db.Count(db.KEY_EVENT_MILESTONE_PENDING),
+		db.Singleton.CountKeyCategory(db.KEY_MILESTONE),
+		db.Singleton.CountKeyCategory(db.KEY_EVENT_MILESTONE_PENDING),
 		len(pendingMilestoneQueue))
-	logs.Log.Infof("TIPS:          %v\n", db.Count(db.KEY_TIP))
+	logs.Log.Infof("TIPS:          %v\n", db.Singleton.CountKeyCategory(db.KEY_TIP))
 }
 
 func report() {

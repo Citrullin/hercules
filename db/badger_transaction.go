@@ -13,10 +13,16 @@ type BadgerTransaction struct {
 }
 
 func (bt *BadgerTransaction) PutBytes(key, value []byte, ttl *time.Duration) error {
+	err := error(nil)
 	if ttl == nil {
-		return bt.txn.Set(key, value)
+		err = bt.txn.Set(key, value)
+	} else {
+		err = bt.txn.SetWithTTL(key, value, *ttl)
 	}
-	return bt.txn.SetWithTTL(key, value, *ttl)
+	if err == badger.ErrTxnTooBig {
+		return ErrTransactionTooBig
+	}
+	return err
 }
 
 func (bt *BadgerTransaction) GetBytes(key []byte) ([]byte, error) {
@@ -46,15 +52,30 @@ func (bt *BadgerTransaction) GetBytesRaw(key []byte) ([]byte, error) {
 	return response, nil
 }
 
-func (bt *BadgerTransaction) Has(key []byte) bool {
+func (bt *BadgerTransaction) HasKey(key []byte) bool {
 	_, err := bt.txn.Get(key)
 	return err == nil
 }
 
+func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timestamp int) bool {
+	result := false
+	bt.ForPrefix([]byte{keyCategory}, true, func(_, value []byte) (bool, error) {
+		var ts = 0
+		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts); err != nil {
+			return false, err
+		}
+		if ts > 0 && ts <= timestamp {
+			result = true
+			return false, nil
+		}
+		return true, nil
+	})
+	return result
+}
+
 func (bt *BadgerTransaction) Put(key []byte, value interface{}, ttl *time.Duration) error {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(value); err != nil {
+	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err
 	}
 	return bt.PutBytes(key, buf.Bytes(), ttl)
@@ -98,7 +119,11 @@ func (bt *BadgerTransaction) GetInt64(key []byte) (int64, error) {
 }
 
 func (bt *BadgerTransaction) Remove(key []byte) error {
-	return bt.txn.Delete(key)
+	err := bt.txn.Delete(key)
+	if err == badger.ErrTxnTooBig {
+		return ErrTransactionTooBig
+	}
+	return err
 }
 
 func (bt *BadgerTransaction) RemoveKeyCategory(keyCategory byte) error {
@@ -107,21 +132,16 @@ func (bt *BadgerTransaction) RemoveKeyCategory(keyCategory byte) error {
 
 func (bt *BadgerTransaction) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) int {
 	var keys [][]byte
-	bt.forPrefix([]byte{keyCategory}, true, func(item *badger.Item) {
-		value, err := item.Value()
-		if err != nil {
-			return
-		}
-
+	bt.ForPrefix([]byte{keyCategory}, true, func(key, value []byte) (bool, error) {
 		var ts int64
-		buf := bytes.NewBuffer(value)
-		dec := gob.NewDecoder(buf)
-		if err := dec.Decode(&ts); err != nil {
-			return
+		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts); err != nil {
+			return false, err
 		}
 		if ts < timestamp {
-			keys = append(keys, AsKey(item.Key(), keyCategory))
+			keys = append(keys, AsKey(key, keyCategory))
 		}
+
+		return true, nil
 	})
 
 	for _, key := range keys {
@@ -133,11 +153,11 @@ func (bt *BadgerTransaction) RemoveKeysFromCategoryBefore(keyCategory byte, time
 
 func (bt *BadgerTransaction) RemovePrefix(prefix []byte) error {
 	keys := [][]byte{}
-	bt.forPrefix(prefix, false, func(item *badger.Item) {
-		itemKey := item.Key()
+	bt.ForPrefix(prefix, false, func(itemKey, _ []byte) (bool, error) {
 		key := make([]byte, len(itemKey))
 		copy(key, itemKey)
 		keys = append(keys, key)
+		return true, nil
 	})
 
 	for _, key := range keys {
@@ -155,10 +175,25 @@ func (bt *BadgerTransaction) CountKeyCategory(keyCategory byte) int {
 
 func (bt *BadgerTransaction) CountPrefix(prefix []byte) int {
 	count := 0
-	bt.forPrefix(prefix, false, func(item *badger.Item) {
+	bt.ForPrefix(prefix, false, func(_, _ []byte) (bool, error) {
 		count++
+		return true, nil
 	})
 	return count
+}
+
+func (bt *BadgerTransaction) SumInt64FromCategory(keyCategory byte) int64 {
+	sum := int64(0)
+	bt.ForPrefix([]byte{keyCategory}, true, func(_, value []byte) (bool, error) {
+		var v int64 = 0
+		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
+			return false, err
+		}
+		sum += v
+
+		return true, nil
+	})
+	return sum
 }
 
 func (bt *BadgerTransaction) IncrementBy(key []byte, delta int64, deleteOnZero bool) (int64, error) {
@@ -181,13 +216,30 @@ func (bt *BadgerTransaction) Commit() error {
 	return bt.txn.Commit(func(e error) {})
 }
 
-func (bt *BadgerTransaction) forPrefix(prefix []byte, prefetchValues bool, fn func(*badger.Item)) {
+func (bt *BadgerTransaction) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
 	options := badger.DefaultIteratorOptions
-	options.PrefetchValues = prefetchValues
+	options.PrefetchValues = fetchValues
 	it := bt.txn.NewIterator(options)
 	defer it.Close()
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		fn(it.Item())
+		ok, err := false, error(nil)
+		if fetchValues {
+			value, err := it.Item().Value()
+			if err != nil {
+				return err
+			}
+			ok, err = fn(it.Item().Key(), value)
+		} else {
+			ok, err = fn(it.Item().Key(), nil)
+		}
+		if err != nil {
+			return err
+		}
+		if !ok {
+			break
+		}
 	}
+
+	return nil
 }
