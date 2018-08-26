@@ -18,7 +18,7 @@ func LoadSingleton(config *viper.Viper) error {
 }
 
 func Load(config *viper.Viper) (Interface, error) {
-	databaseType := config.GetString("database.type")
+	databaseType := "badger" // config.GetString("database.type")
 
 	implementation, found := implementations[databaseType]
 	if !found {

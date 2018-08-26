@@ -13,8 +13,7 @@ import (
 )
 
 func init() {
-	implementations["badger"] = NewBadger
-	implementations["badger-low-memory"] = NewBadgerLowMemory
+	RegisterImplementation("badger", NewBadger)
 }
 
 type Badger struct {
@@ -24,37 +23,32 @@ type Badger struct {
 }
 
 func NewBadger(config *viper.Viper) (Interface, error) {
-	// TODO: remove the light switch
-	if config.GetBool("light") {
-		return NewBadgerLowMemory(config)
-	}
-	return newBadger(config, badger.DefaultOptions, 5*time.Minute)
-}
-
-func NewBadgerLowMemory(config *viper.Viper) (Interface, error) {
-	// Source: https://github.com/dgraph-io/badger#memory-usage
-	opts := badger.DefaultOptions
-	opts.NumMemtables = 1
-	opts.NumLevelZeroTables = 1
-	opts.NumLevelZeroTablesStall = 2
-	opts.NumCompactors = 1
-	opts.MaxLevels = 5
-	opts.LevelOneSize = 256 << 18
-	opts.MaxTableSize = 64 << 18
-	opts.ValueLogFileSize = 1 << 25
-	opts.ValueLogMaxEntries = 250000
-	return newBadger(config, opts, 2*time.Minute)
-}
-
-func newBadger(config *viper.Viper, opts badger.Options, cleanUpInterval time.Duration) (Interface, error) {
 	path := config.GetString("database.path")
+	light := config.GetBool("light")
 
 	logs.Log.Info("Loading database at %s", path)
 
+	cleanUpInterval := 5 * time.Minute
+
+	opts := badger.DefaultOptions
 	opts.Dir = path
 	opts.ValueDir = path
 	opts.ValueLogLoadingMode = options.FileIO
 	opts.TableLoadingMode = options.FileIO
+	if light {
+		// Source: https://github.com/dgraph-io/badger#memory-usage
+		opts := badger.DefaultOptions
+		opts.NumMemtables = 1
+		opts.NumLevelZeroTables = 1
+		opts.NumLevelZeroTablesStall = 2
+		opts.NumCompactors = 1
+		opts.MaxLevels = 5
+		opts.LevelOneSize = 256 << 18
+		opts.MaxTableSize = 64 << 18
+		opts.ValueLogFileSize = 1 << 25
+		opts.ValueLogMaxEntries = 250000
+		cleanUpInterval = 2 * time.Minute
+	}
 
 	db, err := badger.Open(opts)
 	if err != nil {

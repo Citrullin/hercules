@@ -48,7 +48,6 @@
     "neighbors": []
   },
   "database": {
-    "type": "badger",
     "path": "data"
   },
   "snapshots" : {

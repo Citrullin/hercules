@@ -1,12 +1,20 @@
 package db
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/viper"
 )
 
 var implementations = map[string]Constructor{}
+
+func RegisterImplementation(name string, constructor Constructor) {
+	if _, ok := implementations[name]; ok {
+		panic(fmt.Sprintf("database implementation with name [%s] is already registered", name))
+	}
+	implementations[name] = constructor
+}
 
 type Constructor func(*viper.Viper) (Interface, error)
 
