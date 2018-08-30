@@ -1,16 +1,26 @@
 package coding_test
 
-import "time"
+import (
+	"bytes"
+	"time"
+)
 
 var testKey = []byte("test")
 
-type putter struct {
+type storage struct {
 	key   []byte
 	value []byte
 }
 
-func (p *putter) PutBytes(key, value []byte, ttl *time.Duration) error {
-	p.key = key
-	p.value = value
+func (s *storage) PutBytes(key, value []byte, ttl *time.Duration) error {
+	s.key = key
+	s.value = value
 	return nil
+}
+
+func (s *storage) GetBytes(key []byte) ([]byte, error) {
+	if bytes.Equal(s.key, key) {
+		return s.value, nil
+	}
+	return nil, nil
 }
