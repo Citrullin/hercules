@@ -62,7 +62,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 			return errors.New("pending snapshot, skipping current one")
 		}
 
-		Lock(int(timestamp), "", nil)
+		Lock(int(timestamp), "", tx)
 
 		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
 		err := tx.ForPrefix([]byte{db.KEY_TIMESTAMP}, true, func(k, v []byte) (bool, error) {
