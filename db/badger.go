@@ -26,7 +26,7 @@ func NewBadger(config *viper.Viper) (Interface, error) {
 	path := config.GetString("database.path")
 	light := config.GetBool("light")
 
-	logs.Log.Info("Loading database at %s", path)
+	logs.Log.Infof("Loading database at %s", path)
 
 	cleanUpInterval := 5 * time.Minute
 
