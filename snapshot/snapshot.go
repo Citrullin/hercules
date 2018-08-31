@@ -84,6 +84,9 @@ Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
 */
 func IsLocked(tx db.Transaction) (timestamp int, filename string) {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(false)
+	}
 	return GetSnapshotLock(tx), GetSnapshotFileLock(tx)
 }
 
@@ -126,6 +129,10 @@ func GetSnapshotLock(tx db.Transaction) int {
 Returns the date unix timestamp of the last snapshot
 */
 func GetSnapshotTimestamp(tx db.Transaction) int {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(false)
+	}
+
 	if CurrentTimestamp > 0 {
 		return CurrentTimestamp
 	}
@@ -141,6 +148,10 @@ func GetSnapshotTimestamp(tx db.Transaction) int {
 Returns the date unix timestamp of the last snapshot
 */
 func GetSnapshotFileLock(tx db.Transaction) string {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(false)
+	}
+
 	filename, err := tx.GetString(keySnapshotFile)
 	if err != nil {
 		return ""
