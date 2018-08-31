@@ -40,7 +40,7 @@ type GraphRating struct {
 	Graph  *GraphNode
 }
 
-var gTTALocker = &sync.Mutex{}
+var gTTALock = &sync.Mutex{}
 var txCache = make(map[string]time.Time)
 var transactions = make(map[string]*transaction.FastTX)
 
@@ -320,8 +320,8 @@ func buildGraphDiff(ledgerDiff map[string]int64, tx *transaction.FastTX, transac
 }
 
 func GetTXToApprove(reference []byte, depth int) [][]byte {
-	gTTALocker.Lock()
-	defer gTTALocker.Unlock()
+	gTTALock.Lock()
+	defer gTTALock.Unlock()
 	defer cleanCache()
 
 	// Reference:

@@ -18,11 +18,11 @@ type Tip struct {
 }
 
 var Tips []*Tip
-var TipsLocker = &sync.Mutex{}
+var TipsLock = &sync.Mutex{}
 
 func GetRandomTip() (hash []byte) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
+	TipsLock.Lock()
+	defer TipsLock.Unlock()
 
 	if len(Tips) < 1 {
 		return nil
@@ -51,9 +51,9 @@ func loadTips() {
 				return true, nil
 			}
 
-			TipsLocker.Lock()
+			TipsLock.Lock()
 			Tips = append(Tips, &Tip{hash, timestamp})
-			TipsLocker.Unlock()
+			TipsLock.Unlock()
 
 			return true, nil
 		})
@@ -62,11 +62,11 @@ func loadTips() {
 }
 
 func startTipRemover() {
-	flushTicker := time.NewTicker(tipRemoverInterval)
-	for range flushTicker.C {
+	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
+	for range tipRemoverTicker.C {
 		logs.Log.Warning("Tips remover starting... Total tips:", len(Tips))
 		var toRemove []*Tip
-		TipsLocker.Lock()
+		TipsLock.Lock()
 		for _, tip := range Tips {
 			tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
 			tipAgeOK := tipAge < maxTipAge
@@ -75,7 +75,7 @@ func startTipRemover() {
 				toRemove = append(toRemove, tip)
 			}
 		}
-		TipsLocker.Unlock()
+		TipsLock.Unlock()
 		logs.Log.Warning("Tips to remove:", len(toRemove))
 		for _, tip := range toRemove {
 			err := db.Singleton.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP))
@@ -87,8 +87,8 @@ func startTipRemover() {
 }
 
 func addTip(hash []byte, value int) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
+	TipsLock.Lock()
+	defer TipsLock.Unlock()
 	if findTip(hash) >= 0 {
 		return
 	}
@@ -97,8 +97,8 @@ func addTip(hash []byte, value int) {
 }
 
 func removeTip(hash []byte) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
+	TipsLock.Lock()
+	defer TipsLock.Unlock()
 
 	var which = findTip(hash)
 	if which > -1 {
@@ -143,8 +143,8 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 }
 
 func getRandomTip() (hash []byte, txBytes []byte) {
-	TipsLocker.Lock()
-	defer TipsLocker.Unlock()
+	TipsLock.Lock()
+	defer TipsLock.Unlock()
 
 	if len(Tips) < 1 {
 		return nil, nil

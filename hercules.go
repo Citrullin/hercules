@@ -154,6 +154,8 @@ func declareApiConfigs() {
 	flag.String("api.auth.username", "", "API Access Username")
 	flag.String("api.auth.password", "", "API Access Password")
 
+	flag.Bool("api.cors.setAllowOriginToAll", true, "Defines if 'Access-Control-Allow-Origin' is set to '*'")
+
 	flag.Bool("api.http.useHttp", true, "Defines if the API will serve using HTTP protocol")
 	flag.StringP("api.http.host", "h", "0.0.0.0", "HTTP API Host")
 	flag.IntP("api.http.port", "p", 14265, "HTTP API Port")

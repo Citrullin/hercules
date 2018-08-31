@@ -50,9 +50,9 @@ func incomingRunner() {
 					if err == nil {
 						incomingProcessed++
 						addFingerprint(fingerprint)
-						incomingTimeLocker.Lock()
-						lastIncomingTime[raw.IPAddressWithPort] = time.Now()
-						incomingTimeLocker.Unlock()
+						LastIncomingTimeLock.Lock()
+						LastIncomingTime[raw.IPAddressWithPort] = time.Now()
+						LastIncomingTimeLock.Unlock()
 					}
 				}
 			}
@@ -189,13 +189,13 @@ func _checkIncomingError(tx *transaction.FastTX, err error) {
 }
 
 func cleanupRequestQueues() {
-	requestLocker.Lock()
-	incomingTimeLocker.Lock()
-	defer requestLocker.Unlock()
-	defer incomingTimeLocker.Unlock()
+	RequestQueuesLock.Lock()
+	LastIncomingTimeLock.Lock()
+	defer RequestQueuesLock.Unlock()
+	defer LastIncomingTimeLock.Unlock()
 
 	var toRemove []string
-	for address := range requestQueues {
+	for address := range RequestQueues {
 		if server.GetNeighborByAddress(address) == nil {
 			logs.Log.Debug("Removing gone neighbor queue for:", address)
 			toRemove = append(toRemove, address)
@@ -203,8 +203,8 @@ func cleanupRequestQueues() {
 	}
 	if toRemove != nil && len(toRemove) > 0 {
 		for _, address := range toRemove {
-			delete(requestQueues, address)
-			delete(lastIncomingTime, address)
+			delete(RequestQueues, address)
+			delete(LastIncomingTime, address)
 		}
 	}
 }

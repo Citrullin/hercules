@@ -170,9 +170,8 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int) {
 
 	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.", snapshotInterval, snapshotPeriod)
 
-	ticker := time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
-	for range ticker.C {
-
+	snapshotTicker := time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
+	for range snapshotTicker.C {
 		logs.Log.Info("Starting automatic snapshot...")
 		if !InProgress {
 			snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)

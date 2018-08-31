@@ -15,7 +15,7 @@ func Report() {
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)",
 		totalTransactions,
 		db.Singleton.CountKeyCategory(db.KEY_PENDING_HASH),
-		len(pendingRequests))
+		len(PendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v (%v), Unknown: %v",
 		totalConfirmations,
 		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING),
@@ -32,8 +32,8 @@ func Report() {
 
 func report() {
 	Report()
-	flushTicker := time.NewTicker(reportInterval)
-	for range flushTicker.C {
+	tangleReportTicker := time.NewTicker(reportInterval)
+	for range tangleReportTicker.C {
 		Report()
 	}
 }

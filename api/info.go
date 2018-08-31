@@ -20,8 +20,10 @@ func init() {
 func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
+
 	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
+	neighborsCnt := len(server.Neighbors)
+	server.NeighborsLock.RUnlock()
 
 	milestone := convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81]
 	index := tangle.LatestMilestone.Index
@@ -41,7 +43,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"latestMilestoneIndex":               tangle.LatestMilestone.Index,
 		"latestSolidSubtangleMilestone":      solid,
 		"latestSolidSubtangleMilestoneIndex": sindex,
-		"neighbors":                          len(server.Neighbors),
+		"neighbors":                          neighborsCnt,
 		"currentSnapshotTimestamp":           snapshot.CurrentTimestamp,
 		"currentSnapshotTimeHumanReadable":   utils.GetHumanReadableTime(snapshot.CurrentTimestamp),
 		"isSynchronized":                     snapshot.IsSynchronized(),

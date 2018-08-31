@@ -24,8 +24,8 @@ type PendingConfirmation struct {
 }
 type ConfirmQueue chan PendingConfirmation
 
-var confirmLocker = &sync.RWMutex{}
 var confirmsInProgress map[string]bool
+var confirmsInProgressLock = &sync.RWMutex{}
 var confirmQueue ConfirmQueue
 
 func confirmOnLoad() {
@@ -86,8 +86,8 @@ func startConfirmThread() {
 }
 
 func startUnknownVerificationThread() {
-	flushTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
-	for range flushTicker.C {
+	removeOrphanedPendingTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
+	for range removeOrphanedPendingTicker.C {
 		db.Singleton.View(func(tx db.Transaction) error {
 			var toRemove [][]byte
 			tx.ForPrefix([]byte{db.KEY_PENDING_CONFIRMED}, false, func(key, _ []byte) (bool, error) {
@@ -206,8 +206,8 @@ func addPendingConfirmation(key []byte, timestamp int, tx db.Transaction) error 
 }
 
 func hasConfirmInProgress(key []byte) bool {
-	confirmLocker.Lock()
-	defer confirmLocker.Unlock()
+	confirmsInProgressLock.Lock()
+	defer confirmsInProgressLock.Unlock()
 
 	_, ok := confirmsInProgress[string(key)]
 	return ok
@@ -218,16 +218,16 @@ func addConfirmInProgress(key []byte) bool {
 		return false
 	}
 
-	confirmLocker.Lock()
-	defer confirmLocker.Unlock()
+	confirmsInProgressLock.Lock()
+	defer confirmsInProgressLock.Unlock()
 
 	confirmsInProgress[string(key)] = true
 	return true
 }
 
 func removeConfirmInProgress(key []byte) {
-	confirmLocker.Lock()
-	defer confirmLocker.Unlock()
+	confirmsInProgressLock.Lock()
+	defer confirmsInProgressLock.Unlock()
 	k := string(key)
 	_, ok := confirmsInProgress[k]
 	if ok {

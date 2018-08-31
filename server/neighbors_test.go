@@ -99,7 +99,7 @@ func TestAddNeighbor(t *testing.T) {
 
 }
 
-func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
+func TestCheckNeighbourExistsByIPAddressWithPort(t *testing.T) {
 	restartConfig()
 
 	Neighbors = make(map[string]*Neighbor)
@@ -122,14 +122,15 @@ func TestCheckNeighbourExistsByIPAddress(t *testing.T) {
 			t.Error("Error during test set up")
 		}
 
-		ip, _, err := getIPAndHostname(identifier)
+		ips, _, err := getIPsAndHostname(identifier)
 		if err != nil {
 			t.Error("Error during test set up")
 		}
 
+		ip := ips[0].String()
 		ipWithPort := GetFormattedAddress(ip, port)
 
-		neighborsExists, neighbor := checkNeighbourExistsByIPAddress(ipWithPort)
+		neighborsExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipWithPort, false)
 		if !neighborsExists {
 			t.Error("Neighbor does NOT exist!")
 		} else {
@@ -186,7 +187,8 @@ func TestRemoveNeighbor(t *testing.T) {
 
 func TestGetIpAndHostname(t *testing.T) {
 
-	ip, hostname, err := getIPAndHostname(expectedHostname)
+	ips, hostname, err := getIPsAndHostname(expectedHostname)
+	ip := ips[0].String()
 
 	if err != nil || ip == "" || hostname == "" {
 		t.Error("Could not get IP and Hostname for " + expectedHostname)

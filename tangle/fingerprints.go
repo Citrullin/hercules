@@ -1,27 +1,27 @@
 package tangle
 
 import (
-	"time"
 	"sync"
+	"time"
 )
 
 const fingerprintTTL = time.Duration(10) * time.Second
 
-var fingerprintsLocker = &sync.RWMutex{}
 var fingerprints map[string]time.Time
+var fingerprintsLock = &sync.RWMutex{}
 
 func fingerprintsOnLoad() {
 	fingerprints = make(map[string]time.Time)
 }
 
-func cleanupFingerprints () {
-	fingerprintsLocker.Lock()
-	defer fingerprintsLocker.Unlock()
+func cleanupFingerprints() {
+	fingerprintsLock.Lock()
+	defer fingerprintsLock.Unlock()
 
 	ttl := fingerprintTTL
 
 	if lowEndDevice {
-		ttl = ttl*6
+		ttl = ttl * 6
 	}
 
 	now := time.Now()
@@ -36,15 +36,15 @@ func cleanupFingerprints () {
 	}
 }
 
-func hasFingerprint (key []byte) bool {
-	fingerprintsLocker.RLock()
-	defer fingerprintsLocker.RUnlock()
+func hasFingerprint(key []byte) bool {
+	fingerprintsLock.RLock()
+	defer fingerprintsLock.RUnlock()
 	_, ok := fingerprints[string(key)]
 	return ok
 }
 
-func addFingerprint (key []byte) {
-	fingerprintsLocker.Lock()
-	defer fingerprintsLocker.Unlock()
+func addFingerprint(key []byte) {
+	fingerprintsLock.Lock()
+	defer fingerprintsLock.Unlock()
 	fingerprints[string(key)] = time.Now()
 }

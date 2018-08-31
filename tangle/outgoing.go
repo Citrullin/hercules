@@ -3,6 +3,7 @@ package tangle
 import (
 	"bytes"
 	"encoding/gob"
+	"sync"
 	"time"
 
 	"../db"
@@ -27,33 +28,31 @@ type PendingRequest struct {
 }
 
 var lastTip = time.Now()
-var pendingRequests map[string]*PendingRequest
+var PendingRequests map[string]*PendingRequest
+var PendingRequestsLock = &sync.RWMutex{}
 
 func Broadcast(data []byte, exclude string) int {
 	sent := 0
 
 	server.NeighborsLock.RLock()
+	defer server.NeighborsLock.RUnlock()
+
 	for _, neighbor := range server.Neighbors {
-		server.NeighborsLock.RUnlock()
 
 		if neighbor.Addr == exclude {
-			server.NeighborsLock.RLock()
 			continue
 		}
 
 		request := getSomeRequestByAddress(neighbor.Addr, false)
 		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
 		sent++
-
-		server.NeighborsLock.RLock()
 	}
-	server.NeighborsLock.RUnlock()
 
 	return sent
 }
 
 func pendingOnLoad() {
-	pendingRequests = make(map[string]*PendingRequest)
+	PendingRequests = make(map[string]*PendingRequest)
 	loadPendingRequests()
 }
 
@@ -63,8 +62,8 @@ func loadPendingRequests() {
 
 	db.Singleton.Lock()
 	defer db.Singleton.Unlock()
-	requestLocker.Lock()
-	defer requestLocker.Unlock()
+	RequestQueuesLock.Lock()
+	defer RequestQueuesLock.Unlock()
 
 	total := 0
 	added := 0
@@ -87,11 +86,11 @@ func loadPendingRequests() {
 			}
 
 			for _, neighbor := range server.Neighbors {
-				queue, ok := requestQueues[neighbor.Addr]
+				queue, ok := RequestQueues[neighbor.Addr]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
 					queue = &q
-					requestQueues[neighbor.Addr] = queue
+					RequestQueues[neighbor.Addr] = queue
 				}
 				*queue <- &Request{hash, false}
 			}
@@ -106,9 +105,9 @@ func loadPendingRequests() {
 }
 
 func getSomeRequestByAddress(address string, any bool) []byte {
-	requestLocker.RLock()
-	requestQueue, requestOk := requestQueues[address]
-	requestLocker.RUnlock()
+	RequestQueuesLock.RLock()
+	requestQueue, requestOk := RequestQueues[address]
+	RequestQueuesLock.RUnlock()
 	var request []byte
 	if requestOk && len(*requestQueue) > 0 {
 		request = (<-*requestQueue).Requested
@@ -151,21 +150,17 @@ func outgoingRunner() {
 	}
 
 	server.NeighborsLock.RLock()
-	for _, neighbor := range server.Neighbors {
-		server.NeighborsLock.RUnlock()
+	defer server.NeighborsLock.RUnlock()
 
+	for _, neighbor := range server.Neighbors {
 		var request = getSomeRequestByAddress(neighbor.Addr, false)
-		ipAddressWithPort := server.GetFormattedAddress(neighbor.IP, neighbor.Port)
 		if request != nil {
-			sendReply(getMessage(nil, request, false, ipAddressWithPort, nil))
+			sendReply(getMessage(nil, request, false, neighbor.IPAddressWithPort, nil))
 		} else if shouldRequestTip {
 			lastTip = time.Now()
-			sendReply(getMessage(nil, nil, true, ipAddressWithPort, nil))
+			sendReply(getMessage(nil, nil, true, neighbor.IPAddressWithPort, nil))
 		}
-
-		server.NeighborsLock.RLock()
 	}
-	server.NeighborsLock.RUnlock()
 }
 
 func requestIfMissing(hash []byte, IPAddressWithPort string) (has bool, err error) {
@@ -179,14 +174,14 @@ func requestIfMissing(hash []byte, IPAddressWithPort string) (has bool, err erro
 		if pending != nil {
 			neighbor := server.GetNeighborByIPAddressWithPort(IPAddressWithPort)
 			if neighbor != nil {
-				requestLocker.Lock()
-				queue, ok := requestQueues[neighbor.Addr]
+				RequestQueuesLock.Lock()
+				queue, ok := RequestQueues[neighbor.Addr]
 				if !ok {
 					q := make(RequestQueue, maxQueueSize)
 					queue = &q
-					requestQueues[neighbor.Addr] = queue
+					RequestQueues[neighbor.Addr] = queue
 				}
-				requestLocker.Unlock()
+				RequestQueuesLock.Unlock()
 				*queue <- &Request{Requested: hash, Tip: false}
 			}
 		}
@@ -205,9 +200,9 @@ func sendReply(msg *Message) {
 
 	// Check that the neighbor is connected as is sending transactions
 	// Probably a good neighbor with transactions. Set this request as sent.
-	incomingTimeLocker.RLock()
-	lastRequestTime, ok := lastIncomingTime[msg.IPAddressWithPort]
-	incomingTimeLocker.RUnlock()
+	LastIncomingTimeLock.RLock()
+	lastRequestTime, ok := LastIncomingTime[msg.IPAddressWithPort]
+	LastIncomingTimeLock.RUnlock()
 	if ok && time.Now().Sub(lastRequestTime) < reRequestInterval {
 		db.Singleton.IncrementBy(db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false)
 	}
@@ -285,11 +280,11 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, tx 
 }
 
 func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, save bool) *PendingRequest {
-	pendingRequestLocker.Lock()
-	defer pendingRequestLocker.Unlock()
+	PendingRequestsLock.Lock()
+	defer PendingRequestsLock.Unlock()
 
 	key := string(hash)
-	pendingRequest, ok := pendingRequests[key]
+	pendingRequest, ok := PendingRequests[key]
 
 	if ok {
 		return pendingRequest
@@ -312,19 +307,19 @@ func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, s
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), LastNeighborAddr: addr}
-	pendingRequests[key] = pendingRequest
+	PendingRequests[key] = pendingRequest
 	return pendingRequest
 }
 
 func removePendingRequest(hash []byte) bool {
-	pendingRequestLocker.Lock()
-	defer pendingRequestLocker.Unlock()
+	PendingRequestsLock.Lock()
+	defer PendingRequestsLock.Unlock()
 
 	key := string(hash)
-	_, ok := pendingRequests[key]
+	_, ok := PendingRequests[key]
 
 	if ok {
-		delete(pendingRequests, key)
+		delete(PendingRequests, key)
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
 		db.Singleton.Remove(key)
 		db.Singleton.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
@@ -333,22 +328,22 @@ func removePendingRequest(hash []byte) bool {
 }
 
 func getOldPending(excludeAddress string) *PendingRequest {
-	pendingRequestLocker.RLock()
-	defer pendingRequestLocker.RUnlock()
+	PendingRequestsLock.RLock()
+	defer PendingRequestsLock.RUnlock()
 
 	max := 1000
 	if lowEndDevice {
 		max = 200
 	}
 
-	length := len(pendingRequests)
+	length := len(PendingRequests)
 	if length < max {
 		max = length
 	}
 
 	for i := 0; i < max; i++ {
-		k := randmap.FastKey(pendingRequests)
-		v := pendingRequests[k.(string)]
+		k := randmap.FastKey(PendingRequests)
+		v := PendingRequests[k.(string)]
 		now := time.Now()
 		if now.Sub(v.LastTried) > reRequestInterval {
 			v.LastTried = now
@@ -361,15 +356,15 @@ func getOldPending(excludeAddress string) *PendingRequest {
 }
 
 func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
-	pendingRequestLocker.RLock()
-	defer pendingRequestLocker.RUnlock()
+	PendingRequestsLock.RLock()
+	defer PendingRequestsLock.RUnlock()
 
 	max := 10000
 	if lowEndDevice {
 		max = 300
 	}
 
-	length := len(pendingRequests)
+	length := len(PendingRequests)
 	if length < max {
 		max = length
 	}
@@ -378,8 +373,8 @@ func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
 		start := utils.Random(0, max)
 
 		for i := start; i < max; i++ {
-			k := randmap.FastKey(pendingRequests)
-			v := pendingRequests[k.(string)]
+			k := randmap.FastKey(PendingRequests)
+			v := PendingRequests[k.(string)]
 			if v.LastNeighborAddr != excludeAddress {
 				v.LastTried = time.Now()
 				v.LastNeighborAddr = excludeAddress
@@ -397,8 +392,8 @@ if the TX is not received, the requests is deleted. This is probably a fake
 or invalid spam referenced by trunk/branch of a transaction. Just ignore.
 */
 func cleanupStalledRequests() {
-	pendingRequestLocker.Lock()
-	defer pendingRequestLocker.Unlock()
+	PendingRequestsLock.Lock()
+	defer PendingRequestsLock.Unlock()
 
 	var toRemove [][]byte
 	db.Singleton.View(func(tx db.Transaction) error {
@@ -444,7 +439,7 @@ func cleanupStalledRequests() {
 			return nil
 		})
 		if err == nil && hash != nil {
-			delete(pendingRequests, string(hash))
+			delete(PendingRequests, string(hash))
 		}
 	}
 }
