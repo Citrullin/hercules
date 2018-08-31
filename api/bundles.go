@@ -9,7 +9,6 @@ import (
 	"../logs"
 	"../tangle"
 	"../transaction"
-	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -39,36 +38,36 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 		return
 	}
 	for _, trytes := range request.Trytes {
-		err := db.DB.Update(func(txn *badger.Txn) (e error) {
+		err := db.Singleton.Update(func(tx db.Transaction) error {
 			trits := convert.TrytesToTrits(trytes)
 			bits := convert.TrytesToBytes(trytes)[:1604]
-			tx := transaction.TritsToTX(&trits, bits)
+			t := transaction.TritsToTX(&trits, bits)
 
-			// tx.Address is the receiving address
+			// t.Address is the receiving address
 			// only when the transaction value is negative we should check for balance in the receiving address
-			if tx.Value < 0 {
-				balance, err := db.GetInt64(db.GetAddressKey(tx.Address, db.KEY_BALANCE), nil)
+			if t.Value < 0 {
+				balance, err := tx.GetInt64(db.GetAddressKey(t.Address, db.KEY_BALANCE))
 				if err != nil {
-					addressTrytes := convert.BytesToTrytes(tx.Address)
+					addressTrytes := convert.BytesToTrytes(t.Address)
 					return errors.Errorf("Could not read address' balance. Address: %s Message: %s", addressTrytes, err)
-				} else if balance <= 0 || balance < tx.Value {
-					addressTrytes := convert.BytesToTrytes(tx.Address)
+				} else if balance <= 0 || balance < t.Value {
+					addressTrytes := convert.BytesToTrytes(t.Address)
 
 					// TODO: collect values from all TXs, map to addesses and check for the whole sum
 					// This is as to prevent multiple partial transactions from the same address in the bundle
-					return errors.Errorf("Insufficient balance. Address: %s Balance: %v Tx value: %v", addressTrytes, balance, tx.Value)
+					return errors.Errorf("Insufficient balance. Address: %s Balance: %v Tx value: %v", addressTrytes, balance, t.Value)
 				}
 			}
 
-			if !db.Has(db.GetByteKey(tx.Hash, db.KEY_HASH), txn) {
-				err := tangle.SaveTX(tx, &bits, txn)
+			if !tx.HasKey(db.GetByteKey(t.Hash, db.KEY_HASH)) {
+				err := tangle.SaveTX(t, &bits, tx)
 				if err != nil {
 					return err
 				}
 				stored++
 			}
 			if broadcast {
-				tangle.Broadcast(tx.Bytes, "")
+				tangle.Broadcast(t.Bytes, "")
 				broadcasted++
 			}
 			return nil

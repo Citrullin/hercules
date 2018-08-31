@@ -1,27 +1,29 @@
 package snapshot
 
 import (
-	"time"
 	"bufio"
 	"io"
-	"strings"
-	"strconv"
 	"os"
-	"github.com/pkg/errors"
-	"github.com/dgraph-io/badger"
+	"strconv"
+	"strings"
+	"time"
+
+	"../convert"
 	"../db"
 	"../logs"
-	"../convert"
+	"github.com/pkg/errors"
 )
 
-func LoadSnapshot (path string) error {
+func LoadSnapshot(path string) error {
 	logs.Log.Info("Loading snapshot from", path)
 	if CurrentTimestamp > 0 {
 		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
 	timestamp, err := checkSnapshotFile(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	logs.Log.Debug("Timestamp:", timestamp)
 
 	if !IsNewerThanSnapshot(int(timestamp), nil) {
@@ -30,8 +32,8 @@ func LoadSnapshot (path string) error {
 	}
 	Lock(int(timestamp), path, nil)
 
-	db.Locker.Lock()
-	defer db.Locker.Unlock()
+	db.Singleton.Lock()
+	defer db.Singleton.Unlock()
 
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)
@@ -39,18 +41,26 @@ func LoadSnapshot (path string) error {
 	logs.Log.Debug("Saving trimmable TXs flags...")
 	err = trimData(timestamp)
 	logs.Log.Debug("Saved trimmable TXs flags:", len(edgeTransactions))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	err = doLoadSnapshot(path, timestamp)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	if checkDatabaseSnapshot() {
-		return db.DB.Update(func(txn *badger.Txn) error {
-			err:= SetSnapshotTimestamp(int(timestamp), txn)
-			if err != nil { return err }
+		return db.Singleton.Update(func(tx db.Transaction) error {
+			err := SetSnapshotTimestamp(int(timestamp), tx)
+			if err != nil {
+				return err
+			}
 
-			err = Unlock(txn)
-			if err != nil { return err }
+			err = Unlock(tx)
+			if err != nil {
+				return err
+			}
 			return nil
 		})
 	} else {
@@ -58,34 +68,40 @@ func LoadSnapshot (path string) error {
 	}
 }
 
-func loadValueSnapshot(address []byte, value int64, txn *badger.Txn) error {
+func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
 	addressKey := db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE)
-	err := db.Put(addressKey, value, nil, txn)
+	err := tx.Put(addressKey, value, nil)
 	if err != nil {
 		return err
 	}
-	err = db.Put(db.GetAddressKey(address, db.KEY_BALANCE), value, nil, txn)
+	err = tx.Put(db.GetAddressKey(address, db.KEY_BALANCE), value, nil)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func loadSpentSnapshot(address []byte, txn *badger.Txn) error {
-	err := db.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address, nil, txn)
-	if err != nil { return err }
-	err = db.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil, txn)
-	if err != nil { return err }
-	err = db.Put(db.GetAddressKey(address, db.KEY_SPENT), true, nil, txn)
-	if err != nil { return err }
+func loadSpentSnapshot(address []byte, tx db.Transaction) error {
+	err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address, nil)
+	if err != nil {
+		return err
+	}
+	err = tx.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil)
+	if err != nil {
+		return err
+	}
+	err = tx.Put(db.GetAddressKey(address, db.KEY_SPENT), true, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func loadKey(key []byte, timestamp int64) error {
-	return db.Put(key, timestamp, nil, nil)
+	return db.Singleton.Put(key, timestamp, nil)
 }
 
-func doLoadSnapshot (path string, timestamp int64) error{
+func doLoadSnapshot(path string, timestamp int64) error {
 	logs.Log.Infof("Loading values from %v. It can take several minutes. Please hold...", path)
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -94,8 +110,8 @@ func doLoadSnapshot (path string, timestamp int64) error{
 	}
 	defer f.Close()
 
-	err = db.RemoveAll(db.KEY_BALANCE)
-	err = db.RemoveAll(db.KEY_SNAPSHOT_BALANCE)
+	err = db.Singleton.RemoveKeyCategory(db.KEY_BALANCE)
+	err = db.Singleton.RemoveKeyCategory(db.KEY_SNAPSHOT_BALANCE)
 	if err != nil {
 		return err
 	}
@@ -105,7 +121,7 @@ func doLoadSnapshot (path string, timestamp int64) error{
 	var total int64 = 0
 	var totalSpent int64 = 0
 	var firstLine = true
-	var txn = db.DB.NewTransaction(true)
+	var tx = db.Singleton.NewTransaction(true)
 
 	for {
 		line, err := rd.ReadString('\n')
@@ -135,34 +151,40 @@ func doLoadSnapshot (path string, timestamp int64) error{
 			tokens := strings.Split(line, ";")
 			address := convert.TrytesToBytes(tokens[0])[:49]
 			value, err := strconv.ParseInt(tokens[1], 10, 64)
-			if err != nil { return err }
-			total += value
-			err = loadValueSnapshot(address, value, txn)
 			if err != nil {
-				if err == badger.ErrTxnTooBig {
-					err := txn.Commit(func(e error) {})
+				return err
+			}
+			total += value
+			err = loadValueSnapshot(address, value, tx)
+			if err != nil {
+				if err == db.ErrTransactionTooBig {
+					err := tx.Commit()
 					if err != nil {
 						return err
 					}
-					txn = db.DB.NewTransaction(true)
-					err = loadValueSnapshot(address, value, txn)
-					if err != nil { return err }
+					tx = db.Singleton.NewTransaction(true)
+					err = loadValueSnapshot(address, value, tx)
+					if err != nil {
+						return err
+					}
 				} else {
 					return err
 				}
 			}
 		} else if stage == 1 {
 			totalSpent++
-			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
+			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
 			if err != nil {
-				if err == badger.ErrTxnTooBig {
-					err := txn.Commit(func(e error) {})
+				if err == db.ErrTransactionTooBig {
+					err := tx.Commit()
 					if err != nil {
 						return err
 					}
-					txn = db.DB.NewTransaction(true)
-					err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
-					if err != nil { return err }
+					tx = db.Singleton.NewTransaction(true)
+					err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+					if err != nil {
+						return err
+					}
 				} else {
 					return err
 				}
@@ -171,14 +193,16 @@ func doLoadSnapshot (path string, timestamp int64) error{
 			key := convert.TrytesToBytes(line)[:16]
 			err = loadKey(key, timestamp)
 			if err != nil {
-				if err == badger.ErrTxnTooBig {
-					err := txn.Commit(func(e error) {})
+				if err == db.ErrTransactionTooBig {
+					err := tx.Commit()
 					if err != nil {
 						return err
 					}
-					txn = db.DB.NewTransaction(true)
+					tx = db.Singleton.NewTransaction(true)
 					err = loadKey(key, timestamp)
-					if err != nil { return err }
+					if err != nil {
+						return err
+					}
 				} else {
 					return err
 				}
@@ -186,7 +210,7 @@ func doLoadSnapshot (path string, timestamp int64) error{
 		}
 	}
 
-	err = txn.Commit(func(e error) {})
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}

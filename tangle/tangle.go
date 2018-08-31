@@ -12,7 +12,6 @@ import (
 	"../server"
 	"../transaction"
 	"github.com/spf13/viper"
-	"github.com/dgraph-io/badger"
 )
 
 const (
@@ -76,8 +75,8 @@ func Start(s *server.Server, cfg *viper.Viper) {
 
 	lowEndDevice = config.GetBool("light")
 
-	totalTransactions = int64(db.Count(db.KEY_HASH))
-	totalConfirmations = int64(db.Count(db.KEY_CONFIRMED))
+	totalTransactions = int64(db.Singleton.CountKeyCategory(db.KEY_HASH))
+	totalConfirmations = int64(db.Singleton.CountKeyCategory(db.KEY_CONFIRMED))
 
 	// reapplyConfirmed()
 	fingerprintsOnLoad()
@@ -86,7 +85,6 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	milestoneOnLoad()
 	confirmOnLoad()
 	// checkConsistency(false, false)
-
 
 	// This had to be done due to the tangle split in May 2018.
 	// Might need this in the future for whatever reason?
@@ -112,7 +110,7 @@ func Start(s *server.Server, cfg *viper.Viper) {
 	}()
 }
 
-func cleanup () {
+func cleanup() {
 	interval := cleanupInterval
 	if lowEndDevice {
 		interval *= 3
@@ -125,56 +123,50 @@ func cleanup () {
 	}
 }
 
-func checkConsistency (skipRequests bool, skipConfirmations bool) {
+func checkConsistency(skipRequests bool, skipConfirmations bool) {
 	logs.Log.Info("Checking database consistency")
 	if !skipRequests {
-		db.RemoveAll(db.KEY_PENDING_HASH)
-		db.RemoveAll(db.KEY_PENDING_TIMESTAMP)
+		db.Singleton.RemoveKeyCategory(db.KEY_PENDING_HASH)
+		db.Singleton.RemoveKeyCategory(db.KEY_PENDING_TIMESTAMP)
 	}
-	db.DB.View(func(txn *badger.Txn) (e error) {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_HASH}
+	db.Singleton.View(func(tx db.Transaction) (e error) {
 		x := 0
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			key := item.Key()
+		return tx.ForPrefix([]byte{db.KEY_HASH}, true, func(key, value []byte) (bool, error) {
 			relKey := db.AsKey(key, db.KEY_RELATION)
-			relation, _ := db.GetBytes(relKey, txn)
+			relation, _ := tx.GetBytes(relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
-			if !skipRequests && (
-				!db.Has(db.AsKey(relation[:16], db.KEY_HASH), txn) ||
-					!db.Has(db.AsKey(relation[16:], db.KEY_HASH), txn)) {
-				txBytes, _ := db.GetBytes(db.AsKey(key, db.KEY_BYTES), txn)
+			if !skipRequests &&
+				(!tx.HasKey(db.AsKey(relation[:16], db.KEY_HASH)) || !tx.HasKey(db.AsKey(relation[16:], db.KEY_HASH))) {
+				txBytes, _ := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
 				trits := convert.BytesToTrits(txBytes)[:8019]
-				tx := transaction.TritsToFastTX(&trits, txBytes)
-				db.DB.Update(func(txn *badger.Txn) error {
-					requestIfMissing(tx.TrunkTransaction, "")
-					requestIfMissing(tx.BranchTransaction, "")
+				t := transaction.TritsToFastTX(&trits, txBytes)
+				db.Singleton.Update(func(tx db.Transaction) error {
+					requestIfMissing(t.TrunkTransaction, "")
+					requestIfMissing(t.BranchTransaction, "")
 					return nil
 				})
 			}
 
 			// Re-confirm children
 			if !skipConfirmations {
-				if db.Has(db.AsKey(relKey, db.KEY_CONFIRMED), txn) {
-					db.DB.Update(func(txn *badger.Txn) error {
-						confirmChild(relation[:16], txn)
-						confirmChild(relation[16:], txn)
+				if tx.HasKey(db.AsKey(relKey, db.KEY_CONFIRMED)) {
+					db.Singleton.Update(func(tx db.Transaction) error {
+						confirmChild(relation[:16], tx)
+						confirmChild(relation[16:], tx)
 						return nil
 					})
 				}
 			}
 			x++
 
-			if x % 10000 == 0 {
+			if x%10000 == 0 {
 				logs.Log.Debug("Processed", x)
 			}
-		}
-		return nil
+
+			return true, nil
+		})
 	})
 }

@@ -6,7 +6,6 @@ import (
 
 	"../convert"
 	"../db"
-	"github.com/dgraph-io/badger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,7 +53,7 @@ func findAddresses(trits []byte, single bool) []string {
 	hashes := find(trits, db.KEY_ADDRESS)
 	if single && len(hashes) == 0 {
 		// Workaround for IOTA wallet support. Fake transactions for positive addresses:
-		balance, err := db.GetInt64(db.GetAddressKey(trits, db.KEY_BALANCE), nil)
+		balance, err := db.Singleton.GetInt64(db.GetAddressKey(trits, db.KEY_BALANCE))
 		if err == nil && balance > 0 {
 			return []string{dummyHash}
 		}
@@ -64,20 +63,16 @@ func findAddresses(trits []byte, single bool) []string {
 
 func find(trits []byte, prefix byte) []string {
 	var response = []string{}
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-		defer it.Close()
+	db.Singleton.View(func(tx db.Transaction) error {
 		prefix := db.GetByteKey(trits, prefix)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			key := db.AsKey(it.Item().Key()[16:], db.KEY_HASH)
-			hash, err := db.GetBytes(key, txn)
+		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
+			key = db.AsKey(key[16:], db.KEY_HASH)
+			hash, err := tx.GetBytes(key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}
-		}
-		return nil
+			return true, nil
+		})
 	})
 	return response
 }

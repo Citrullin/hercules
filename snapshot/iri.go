@@ -1,16 +1,16 @@
 package snapshot
 
 import (
-	"time"
-	"os"
 	"bufio"
 	"io"
-	"strings"
+	"os"
 	"strconv"
-	"github.com/dgraph-io/badger"
-	"../logs"
-	"../db"
+	"strings"
+	"time"
+
 	"../convert"
+	"../db"
+	"../logs"
 )
 
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
@@ -19,8 +19,8 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
 		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
-	db.Locker.Lock()
-	defer db.Locker.Unlock()
+	db.Singleton.Lock()
+	defer db.Singleton.Unlock()
 
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)
@@ -56,7 +56,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 	defer f.Close()
 
 	rd := bufio.NewReader(f)
-	var txn = db.DB.NewTransaction(true)
+	var tx = db.Singleton.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -67,23 +67,25 @@ func loadIRISnapshotSpent(spentPath string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
-		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
+		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
 		if err != nil {
-			if err == badger.ErrTxnTooBig {
-				err := txn.Commit(func(e error) {})
+			if err == db.ErrTransactionTooBig {
+				err := tx.Commit()
 				if err != nil {
 					return err
 				}
-				txn = db.DB.NewTransaction(true)
-				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], txn)
-				if err != nil { return err }
+				tx = db.Singleton.NewTransaction(true)
+				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+				if err != nil {
+					return err
+				}
 			} else {
 				return err
 			}
 		}
 	}
 
-	return txn.Commit(func (e error) {})
+	return tx.Commit()
 }
 
 func loadIRISnapshotValues(valuesPath string) error {
@@ -94,15 +96,15 @@ func loadIRISnapshotValues(valuesPath string) error {
 	}
 	defer f.Close()
 
-	err = db.RemoveAll(db.KEY_BALANCE)
-	err = db.RemoveAll(db.KEY_SNAPSHOT_BALANCE)
+	err = db.Singleton.RemoveKeyCategory(db.KEY_BALANCE)
+	err = db.Singleton.RemoveKeyCategory(db.KEY_SNAPSHOT_BALANCE)
 	if err != nil {
 		return err
 	}
 
 	rd := bufio.NewReader(f)
 	var total int64 = 0
-	var txn = db.DB.NewTransaction(true)
+	var txn = db.Singleton.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -116,18 +118,22 @@ func loadIRISnapshotValues(valuesPath string) error {
 		tokens := strings.Split(line, ";")
 		address := convert.TrytesToBytes(tokens[0])[:49]
 		value, err := strconv.ParseInt(strings.TrimSpace(tokens[1]), 10, 64)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		total += value
 		err = loadValueSnapshot(address, value, txn)
 		if err != nil {
-			if err == badger.ErrTxnTooBig {
-				err := txn.Commit(func(e error) {})
+			if err == db.ErrTransactionTooBig {
+				err := txn.Commit()
 				if err != nil {
 					return err
 				}
-				txn = db.DB.NewTransaction(true)
+				txn = db.Singleton.NewTransaction(true)
 				err = loadValueSnapshot(address, value, txn)
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 			} else {
 				return err
 			}
@@ -136,5 +142,5 @@ func loadIRISnapshotValues(valuesPath string) error {
 
 	logs.Log.Debugf("Snapshot total value: %v", total)
 
-	return txn.Commit(func (e error) {})
+	return txn.Commit()
 }

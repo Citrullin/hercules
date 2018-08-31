@@ -10,7 +10,6 @@ import (
 	"../logs"
 	"../transaction"
 	"../utils"
-	"github.com/dgraph-io/badger"
 )
 
 type Tip struct {
@@ -40,30 +39,24 @@ func tipOnLoad() {
 
 func loadTips() {
 	logs.Log.Info("Loading tips...")
-	_ = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_TIP}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			key := item.Key()
-			v, _ := item.Value()
-
+	db.Singleton.View(func(tx db.Transaction) error {
+		return tx.ForPrefix([]byte{db.KEY_TIP}, true, func(key, value []byte) (bool, error) {
 			var timestamp int
-			buf := bytes.NewBuffer(v)
-			dec := gob.NewDecoder(buf)
-			err := dec.Decode(&timestamp)
-			if err == nil {
-				hash, err := db.GetBytes(db.AsKey(key, db.KEY_HASH), txn)
-				if err == nil {
-					TipsLocker.Lock()
-					Tips = append(Tips, &Tip{hash, timestamp})
-					TipsLocker.Unlock()
-				}
+			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&timestamp); err != nil {
+				return true, nil
 			}
-		}
-		return nil
+
+			hash, err := tx.GetBytes(db.AsKey(key, db.KEY_HASH))
+			if err != nil {
+				return true, nil
+			}
+
+			TipsLocker.Lock()
+			Tips = append(Tips, &Tip{hash, timestamp})
+			TipsLocker.Unlock()
+
+			return true, nil
+		})
 	})
 	logs.Log.Infof("Loaded tips: %v\n", len(Tips))
 }
@@ -78,14 +71,14 @@ func startTipRemover() {
 			tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
 			tipAgeOK := tipAge < maxTipAge
 			origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
-			if !tipAgeOK || db.CountByPrefix(origKey) > 0 {
+			if !tipAgeOK || db.Singleton.CountPrefix(origKey) > 0 {
 				toRemove = append(toRemove, tip)
 			}
 		}
 		TipsLocker.Unlock()
 		logs.Log.Warning("Tips to remove:", len(toRemove))
 		for _, tip := range toRemove {
-			err := db.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP), nil)
+			err := db.Singleton.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP))
 			if err == nil {
 				removeTip(tip.Hash)
 			}
@@ -126,25 +119,25 @@ func findTip(hash []byte) int {
 	return -1
 }
 
-func updateTipsOnNewTransaction(tx *transaction.FastTX, txn *badger.Txn) error {
-	key := db.GetByteKey(tx.Hash, db.KEY_APPROVEE)
-	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tx.Timestamp), 0)).Nanoseconds())
+func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error {
+	key := db.GetByteKey(t.Hash, db.KEY_APPROVEE)
+	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(t.Timestamp), 0)).Nanoseconds())
 
-	if tipAge < maxTipAge && db.CountByPrefix(key) < 1 {
-		err := db.Put(db.AsKey(key, db.KEY_TIP), tx.Timestamp, nil, txn)
+	if tipAge < maxTipAge && db.Singleton.CountPrefix(key) < 1 {
+		err := db.Singleton.Put(db.AsKey(key, db.KEY_TIP), t.Timestamp, nil)
 		if err != nil {
 			return err
 		}
-		addTip(tx.Hash, tx.Timestamp)
+		addTip(t.Hash, t.Timestamp)
 	}
 
-	err := db.Remove(db.GetByteKey(tx.TrunkTransaction, db.KEY_TIP), txn)
+	err := db.Singleton.Remove(db.GetByteKey(t.TrunkTransaction, db.KEY_TIP))
 	if err == nil {
-		removeTip(tx.TrunkTransaction)
+		removeTip(t.TrunkTransaction)
 	}
-	err = db.Remove(db.GetByteKey(tx.BranchTransaction, db.KEY_TIP), txn)
+	err = db.Singleton.Remove(db.GetByteKey(t.BranchTransaction, db.KEY_TIP))
 	if err == nil {
-		removeTip(tx.BranchTransaction)
+		removeTip(t.BranchTransaction)
 	}
 	return nil
 }
@@ -158,7 +151,7 @@ func getRandomTip() (hash []byte, txBytes []byte) {
 	}
 
 	hash = Tips[utils.Random(0, len(Tips))].Hash
-	txBytes, err := db.GetBytes(db.GetByteKey(hash, db.KEY_BYTES), nil)
+	txBytes, err := db.Singleton.GetBytes(db.GetByteKey(hash, db.KEY_BYTES))
 	if err != nil {
 		return nil, nil
 	}

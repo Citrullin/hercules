@@ -1,18 +1,18 @@
 package snapshot
 
 import (
-	"path"
-	"os"
 	"bufio"
 	"bytes"
-	"strconv"
 	"encoding/gob"
 	"fmt"
+	"os"
+	"path"
 	"sort"
-	"github.com/dgraph-io/badger"
-	"../logs"
-	"../db"
+	"strconv"
+
 	"../convert"
+	"../db"
+	"../logs"
 	"../utils"
 )
 
@@ -21,7 +21,6 @@ const currentHeaderVersion = "1"
 func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
 	utils.CreateDirectory(snapshotDir)
-
 
 	timestampString := strconv.FormatInt(int64(timestamp), 10)
 	if len(filename) == 0 {
@@ -47,7 +46,7 @@ func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
 	// Write header
 	fmt.Fprintln(w, currentHeaderVersion+","+timestampString)
 
-	var addToBuffer = func (line string) {
+	var addToBuffer = func(line string) {
 		if lowEndDevice {
 			fmt.Fprintln(w, line)
 		} else {
@@ -55,112 +54,88 @@ func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
 		}
 	}
 
-	var commitBuffer = func () {
-		defer func() { lineBuffer = nil } ()
-		if lowEndDevice || lineBuffer == nil { return }
+	var commitBuffer = func() {
+		defer func() { lineBuffer = nil }()
+		if lowEndDevice || lineBuffer == nil {
+			return
+		}
 		sort.Strings(lineBuffer)
 		for _, line := range lineBuffer {
 			fmt.Fprintln(w, line)
 		}
 	}
 
-	err = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_SNAPSHOT_BALANCE}
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			key := item.Key()
-			v, err := item.Value()
-			if err == nil {
-				var value int64 = 0
-				buf := bytes.NewBuffer(v)
-				dec := gob.NewDecoder(buf)
-				err := dec.Decode(&value)
-				if err == nil {
-					// Do not save zero-value addresses
-					if value == 0 { continue }
-
-					line := convert.BytesToTrytes(key[1:])[:81] + ";" + strconv.FormatInt(int64(value), 10)
-					addToBuffer(line)
-				} else {
-					logs.Log.Error("Could not parse a snapshot value from database!", err)
-					return err
-				}
-			} else {
-				logs.Log.Error("Could not read a snapshot value from database!", err)
-				return err
+	err = db.Singleton.View(func(tx db.Transaction) error {
+		err := tx.ForPrefix([]byte{db.KEY_SNAPSHOT_BALANCE}, true, func(key, value []byte) (bool, error) {
+			var v int64 = 0
+			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
+				logs.Log.Error("Could not parse a snapshot value from database!", err)
+				return false, err
 			}
+
+			// Do not save zero-value addresses
+			if v == 0 {
+				return true, nil
+			}
+
+			line := convert.BytesToTrytes(key[1:])[:81] + ";" + strconv.FormatInt(int64(v), 10)
+			addToBuffer(line)
+
+			return true, nil
+		})
+		if err != nil {
+			return err
 		}
+
 		commitBuffer()
 		return nil
 	})
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
-	err = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_SNAPSHOT_SPENT}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			key := it.Item().Key()
+	err = db.Singleton.View(func(tx db.Transaction) error {
+		tx.ForPrefix([]byte{db.KEY_SNAPSHOT_SPENT}, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key[1:])[:81]
 			addToBuffer(line)
-		}
+			return true, nil
+		})
 		commitBuffer()
 		return nil
 	})
-	if err != nil { return err }
-
+	if err != nil {
+		return err
+	}
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
-	err = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_PENDING_BUNDLE}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			key := it.Item().Key()
-			if err != nil {
-				logs.Log.Error("Could not get keep Bundle from the database!", err)
-				return err
-			}
+	err = db.Singleton.View(func(tx db.Transaction) error {
+		tx.ForPrefix([]byte{db.KEY_PENDING_BUNDLE}, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key)
 			addToBuffer(line)
-		}
+			return true, nil
+		})
 		commitBuffer()
 		return nil
 	})
-	if err != nil { return err }
-
+	if err != nil {
+		return err
+	}
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
-	err = db.DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		prefix := []byte{db.KEY_SNAPSHOTTED}
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			key := it.Item().Key()
-			if err != nil {
-				logs.Log.Error("Could not get ignore TX from the database!", err)
-				return err
-			}
+	err = db.Singleton.View(func(tx db.Transaction) error {
+		tx.ForPrefix([]byte{db.KEY_SNAPSHOTTED}, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key)
 			addToBuffer(line)
-		}
+			return true, nil
+		})
 		commitBuffer()
 		return nil
 	})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
+
 	logs.Log.Notice("Snapshot saved, flushing...")
-	err = w.Flush()
-	if err != nil { return err }
+	if err = w.Flush(); err != nil {
+		return err
+	}
 	return os.Rename(pth, savepth)
 }
