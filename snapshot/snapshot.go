@@ -72,6 +72,10 @@ func loadSnapshotFiles() {
 Sets the current snapshot date in the database
 */
 func SetSnapshotTimestamp(timestamp int, tx db.Transaction) error {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(true)
+		defer tx.Discard()
+	}
 	err := tx.Put(keySnapshotDate, timestamp, nil)
 	if err == nil {
 		CurrentTimestamp = timestamp
@@ -86,6 +90,7 @@ If this is a file lock (snapshot being loaded from a file)
 func IsLocked(tx db.Transaction) (timestamp int, filename string) {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
+		defer tx.Discard()
 	}
 	return GetSnapshotLock(tx), GetSnapshotFileLock(tx)
 }
@@ -94,6 +99,11 @@ func IsLocked(tx db.Transaction) (timestamp int, filename string) {
 Creates a snapshot lock in the database
 */
 func Lock(timestamp int, filename string, tx db.Transaction) error {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(true)
+		defer tx.Discard()
+	}
+
 	InProgress = true
 	err := tx.Put(keySnapshotLock, timestamp, nil)
 	if err != nil {
@@ -118,6 +128,11 @@ func Unlock(tx db.Transaction) error {
 Returns the date unix timestamp of the last snapshot
 */
 func GetSnapshotLock(tx db.Transaction) int {
+	if tx == nil {
+		tx = db.Singleton.NewTransaction(false)
+		defer tx.Discard()
+	}
+
 	timestamp, err := tx.GetInt(keySnapshotLock)
 	if err != nil {
 		return -1
@@ -131,6 +146,7 @@ Returns the date unix timestamp of the last snapshot
 func GetSnapshotTimestamp(tx db.Transaction) int {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
+		defer tx.Discard()
 	}
 
 	if CurrentTimestamp > 0 {
@@ -150,6 +166,7 @@ Returns the date unix timestamp of the last snapshot
 func GetSnapshotFileLock(tx db.Transaction) string {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
+		defer tx.Discard()
 	}
 
 	filename, err := tx.GetString(keySnapshotFile)
