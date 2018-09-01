@@ -18,11 +18,11 @@ type Tip struct {
 }
 
 var Tips []*Tip
-var TipsLock = &sync.Mutex{}
+var TipsLock = &sync.RWMutex{}
 
 func GetRandomTip() (hash []byte) {
-	TipsLock.Lock()
-	defer TipsLock.Unlock()
+	TipsLock.RLock()
+	defer TipsLock.RUnlock()
 
 	if len(Tips) < 1 {
 		return nil
@@ -38,7 +38,6 @@ func tipOnLoad() {
 }
 
 func loadTips() {
-	logs.Log.Info("Loading tips...")
 	db.Singleton.View(func(tx db.Transaction) error {
 		return tx.ForPrefix([]byte{db.KEY_TIP}, true, func(key, value []byte) (bool, error) {
 			var timestamp int
@@ -64,43 +63,54 @@ func loadTips() {
 func startTipRemover() {
 	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
 	for range tipRemoverTicker.C {
-		logs.Log.Warning("Tips remover starting... Total tips:", len(Tips))
-		var toRemove []*Tip
-		TipsLock.Lock()
-		for _, tip := range Tips {
-			tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
-			tipAgeOK := tipAge < maxTipAge
-			origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
-			if !tipAgeOK || db.Singleton.CountPrefix(origKey) > 0 {
-				toRemove = append(toRemove, tip)
-			}
-		}
-		TipsLock.Unlock()
-		logs.Log.Warning("Tips to remove:", len(toRemove))
-		for _, tip := range toRemove {
-			err := db.Singleton.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP))
-			if err == nil {
-				removeTip(tip.Hash)
-			}
-		}
+		toRemove := getTipsToRemove()
+		logs.Log.Infof("Tips remover started. Total tips: %v | Tips to remove: %v", len(Tips), len(toRemove))
+
+		removeTips(toRemove)
 	}
 }
 
+func getTipsToRemove() []*Tip {
+	var toRemove []*Tip
+	TipsLock.RLock()
+	defer TipsLock.RUnlock()
+
+	for _, tip := range Tips {
+		tipAge := time.Duration(time.Now().Sub(time.Unix(int64(tip.Timestamp), 0)).Nanoseconds())
+		tipAgeOK := tipAge < maxTipAge
+		origKey := db.GetByteKey(tip.Hash, db.KEY_APPROVEE)
+		if !tipAgeOK || db.Singleton.CountPrefix(origKey) > 0 {
+			toRemove = append(toRemove, tip)
+		}
+	}
+
+	return toRemove
+}
+
 func addTip(hash []byte, value int) {
-	TipsLock.Lock()
-	defer TipsLock.Unlock()
 	if findTip(hash) >= 0 {
 		return
 	}
 
+	TipsLock.Lock()
+	defer TipsLock.Unlock()
 	Tips = append(Tips, &Tip{hash, value})
 }
 
+func removeTips(tipsToRemove []*Tip) {
+	for _, tip := range tipsToRemove {
+		err := db.Singleton.Remove(db.GetByteKey(tip.Hash, db.KEY_TIP))
+		if err == nil {
+			removeTip(tip.Hash)
+		}
+	}
+}
 func removeTip(hash []byte) {
+	var which = findTip(hash)
+
 	TipsLock.Lock()
 	defer TipsLock.Unlock()
 
-	var which = findTip(hash)
 	if which > -1 {
 		if which >= len(Tips)-1 {
 			Tips = Tips[0:which]
@@ -111,6 +121,9 @@ func removeTip(hash []byte) {
 }
 
 func findTip(hash []byte) int {
+	TipsLock.RLock()
+	defer TipsLock.RUnlock()
+
 	for i, tip := range Tips {
 		if bytes.Equal(hash, tip.Hash) {
 			return i
@@ -143,14 +156,14 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 }
 
 func getRandomTip() (hash []byte, txBytes []byte) {
-	TipsLock.Lock()
-	defer TipsLock.Unlock()
-
+	TipsLock.RLock()
 	if len(Tips) < 1 {
 		return nil, nil
 	}
 
 	hash = Tips[utils.Random(0, len(Tips))].Hash
+	TipsLock.RUnlock()
+
 	txBytes, err := db.Singleton.GetBytes(db.GetByteKey(hash, db.KEY_BYTES))
 	if err != nil {
 		return nil, nil
