@@ -34,7 +34,7 @@ func GetRandomTip() (hash []byte) {
 
 func tipOnLoad() {
 	loadTips()
-	go startTipRemover()
+	go tipsRemover()
 }
 
 func loadTips() {
@@ -60,11 +60,11 @@ func loadTips() {
 	logs.Log.Infof("Loaded tips: %v\n", len(Tips))
 }
 
-func startTipRemover() {
+func tipsRemover() {
 	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
 	for range tipRemoverTicker.C {
 		toRemove := getTipsToRemove()
-		logs.Log.Infof("Tips remover started. Total tips: %v | Tips to remove: %v", len(Tips), len(toRemove))
+		logs.Log.Infof("Total tips: %v | Tips to remove: %v", len(Tips), len(toRemove))
 
 		removeTips(toRemove)
 	}
