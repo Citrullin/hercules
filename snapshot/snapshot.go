@@ -170,7 +170,7 @@ func GetSnapshotFileLock(tx db.Transaction) string {
 		defer tx.Discard()
 	}
 
-	filename, err := tx.GetString(keySnapshotFile)
+	filename, err := coding.GetString(tx, keySnapshotFile)
 	if err != nil {
 		return ""
 	}

@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../tangle"
-	"github.com/gin-gonic/gin"
 )
 
 func init() {
@@ -34,7 +36,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 			balances = append(balances, 0)
 			continue
 		}
-		balance, err := db.Singleton.GetInt64(db.GetAddressKey(addressBytes, db.KEY_BALANCE))
+		balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey(addressBytes, db.KEY_BALANCE))
 		if err != nil {
 			balances = append(balances, 0)
 			continue

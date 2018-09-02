@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../utils"
-
-	"github.com/pkg/errors"
 )
 
 /*
@@ -75,11 +76,11 @@ func checkSnapshotFile(path string) (timestamp int64, err error) {
 
 	timestamp = header.Timestamp
 
-	current, err := db.Singleton.GetInt([]byte{db.KEY_SNAPSHOT_DATE})
-	if err == nil && int64(current) > timestamp {
+	current, err := coding.GetInt64(db.Singleton, []byte{db.KEY_SNAPSHOT_DATE})
+	if err == nil && current > timestamp {
 		logs.Log.Errorf(
 			"The current snapshot (%v) is more recent than the one being loaded (%v)!",
-			time.Unix(int64(current), 0),
+			time.Unix(current, 0),
 			time.Unix(timestamp, 0))
 		return 0, errors.New("current snapshot more recent")
 	}

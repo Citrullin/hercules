@@ -47,19 +47,6 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		assert.True(t, e.db.HasKey(testKey))
 	})
 
-	t.Run("Get", func(t *testing.T) {
-		e := setUpTestEnvironment(t, setUpFn)
-		defer e.tearDown()
-
-		require.NoError(t,
-			e.db.PutBytes(testKey, []byte{0x4, 0x4, 0x0, 0xff, 0xf6}, nil))
-
-		var value int
-		err := e.db.Get(testKey, &value)
-		require.NoError(t, err)
-		assert.Equal(t, 123, value)
-	})
-
 	t.Run("Remove", func(t *testing.T) {
 		e := setUpTestEnvironment(t, setUpFn)
 		defer e.tearDown()
@@ -120,7 +107,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 
 		assert.Equal(t, int64(1010), value)
 
-		value, err = e.db.GetInt64(testKey)
+		value, err = coding.GetInt64(e.db, testKey)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1010), value)
 	})

@@ -273,7 +273,7 @@ func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, tran
 		if value < 0 {
 			_, ok := ledgerState[addrString]
 			if !ok {
-				balance, err := db.Singleton.GetInt64(db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
+				balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
 				if err != nil {
 					balance = 0
 				}

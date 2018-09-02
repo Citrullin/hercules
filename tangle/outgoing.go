@@ -83,7 +83,7 @@ func loadPendingRequests() {
 				return true, nil
 			}
 
-			timestamp, err := tx.GetInt64(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
 			if err != nil {
 				logs.Log.Warning("Could not load pending Tx Timestamp")
 				return true, nil

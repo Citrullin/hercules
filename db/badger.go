@@ -108,41 +108,6 @@ func (b *Badger) HasKeysFromCategoryBefore(keyCategory byte, timestamp int64) bo
 	return tx.HasKeysFromCategoryBefore(keyCategory, timestamp)
 }
 
-func (b *Badger) Get(key []byte, value interface{}) error {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.Get(key, value)
-}
-
-func (b *Badger) GetString(key []byte) (string, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetString(key)
-}
-
-func (b *Badger) GetInt(key []byte) (int, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetInt(key)
-}
-
-func (b *Badger) GetBool(key []byte) (bool, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetBool(key)
-}
-
-func (b *Badger) GetInt64(key []byte) (int64, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetInt64(key)
-}
-
 func (b *Badger) Remove(key []byte) error {
 	return b.Update(func(t Transaction) error {
 		return t.Remove(key)

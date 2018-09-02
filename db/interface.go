@@ -22,11 +22,6 @@ type Manipulator interface {
 	PutBytes([]byte, []byte, *time.Duration) error
 	GetBytes([]byte) ([]byte, error)
 	GetBytesRaw([]byte) ([]byte, error)
-	GetInt64([]byte) (int64, error)
-	GetInt([]byte) (int, error)
-	GetString([]byte) (string, error)
-	GetBool([]byte) (bool, error)
-	Get([]byte, interface{}) error
 	HasKey([]byte) bool
 	HasKeysFromCategoryBefore(byte, int64) bool
 	Remove([]byte) error

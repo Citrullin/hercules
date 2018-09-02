@@ -72,7 +72,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 
 			key := db.AsKey(k, db.KEY_CONFIRMED)
 			if tx.HasKey(key) && !tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) {
-				value, err := tx.GetInt64(db.AsKey(key, db.KEY_VALUE))
+				value, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_VALUE))
 				if err != nil || value == 0 {
 					return true, nil
 				}
@@ -221,7 +221,7 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 		}
 
 		valueKey := db.AsKey(key, db.KEY_VALUE)
-		value, err := tx.GetInt64(valueKey)
+		value, err := coding.GetInt64(tx, valueKey)
 		if err != nil {
 			logs.Log.Errorf("Error reading value for %v", valueKey)
 			return false, err
