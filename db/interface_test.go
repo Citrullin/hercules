@@ -95,20 +95,4 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 
 		assert.Equal(t, 2, e.db.CountPrefix([]byte("a")))
 	})
-
-	t.Run("IncrementBy", func(t *testing.T) {
-		e := setUpTestEnvironment(t, setUpFn)
-		defer e.tearDown()
-
-		require.NoError(t, coding.PutInt64(e.db, testKey, 1000))
-
-		value, err := e.db.IncrementBy(testKey, 10, true)
-		require.NoError(t, err)
-
-		assert.Equal(t, int64(1010), value)
-
-		value, err = coding.GetInt64(e.db, testKey)
-		require.NoError(t, err)
-		assert.Equal(t, int64(1010), value)
-	})
 }

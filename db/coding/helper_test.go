@@ -36,3 +36,9 @@ func (s *storage) ForPrefix(prefix []byte, loadValues bool, fn func([]byte, []by
 	}
 	return nil
 }
+
+func (s *storage) Remove(key []byte) error {
+	s.key = nil
+	s.value = nil
+	return nil
+}

@@ -155,14 +155,6 @@ func (b *Badger) SumInt64FromCategory(keyCategory byte) int64 {
 	return tx.SumInt64FromCategory(keyCategory)
 }
 
-func (b *Badger) IncrementBy(key []byte, delta int64, deleteOnZero bool) (value int64, err error) {
-	err = b.Update(func(t Transaction) error {
-		value, err = t.IncrementBy(key, delta, deleteOnZero)
-		return err
-	})
-	return
-}
-
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
 	tx := b.NewTransaction(false)
 	defer tx.Discard()

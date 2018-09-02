@@ -126,7 +126,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 				return err
 			}
 
-			_, err = tx.IncrementBy(db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE), kv.value, false)
+			_, err = coding.IncrementInt64By(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE), kv.value, false)
 			if err != nil {
 				return err
 			}

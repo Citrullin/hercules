@@ -31,7 +31,6 @@ type Manipulator interface {
 	CountKeyCategory(byte) int
 	CountPrefix([]byte) int
 	SumInt64FromCategory(byte) int64
-	IncrementBy([]byte, int64, bool) (int64, error)
 	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
 }
 

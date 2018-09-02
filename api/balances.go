@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"encoding/gob"
 	"net/http"
 	"time"
 
@@ -11,7 +9,6 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
-	"../logs"
 	"../tangle"
 )
 
@@ -54,18 +51,12 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 func listAllAccounts(request Request, c *gin.Context, t time.Time) {
 	var accounts = make(map[string]interface{})
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_BALANCE}, true, func(key, value []byte) (bool, error) {
-			var v int64 = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
-				logs.Log.Error("Could not parse a snapshot value from database!", err)
-				return false, err
-			}
-
-			if v == 0 {
+		return coding.ForPrefixInt64(tx, []byte{db.KEY_BALANCE}, false, func(key []byte, value int64) (bool, error) {
+			if value == 0 {
 				return true, nil
 			}
 
-			accounts[convert.BytesToTrytes(key[1:])[:81]] = v
+			accounts[convert.BytesToTrytes(key[1:])[:81]] = value
 
 			return true, nil
 		})

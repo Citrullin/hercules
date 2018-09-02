@@ -2,7 +2,6 @@ package tangle
 
 import (
 	"bytes"
-	"encoding/gob"
 	"sync"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 
 type Tip struct {
 	Hash      []byte
-	Timestamp int
+	Timestamp int64
 }
 
 var Tips []*Tip
@@ -40,12 +39,7 @@ func tipOnLoad() {
 
 func loadTips() {
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_TIP}, true, func(key, value []byte) (bool, error) {
-			var timestamp int
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&timestamp); err != nil {
-				return true, nil
-			}
-
+		return coding.ForPrefixInt64(tx, []byte{db.KEY_TIP}, true, func(key []byte, timestamp int64) (bool, error) {
 			hash, err := tx.GetBytes(db.AsKey(key, db.KEY_HASH))
 			if err != nil {
 				return true, nil
@@ -88,7 +82,7 @@ func getTipsToRemove() []*Tip {
 	return toRemove
 }
 
-func addTip(hash []byte, value int) {
+func addTip(hash []byte, value int64) {
 	if findTip(hash) >= 0 {
 		return
 	}
@@ -142,7 +136,7 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 		if err != nil {
 			return err
 		}
-		addTip(t.Hash, t.Timestamp)
+		addTip(t.Hash, int64(t.Timestamp))
 	}
 
 	err := db.Singleton.Remove(db.GetByteKey(t.TrunkTransaction, db.KEY_TIP))

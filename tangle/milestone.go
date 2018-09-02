@@ -3,7 +3,6 @@ package tangle
 import (
 	"bufio"
 	"bytes"
-	"encoding/gob"
 	"errors"
 	"io"
 	"os"
@@ -118,11 +117,7 @@ func loadLatestMilestone() {
 		latest := 0
 		LatestMilestone = Milestone{tipFastTX, latest}
 
-		return tx.ForPrefix([]byte{db.KEY_MILESTONE}, true, func(key, value []byte) (bool, error) {
-			var ms = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ms); err != nil {
-				return true, nil
-			}
+		return coding.ForPrefixInt(tx, []byte{db.KEY_MILESTONE}, true, func(key []byte, ms int) (bool, error) {
 			if ms <= latest {
 				return true, nil
 			}
@@ -382,11 +377,7 @@ func GetMilestoneKeyByIndex(index int, acceptNearest bool) []byte {
 	currentIndex := LatestMilestone.Index + 1
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_MILESTONE}, true, func(key, value []byte) (bool, error) {
-			var ms = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ms); err != nil {
-				return true, nil
-			}
+		return coding.ForPrefixInt(tx, []byte{db.KEY_MILESTONE}, true, func(key []byte, ms int) (bool, error) {
 			if ms == index {
 				milestoneKey = db.AsKey(key, db.KEY_HASH)
 				return false, nil

@@ -1,8 +1,6 @@
 package snapshot
 
 import (
-	"bytes"
-	"encoding/gob"
 	"time"
 
 	"../convert"
@@ -48,16 +46,10 @@ func trimData(timestamp int64) error {
 	var found = 0
 
 	err := db.Singleton.View(func(tx db.Transaction) error {
-		err := tx.ForPrefix([]byte{db.KEY_TIMESTAMP}, true, func(k, v []byte) (bool, error) {
-			var txTimestamp = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(v)).Decode(&txTimestamp); err != nil {
-				logs.Log.Error("Could not parse a TX timestamp value!")
-				return false, err
-			}
-
+		err := coding.ForPrefixInt64(tx, []byte{db.KEY_TIMESTAMP}, false, func(k []byte, txTimestamp int64) (bool, error) {
 			// TODO: since the milestone timestamps are often zero, it might be a good idea to keep them..?
 			// Theoretically, they are not needed any longer. :-/
-			if int64(txTimestamp) <= timestamp {
+			if txTimestamp <= timestamp {
 				key := db.AsKey(k, db.KEY_EVENT_TRIM_PENDING)
 				if !tx.HasKey(key) {
 					txs = append(txs, key)

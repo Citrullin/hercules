@@ -73,57 +73,6 @@ func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timesta
 	return result
 }
 
-func (bt *BadgerTransaction) Put(key []byte, value interface{}, ttl *time.Duration) error {
-
-	switch value.(type) {
-	case []byte:
-		return bt.PutBytes(key, value.([]byte), ttl)
-	}
-
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
-		return err
-	}
-	return bt.PutBytes(key, buf.Bytes(), ttl)
-}
-
-func (bt *BadgerTransaction) Get(key []byte, value interface{}) error {
-	data, err := bt.GetBytes(key)
-	if err != nil {
-		return err
-	}
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	if err := dec.Decode(value); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (bt *BadgerTransaction) GetString(key []byte) (string, error) {
-	var result = ""
-	err := bt.Get(key, &result)
-	return result, err
-}
-
-func (bt *BadgerTransaction) GetInt(key []byte) (int, error) {
-	var result = 0
-	err := bt.Get(key, &result)
-	return result, err
-}
-
-func (bt *BadgerTransaction) GetBool(key []byte) (bool, error) {
-	var result = false
-	err := bt.Get(key, &result)
-	return result, err
-}
-
-func (bt *BadgerTransaction) GetInt64(key []byte) (int64, error) {
-	var result int64 = 0
-	err := bt.Get(key, &result)
-	return result, err
-}
-
 func (bt *BadgerTransaction) Remove(key []byte) error {
 	err := bt.txn.Delete(key)
 	if err == badger.ErrTxnTooBig {
@@ -200,18 +149,6 @@ func (bt *BadgerTransaction) SumInt64FromCategory(keyCategory byte) int64 {
 		return true, nil
 	})
 	return sum
-}
-
-func (bt *BadgerTransaction) IncrementBy(key []byte, delta int64, deleteOnZero bool) (int64, error) {
-	balance, err := bt.GetInt64(key)
-	balance += delta
-	if balance == 0 && deleteOnZero && err != nil {
-		if err := bt.Remove(key); err != nil {
-			return balance, err
-		}
-	}
-	err = bt.Put(key, balance, nil)
-	return balance, err
 }
 
 func (bt *BadgerTransaction) Discard() {

@@ -142,7 +142,7 @@ func confirm(key []byte, tx db.Transaction) (error, bool) {
 	}
 
 	if t.Value != 0 {
-		_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+		_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 		if err != nil {
 			logs.Log.Errorf("Could not update account balance: %v", err)
 			return errors.New("Could not update account balance!"), false
@@ -240,7 +240,7 @@ func reapplyConfirmed() {
 			t := transaction.TritsToFastTX(&trits, txBytes)
 			if t.Value != 0 {
 				err := db.Singleton.Update(func(tx db.Transaction) error {
-					_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+					_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
