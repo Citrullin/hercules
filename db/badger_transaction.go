@@ -40,16 +40,6 @@ func (bt *BadgerTransaction) GetBytes(key []byte) ([]byte, error) {
 	return value, nil
 }
 
-func (bt *BadgerTransaction) GetBytesRaw(key []byte) ([]byte, error) {
-	data, err := bt.GetBytes(key)
-	if err != nil {
-		return nil, err
-	}
-	response := make([]byte, len(data))
-	copy(response, data)
-	return response, nil
-}
-
 func (bt *BadgerTransaction) HasKey(key []byte) bool {
 	_, err := bt.txn.Get(key)
 	return err == nil

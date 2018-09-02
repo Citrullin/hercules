@@ -87,13 +87,6 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	return tx.GetBytes(key)
 }
 
-func (b *Badger) GetBytesRaw(key []byte) ([]byte, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetBytesRaw(key)
-}
-
 func (b *Badger) HasKey(key []byte) bool {
 	tx := b.NewTransaction(false)
 	defer tx.Discard()

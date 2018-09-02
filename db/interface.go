@@ -21,7 +21,6 @@ type Constructor func(*viper.Viper) (Interface, error)
 type Manipulator interface {
 	PutBytes([]byte, []byte, *time.Duration) error
 	GetBytes([]byte) ([]byte, error)
-	GetBytesRaw([]byte) ([]byte, error)
 	HasKey([]byte) bool
 	Remove([]byte) error
 	RemovePrefix([]byte) error
