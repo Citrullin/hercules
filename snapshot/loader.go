@@ -83,7 +83,7 @@ func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
 }
 
 func loadSpentSnapshot(address []byte, tx db.Transaction) error {
-	err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address, nil)
+	err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/viper"
 )
@@ -19,7 +18,7 @@ func RegisterImplementation(name string, constructor Constructor) {
 type Constructor func(*viper.Viper) (Interface, error)
 
 type Manipulator interface {
-	PutBytes([]byte, []byte, *time.Duration) error
+	PutBytes([]byte, []byte) error
 	GetBytes([]byte) ([]byte, error)
 	HasKey([]byte) bool
 	Remove([]byte) error

@@ -74,9 +74,9 @@ func (b *Badger) Unlock() {
 	b.dbLock.Unlock()
 }
 
-func (b *Badger) PutBytes(key, value []byte, ttl *time.Duration) error {
+func (b *Badger) PutBytes(key, value []byte) error {
 	return b.Update(func(t Transaction) error {
-		return t.PutBytes(key, value, ttl)
+		return t.PutBytes(key, value)
 	})
 }
 

@@ -134,7 +134,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
 				trunkBytesKey := db.GetByteKey(t.TrunkTransaction, db.KEY_BYTES)
-				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil)
+				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 				_checkIncomingError(t, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}

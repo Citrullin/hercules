@@ -87,7 +87,7 @@ func LoadMissingMilestonesFromFile(path string) error {
 					trits := convert.BytesToTrits(bits)[:8019]
 					tx := transaction.TritsToTX(&trits, bits)
 					trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
-					err = db.Singleton.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil)
+					err = db.Singleton.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 					pendingMilestone := &PendingMilestone{key, trunkBytesKey}
 					logs.Log.Debugf("Added missing milestone: %v", convert.BytesToTrytes(tx.Hash)[:81])
 					addPendingMilestoneToQueue(pendingMilestone)

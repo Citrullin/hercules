@@ -18,7 +18,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		defer e.tearDown()
 
 		require.NoError(t,
-			e.db.PutBytes(testKey, testValue, nil))
+			e.db.PutBytes(testKey, testValue))
 	})
 
 	t.Run("GetBytes", func(t *testing.T) {
@@ -26,7 +26,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		defer e.tearDown()
 
 		require.NoError(t,
-			e.db.PutBytes(testKey, testValue, nil))
+			e.db.PutBytes(testKey, testValue))
 
 		value, err := e.db.GetBytes(testKey)
 		require.NoError(t, err)
@@ -39,7 +39,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		defer e.tearDown()
 
 		require.NoError(t,
-			e.db.PutBytes(testKey, testValue, nil))
+			e.db.PutBytes(testKey, testValue))
 
 		assert.True(t, e.db.HasKey(testKey))
 	})
@@ -49,7 +49,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		defer e.tearDown()
 
 		require.NoError(t,
-			e.db.PutBytes(testKey, testValue, nil))
+			e.db.PutBytes(testKey, testValue))
 
 		require.NoError(t,
 			e.db.Remove(testKey))
@@ -61,8 +61,8 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		e := setUpTestEnvironment(t, setUpFn)
 		defer e.tearDown()
 
-		require.NoError(t, e.db.PutBytes([]byte("abc"), testValue, nil))
-		require.NoError(t, e.db.PutBytes([]byte("aac"), testValue, nil))
+		require.NoError(t, e.db.PutBytes([]byte("abc"), testValue))
+		require.NoError(t, e.db.PutBytes([]byte("aac"), testValue))
 
 		require.NoError(t,
 			e.db.RemovePrefix([]byte("aa")))
@@ -75,8 +75,8 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		e := setUpTestEnvironment(t, setUpFn)
 		defer e.tearDown()
 
-		require.NoError(t, e.db.PutBytes([]byte("abc"), testValue, nil))
-		require.NoError(t, e.db.PutBytes([]byte("aac"), testValue, nil))
+		require.NoError(t, e.db.PutBytes([]byte("abc"), testValue))
+		require.NoError(t, e.db.PutBytes([]byte("aac"), testValue))
 
 		assert.Equal(t, 2, e.db.CountPrefix([]byte("a")))
 	})

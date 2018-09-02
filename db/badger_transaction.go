@@ -1,8 +1,6 @@
 package db
 
 import (
-	"time"
-
 	"github.com/dgraph-io/badger"
 )
 
@@ -10,13 +8,8 @@ type BadgerTransaction struct {
 	txn *badger.Txn
 }
 
-func (bt *BadgerTransaction) PutBytes(key, value []byte, ttl *time.Duration) error {
-	err := error(nil)
-	if ttl == nil {
-		err = bt.txn.Set(key, value)
-	} else {
-		err = bt.txn.SetWithTTL(key, value, *ttl)
-	}
+func (bt *BadgerTransaction) PutBytes(key, value []byte) error {
+	err := bt.txn.Set(key, value)
 	if err == badger.ErrTxnTooBig {
 		return ErrTransactionTooBig
 	}

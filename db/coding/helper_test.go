@@ -2,7 +2,6 @@ package coding_test
 
 import (
 	"bytes"
-	"time"
 )
 
 var testKey = []byte("test")
@@ -12,7 +11,7 @@ type storage struct {
 	value []byte
 }
 
-func (s *storage) PutBytes(key, value []byte, ttl *time.Duration) error {
+func (s *storage) PutBytes(key, value []byte) error {
 	s.key = key
 	s.value = value
 	return nil
