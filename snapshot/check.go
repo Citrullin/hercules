@@ -47,13 +47,13 @@ Checks outstanding pending confirmations that node is beyond the snapshot horizo
 This is just an additional measure to prevent tangle inconsistencies.
 */
 func CanSnapshot(timestamp int64) bool {
-	return !db.Singleton.HasKeysFromCategoryBefore(db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
+	return !coding.HasKeyInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
 }
 
 func checkDatabaseSnapshot() bool {
 	logs.Log.Info("Checking database snapshot integrity")
 
-	total := db.Singleton.SumInt64FromCategory(db.KEY_SNAPSHOT_BALANCE)
+	total := coding.SumInt64InCategory(db.Singleton, db.KEY_SNAPSHOT_BALANCE)
 	if total == TOTAL_IOTAS {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true

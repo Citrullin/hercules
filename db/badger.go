@@ -101,13 +101,6 @@ func (b *Badger) HasKey(key []byte) bool {
 	return tx.HasKey(key)
 }
 
-func (b *Badger) HasKeysFromCategoryBefore(keyCategory byte, timestamp int64) bool {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.HasKeysFromCategoryBefore(keyCategory, timestamp)
-}
-
 func (b *Badger) Remove(key []byte) error {
 	return b.Update(func(t Transaction) error {
 		return t.Remove(key)
@@ -118,14 +111,6 @@ func (b *Badger) RemoveKeyCategory(keyCategory byte) error {
 	return b.Update(func(t Transaction) error {
 		return t.RemoveKeyCategory(keyCategory)
 	})
-}
-
-func (b *Badger) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) (count int) {
-	b.Update(func(t Transaction) error {
-		count = t.RemoveKeysFromCategoryBefore(keyCategory, timestamp)
-		return nil
-	})
-	return
 }
 
 func (b *Badger) RemovePrefix(prefix []byte) error {
@@ -146,13 +131,6 @@ func (b *Badger) CountPrefix(prefix []byte) int {
 	defer tx.Discard()
 
 	return tx.CountPrefix(prefix)
-}
-
-func (b *Badger) SumInt64FromCategory(keyCategory byte) int64 {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.SumInt64FromCategory(keyCategory)
 }
 
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {

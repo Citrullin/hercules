@@ -23,14 +23,11 @@ type Manipulator interface {
 	GetBytes([]byte) ([]byte, error)
 	GetBytesRaw([]byte) ([]byte, error)
 	HasKey([]byte) bool
-	HasKeysFromCategoryBefore(byte, int64) bool
 	Remove([]byte) error
 	RemovePrefix([]byte) error
 	RemoveKeyCategory(byte) error
-	RemoveKeysFromCategoryBefore(byte, int64) int
 	CountKeyCategory(byte) int
 	CountPrefix([]byte) int
-	SumInt64FromCategory(byte) int64
 	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
 }
 

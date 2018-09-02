@@ -5,9 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"."
-	"./coding"
 )
 
 var (
@@ -72,18 +69,6 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 
 		assert.True(t, e.db.HasKey([]byte("abc")))
 		assert.False(t, e.db.HasKey([]byte("aac")))
-	})
-
-	t.Run("RemoveKeysFromCategoryBefore", func(t *testing.T) {
-		e := setUpTestEnvironment(t, setUpFn)
-		defer e.tearDown()
-
-		key := db.AsKey(testKey, db.KEY_EDGE)
-		require.NoError(t, coding.PutInt64(e.db, key, 1000))
-
-		assert.Equal(t, 1, e.db.RemoveKeysFromCategoryBefore(db.KEY_EDGE, 2000))
-
-		assert.False(t, e.db.HasKey(key))
 	})
 
 	t.Run("CountPrefix", func(t *testing.T) {

@@ -149,7 +149,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		edgeTransactions <- &trimKey
 	}
 
-	db.Singleton.RemoveKeysFromCategoryBefore(db.KEY_PENDING_BUNDLE, int64(timestamp))
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_PENDING_BUNDLE, timestamp)
 	for _, key := range toKeepBundle {
 		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
@@ -157,7 +157,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		}
 	}
 
-	db.Singleton.RemoveKeysFromCategoryBefore(db.KEY_SNAPSHOTTED, int64(timestamp))
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_SNAPSHOTTED, timestamp)
 	for _, key := range snapshotted {
 		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
@@ -165,7 +165,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		}
 	}
 
-	db.Singleton.RemoveKeysFromCategoryBefore(db.KEY_EDGE, int64(timestamp))
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_EDGE, timestamp)
 
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")

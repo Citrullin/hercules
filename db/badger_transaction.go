@@ -1,8 +1,6 @@
 package db
 
 import (
-	"bytes"
-	"encoding/gob"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -57,22 +55,6 @@ func (bt *BadgerTransaction) HasKey(key []byte) bool {
 	return err == nil
 }
 
-func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timestamp int64) bool {
-	result := false
-	bt.ForPrefix([]byte{keyCategory}, true, func(_, value []byte) (bool, error) {
-		var ts = int64(0)
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts); err != nil {
-			return false, err
-		}
-		if ts > 0 && ts <= timestamp {
-			result = true
-			return false, nil
-		}
-		return true, nil
-	})
-	return result
-}
-
 func (bt *BadgerTransaction) Remove(key []byte) error {
 	err := bt.txn.Delete(key)
 	if err == badger.ErrTxnTooBig {
@@ -83,27 +65,6 @@ func (bt *BadgerTransaction) Remove(key []byte) error {
 
 func (bt *BadgerTransaction) RemoveKeyCategory(keyCategory byte) error {
 	return bt.RemovePrefix([]byte{keyCategory})
-}
-
-func (bt *BadgerTransaction) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) int {
-	var keys [][]byte
-	bt.ForPrefix([]byte{keyCategory}, true, func(key, value []byte) (bool, error) {
-		var ts int64
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts); err != nil {
-			return false, err
-		}
-		if ts < timestamp {
-			keys = append(keys, AsKey(key, keyCategory))
-		}
-
-		return true, nil
-	})
-
-	for _, key := range keys {
-		bt.Remove(key)
-	}
-
-	return len(keys)
 }
 
 func (bt *BadgerTransaction) RemovePrefix(prefix []byte) error {
@@ -135,20 +96,6 @@ func (bt *BadgerTransaction) CountPrefix(prefix []byte) int {
 		return true, nil
 	})
 	return count
-}
-
-func (bt *BadgerTransaction) SumInt64FromCategory(keyCategory byte) int64 {
-	sum := int64(0)
-	bt.ForPrefix([]byte{keyCategory}, true, func(_, value []byte) (bool, error) {
-		var v int64 = 0
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
-			return false, err
-		}
-		sum += v
-
-		return true, nil
-	})
-	return sum
 }
 
 func (bt *BadgerTransaction) Discard() {
