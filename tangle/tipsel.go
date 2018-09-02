@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"math"
 	"math/rand"
-
-	"time"
-
 	"sync"
+	"time"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -359,7 +358,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
-					db.Singleton.Put(db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix(), nil)
+					coding.PutInt64(db.Singleton, db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix())
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer

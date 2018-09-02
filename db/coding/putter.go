@@ -10,7 +10,23 @@ type Putter interface {
 	PutBytes([]byte, []byte, *time.Duration) error
 }
 
+func PutBytes(p Putter, key, value []byte) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
+		return err
+	}
+	return p.PutBytes(key, buf.Bytes(), nil)
+}
+
 func PutBool(p Putter, key []byte, value bool) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
+		return err
+	}
+	return p.PutBytes(key, buf.Bytes(), nil)
+}
+
+func PutInt(p Putter, key []byte, value int) error {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err

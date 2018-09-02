@@ -18,7 +18,7 @@ import (
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+func IsNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
 	current := GetSnapshotTimestamp(tx)
 	return timestamp > current
 }
@@ -26,7 +26,7 @@ func IsNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsEqualOrNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+func IsEqualOrNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
 	current := GetSnapshotTimestamp(tx)
 	return timestamp >= current
 }
@@ -45,7 +45,7 @@ func IsSynchronized() bool {
 Checks outstanding pending confirmations that node is beyond the snapshot horizon.
 This is just an additional measure to prevent tangle inconsistencies.
 */
-func CanSnapshot(timestamp int) bool {
+func CanSnapshot(timestamp int64) bool {
 	return !db.Singleton.HasKeysFromCategoryBefore(db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
 }
 
@@ -71,7 +71,7 @@ func checkSnapshotFile(path string) (timestamp int64, err error) {
 		return 0, err
 	}
 
-	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)", header.Version, utils.GetHumanReadableTime(int(header.Timestamp)), header.Timestamp)
+	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)", header.Version, utils.GetHumanReadableTime(header.Timestamp), header.Timestamp)
 
 	timestamp = header.Timestamp
 

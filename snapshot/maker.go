@@ -2,10 +2,10 @@ package snapshot
 
 import (
 	"bytes"
-	"encoding/gob"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 	"github.com/pkg/errors"
@@ -19,7 +19,7 @@ type KeyValue struct {
 /*
 Creates a snapshot on the current tangle database.
 */
-func MakeSnapshot(timestamp int, filename string) error {
+func MakeSnapshot(timestamp int64, filename string) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
 	InProgress = true
 	defer func() {
@@ -44,7 +44,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 	}
 
 	err := db.Singleton.Update(func(tx db.Transaction) error {
-		if !IsEqualOrNewerThanSnapshot(int(timestamp), nil) {
+		if !IsEqualOrNewerThanSnapshot(timestamp, nil) {
 			logs.Log.Infof("The given snapshot (%v) timestamp is older than the current one. Skipping", timestamp)
 			return errors.New("given snapshot is older than current one")
 		}
@@ -62,33 +62,29 @@ func MakeSnapshot(timestamp int, filename string) error {
 			return errors.New("pending snapshot, skipping current one")
 		}
 
-		Lock(int(timestamp), "", tx)
+		Lock(timestamp, "", tx)
 
 		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
-		err := tx.ForPrefix([]byte{db.KEY_TIMESTAMP}, true, func(k, v []byte) (bool, error) {
-			var txTimestamp = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(v)).Decode(&txTimestamp); err != nil {
-				logs.Log.Error("Could not parse a TX timestamp value!")
-				return false, err
+		err := coding.ForPrefixInt64(tx, []byte{db.KEY_TIMESTAMP}, false, func(k []byte, txTimestamp int64) (bool, error) {
+			if txTimestamp > timestamp {
+				return true, nil
 			}
 
-			if txTimestamp <= timestamp {
-				key := db.AsKey(k, db.KEY_CONFIRMED)
-				if tx.HasKey(key) && !tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) {
-					value, err := tx.GetInt64(db.AsKey(key, db.KEY_VALUE))
-					if err != nil || value == 0 {
-						return true, nil
-					}
+			key := db.AsKey(k, db.KEY_CONFIRMED)
+			if tx.HasKey(key) && !tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) {
+				value, err := tx.GetInt64(db.AsKey(key, db.KEY_VALUE))
+				if err != nil || value == 0 {
+					return true, nil
+				}
 
-					txBytes, err := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
-					if err != nil {
-						return false, err
-					}
-					trits := convert.BytesToTrits(txBytes)[:8019]
-					tx := transaction.TritsToFastTX(&trits, txBytes)
-					if !contains(tx.Bundle) {
-						bundles = append(bundles, tx.Bundle)
-					}
+				txBytes, err := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+				if err != nil {
+					return false, err
+				}
+				trits := convert.BytesToTrits(txBytes)[:8019]
+				tx := transaction.TritsToFastTX(&trits, txBytes)
+				if !contains(tx.Bundle) {
+					bundles = append(bundles, tx.Bundle)
 				}
 			}
 
@@ -137,7 +133,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 
 			// Update spents:
 			if kv.value < 0 {
-				err := tx.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil)
+				err := coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true)
 				if err != nil {
 					return err
 				}
@@ -145,7 +141,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 
 			// Create trimming event:
 			trimKey = db.AsKey(kv.key, db.KEY_EVENT_TRIM_PENDING)
-			return tx.Put(trimKey, true, nil)
+			return coding.PutBool(tx, trimKey, true)
 		})
 		if err != nil {
 			return err
@@ -155,7 +151,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 
 	db.Singleton.RemoveKeysFromCategoryBefore(db.KEY_PENDING_BUNDLE, int64(timestamp))
 	for _, key := range toKeepBundle {
-		err := db.Singleton.Put(key, timestamp, nil)
+		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
 			return err
 		}
@@ -163,7 +159,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 
 	db.Singleton.RemoveKeysFromCategoryBefore(db.KEY_SNAPSHOTTED, int64(timestamp))
 	for _, key := range snapshotted {
-		err := db.Singleton.Put(key, timestamp, nil)
+		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
 			return err
 		}
@@ -198,7 +194,7 @@ func MakeSnapshot(timestamp int, filename string) error {
 	return errors.New("failed database snapshot integrity check")
 }
 
-func loadAllFromBundle(bundleHash []byte, timestamp int, tx db.Transaction) ([]KeyValue, [][]byte, []byte, error) {
+func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([]KeyValue, [][]byte, []byte, error) {
 	var (
 		totalValue  int64 = 0
 		txs         []KeyValue
@@ -216,7 +212,7 @@ func loadAllFromBundle(bundleHash []byte, timestamp int, tx db.Transaction) ([]K
 			return true, nil
 		}
 
-		txTimestamp, err := tx.GetInt(db.AsKey(key, db.KEY_TIMESTAMP))
+		txTimestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP))
 		if err != nil {
 			return false, err
 		}

@@ -101,17 +101,11 @@ func (b *Badger) HasKey(key []byte) bool {
 	return tx.HasKey(key)
 }
 
-func (b *Badger) HasKeysFromCategoryBefore(keyCategory byte, timestamp int) bool {
+func (b *Badger) HasKeysFromCategoryBefore(keyCategory byte, timestamp int64) bool {
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
 	return tx.HasKeysFromCategoryBefore(keyCategory, timestamp)
-}
-
-func (b *Badger) Put(key []byte, value interface{}, ttl *time.Duration) error {
-	return b.Update(func(t Transaction) error {
-		return t.Put(key, value, ttl)
-	})
 }
 
 func (b *Badger) Get(key []byte, value interface{}) error {

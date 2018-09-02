@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../utils"
@@ -304,8 +305,8 @@ func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, s
 
 	if save {
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
-		db.Singleton.Put(key, hash, nil)
-		db.Singleton.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil)
+		coding.PutBytes(db.Singleton, key, hash)
+		coding.PutInt64(db.Singleton, db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp)
 	}
 
 	addr := IPAddressWithPort

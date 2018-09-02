@@ -13,6 +13,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -252,7 +253,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) int {
 	// 2. Check if 1-index TX already exists
 	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
 	if err != nil {
-		err := tx.Put(db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key, nil)
+		err := coding.PutBytes(tx, db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key)
 		if err != nil {
 			logs.Log.Errorf("Could not add pending milestone pair: %v", err)
 			panic(err)
@@ -319,7 +320,7 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 		logs.Log.Errorf("Could not remove pending milestone: %v", err)
 		panic(err)
 	}
-	err = tx.Put(db.AsKey(key, db.KEY_MILESTONE), milestoneIndex, nil)
+	err = coding.PutInt(tx, db.AsKey(key, db.KEY_MILESTONE), milestoneIndex)
 	if err != nil {
 		logs.Log.Errorf("Could not save milestone: %v", err)
 		panic(err)
@@ -327,7 +328,7 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 	checkIsLatestMilestone(milestoneIndex, t)
 
 	// Trigger confirmations
-	err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), t.Timestamp, tx)
+	err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
 	if err != nil {
 		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)

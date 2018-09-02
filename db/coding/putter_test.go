@@ -9,6 +9,13 @@ import (
 	"."
 )
 
+func TestPutBytes(t *testing.T) {
+	s := &storage{}
+
+	require.NoError(t, coding.PutBytes(s, testKey, []byte{1, 2, 3}))
+	assert.Equal(t, []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}, s.value)
+}
+
 func TestPutBool(t *testing.T) {
 	s := &storage{}
 
@@ -17,6 +24,13 @@ func TestPutBool(t *testing.T) {
 
 	require.NoError(t, coding.PutBool(s, testKey, true))
 	assert.Equal(t, []byte{0x03, 0x02, 0x00, 0x01}, s.value)
+}
+
+func TestPutInt(t *testing.T) {
+	s := &storage{}
+
+	require.NoError(t, coding.PutInt(s, testKey, 123))
+	assert.Equal(t, []byte{0x04, 0x04, 0x00, 0xff, 0xf6}, s.value)
 }
 
 func TestPutInt64(t *testing.T) {

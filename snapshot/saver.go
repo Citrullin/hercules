@@ -18,7 +18,7 @@ import (
 
 const currentHeaderVersion = "1"
 
-func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
+func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
 	utils.CreateDirectory(snapshotDir)
 

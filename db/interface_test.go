@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"."
+	"./coding"
 )
 
 var (
@@ -36,7 +37,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		assert.Equal(t, "value", string(value))
 	})
 
-	t.Run("Has", func(t *testing.T) {
+	t.Run("HasKey", func(t *testing.T) {
 		e := setUpTestEnvironment(t, setUpFn)
 		defer e.tearDown()
 
@@ -44,18 +45,6 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 			e.db.PutBytes(testKey, testValue, nil))
 
 		assert.True(t, e.db.HasKey(testKey))
-	})
-
-	t.Run("Put", func(t *testing.T) {
-		e := setUpTestEnvironment(t, setUpFn)
-		defer e.tearDown()
-
-		require.NoError(t,
-			e.db.Put(testKey, 123, nil))
-
-		value, err := e.db.GetBytes(testKey)
-		require.NoError(t, err)
-		assert.Equal(t, []byte{0x4, 0x4, 0x0, 0xff, 0xf6}, value)
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -103,7 +92,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		defer e.tearDown()
 
 		key := db.AsKey(testKey, db.KEY_EDGE)
-		require.NoError(t, e.db.Put(key, int64(1000), nil))
+		require.NoError(t, coding.PutInt64(e.db, key, 1000))
 
 		assert.Equal(t, 1, e.db.RemoveKeysFromCategoryBefore(db.KEY_EDGE, 2000))
 
@@ -124,7 +113,7 @@ func InterfaceSuite(t *testing.T, setUpFn setUpFunc) {
 		e := setUpTestEnvironment(t, setUpFn)
 		defer e.tearDown()
 
-		require.NoError(t, e.db.Put(testKey, int64(1000), nil))
+		require.NoError(t, coding.PutInt64(e.db, testKey, 1000))
 
 		value, err := e.db.IncrementBy(testKey, 10, true)
 		require.NoError(t, err)

@@ -24,3 +24,15 @@ func (s *storage) GetBytes(key []byte) ([]byte, error) {
 	}
 	return nil, nil
 }
+
+func (s *storage) ForPrefix(prefix []byte, loadValues bool, fn func([]byte, []byte) (bool, error)) error {
+	if bytes.HasPrefix(s.key, prefix) {
+		if loadValues {
+			_, err := fn(s.key, s.value)
+			return err
+		}
+		_, err := fn(s.key, nil)
+		return err
+	}
+	return nil
+}

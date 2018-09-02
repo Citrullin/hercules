@@ -57,10 +57,10 @@ func (bt *BadgerTransaction) HasKey(key []byte) bool {
 	return err == nil
 }
 
-func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timestamp int) bool {
+func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timestamp int64) bool {
 	result := false
 	bt.ForPrefix([]byte{keyCategory}, true, func(_, value []byte) (bool, error) {
-		var ts = 0
+		var ts = int64(0)
 		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts); err != nil {
 			return false, err
 		}

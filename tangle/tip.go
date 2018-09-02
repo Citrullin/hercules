@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 	"../utils"
@@ -137,7 +138,7 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(t.Timestamp), 0)).Nanoseconds())
 
 	if tipAge < maxTipAge && db.Singleton.CountPrefix(key) < 1 {
-		err := db.Singleton.Put(db.AsKey(key, db.KEY_TIP), t.Timestamp, nil)
+		err := coding.PutInt64(db.Singleton, db.AsKey(key, db.KEY_TIP), int64(t.Timestamp))
 		if err != nil {
 			return err
 		}

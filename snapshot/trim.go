@@ -7,6 +7,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -78,11 +79,11 @@ func trimData(timestamp int64) error {
 	logs.Log.Infof("Scheduling to trim %v transactions", found)
 	tx := db.Singleton.NewTransaction(true)
 	for _, k := range txs {
-		if err := tx.Put(k, true, nil); err != nil {
+		if err := coding.PutBool(tx, k, true); err != nil {
 			if err == db.ErrTransactionTooBig {
 				_ = tx.Commit()
 				tx = db.Singleton.NewTransaction(true)
-				if err := tx.Put(k, true, nil); err != nil {
+				if err := coding.PutBool(tx, k, true); err != nil {
 					return err
 				}
 			} else {
