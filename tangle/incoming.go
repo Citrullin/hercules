@@ -38,14 +38,18 @@ func incomingRunner() {
 
 		fingerprint := db.GetByteKey(data, db.KEY_FINGERPRINT)
 		if !hasFingerprint(fingerprint) {
+			// Message was not received in the last time
 			trits := convert.BytesToTrits(data)[:8019]
 			var tx = transaction.TritsToTX(&trits, data)
 			hash = tx.Hash
 
 			if !bytes.Equal(data, tipBytes) {
+				// Tx was not a tip
 				if !crypt.IsValidPoW(tx.Hash, MWM) {
+					// POW invalid => Track invalid messages from neighbor
 					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
 				} else {
+					// POW valid => Process the message
 					err := processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
 					if err == nil {
 						incomingProcessed++
@@ -189,22 +193,24 @@ func _checkIncomingError(tx *transaction.FastTX, err error) {
 }
 
 func cleanupRequestQueues() {
-	RequestQueuesLock.Lock()
-	LastIncomingTimeLock.Lock()
-	defer RequestQueuesLock.Unlock()
-	defer LastIncomingTimeLock.Unlock()
-
+	RequestQueuesLock.RLock()
 	var toRemove []string
 	for address := range RequestQueues {
 		if server.GetNeighborByAddress(address) == nil {
-			logs.Log.Debug("Removing gone neighbor queue for:", address)
 			toRemove = append(toRemove, address)
 		}
 	}
+	RequestQueuesLock.RUnlock()
+
+	RequestQueuesLock.Lock()
+	LastIncomingTimeLock.Lock()
 	if toRemove != nil && len(toRemove) > 0 {
 		for _, address := range toRemove {
+			logs.Log.Debug("Removing gone neighbor queue for:", address)
 			delete(RequestQueues, address)
 			delete(LastIncomingTime, address)
 		}
 	}
+	RequestQueuesLock.Unlock()
+	LastIncomingTimeLock.Unlock()
 }

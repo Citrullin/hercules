@@ -15,8 +15,6 @@ func fingerprintsOnLoad() {
 }
 
 func cleanupFingerprints() {
-	fingerprintsLock.Lock()
-	defer fingerprintsLock.Unlock()
 
 	ttl := fingerprintTTL
 
@@ -26,14 +24,20 @@ func cleanupFingerprints() {
 
 	now := time.Now()
 	var toRemove []string
+
+	fingerprintsLock.RLock()
 	for key, t := range fingerprints {
 		if now.Sub(t) >= ttl {
 			toRemove = append(toRemove, key)
 		}
 	}
+	fingerprintsLock.RUnlock()
+
+	fingerprintsLock.Lock()
 	for _, key := range toRemove {
 		delete(fingerprints, key)
 	}
+	fingerprintsLock.Unlock()
 }
 
 func hasFingerprint(key []byte) bool {

@@ -34,17 +34,20 @@ var PendingRequestsLock = &sync.RWMutex{}
 func Broadcast(data []byte, exclude string) int {
 	sent := 0
 
+	var neighborsTmp = make(map[string]string)
 	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
-
 	for _, neighbor := range server.Neighbors {
+		neighborsTmp[neighbor.Addr] = neighbor.IPAddressWithPort
+	}
+	server.NeighborsLock.RUnlock()
 
-		if neighbor.Addr == exclude {
+	for addr, addrWithIP := range neighborsTmp {
+		if addr == exclude {
 			continue
 		}
 
-		request := getSomeRequestByAddress(neighbor.Addr, false)
-		sendReply(getMessage(data, request, request == nil, neighbor.Addr, nil))
+		request := getSomeRequestByAddress(addr, false)
+		sendReply(getMessage(data, request, request == nil, addrWithIP, nil))
 		sent++
 	}
 
@@ -149,16 +152,20 @@ func outgoingRunner() {
 		shouldRequestTip = time.Now().Sub(lastTip) > tipRequestInterval
 	}
 
+	var neighborsTmp = make(map[string]string)
 	server.NeighborsLock.RLock()
-	defer server.NeighborsLock.RUnlock()
-
 	for _, neighbor := range server.Neighbors {
-		var request = getSomeRequestByAddress(neighbor.Addr, false)
+		neighborsTmp[neighbor.Addr] = neighbor.IPAddressWithPort
+	}
+	server.NeighborsLock.RUnlock()
+
+	for addr, addrWithIP := range neighborsTmp {
+		var request = getSomeRequestByAddress(addr, false)
 		if request != nil {
-			sendReply(getMessage(nil, request, false, neighbor.IPAddressWithPort, nil))
+			sendReply(getMessage(nil, request, false, addrWithIP, nil))
 		} else if shouldRequestTip {
 			lastTip = time.Now()
-			sendReply(getMessage(nil, nil, true, neighbor.IPAddressWithPort, nil))
+			sendReply(getMessage(nil, nil, true, addrWithIP, nil))
 		}
 	}
 }
