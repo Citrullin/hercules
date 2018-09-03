@@ -27,8 +27,8 @@ func trimTXRunner() {
 	})
 	logs.Log.Debug("Loaded trimmable TXs", len(edgeTransactions))
 	for hashKey := range edgeTransactions {
-		db.Singleton.Lock()
-		db.Singleton.Unlock() // should this be unlocked?
+		//db.Singleton.Lock()
+		//db.Singleton.Unlock() // should this be unlocked?
 		if InProgress {
 			time.Sleep(1 * time.Second)
 			continue

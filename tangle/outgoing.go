@@ -60,8 +60,8 @@ func loadPendingRequests() {
 	// TODO: if pending is pending for too long, remove it from the loop?
 	logs.Log.Info("Loading pending requests")
 
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
+	//db.Singleton.Lock()
+	//defer db.Singleton.Unlock()
 	RequestQueuesLock.Lock()
 	defer RequestQueuesLock.Unlock()
 

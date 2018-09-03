@@ -32,8 +32,8 @@ func LoadSnapshot(path string) error {
 	}
 	Lock(int(timestamp), path, nil)
 
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
+	//db.Singleton.Lock()
+	//defer db.Singleton.Unlock()
 
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)

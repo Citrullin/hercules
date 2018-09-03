@@ -178,8 +178,8 @@ Runs checking of pending milestones.
 */
 func startMilestoneChecker() {
 	total := 0
-	db.Singleton.Lock()
-	db.Singleton.Unlock()
+	//db.Singleton.Lock()
+	//db.Singleton.Unlock()
 	var pairs []PendingMilestone
 	db.Singleton.View(func(tx db.Transaction) error {
 		return tx.ForPrefix([]byte{db.KEY_EVENT_MILESTONE_PENDING}, true, func(key, value []byte) (bool, error) {
