@@ -158,6 +158,7 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 func getRandomTip() (hash []byte, txBytes []byte) {
 	TipsLock.RLock()
 	if len(Tips) < 1 {
+		TipsLock.RUnlock()
 		return nil, nil
 	}
 
