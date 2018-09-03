@@ -41,13 +41,13 @@ func Broadcast(data []byte, exclude string) int {
 	}
 	server.NeighborsLock.RUnlock()
 
-	for addr, addrWithIP := range neighborsTmp {
+	for addr, ipWithPort := range neighborsTmp {
 		if addr == exclude {
 			continue
 		}
 
 		request := getSomeRequestByAddress(addr, false)
-		sendReply(getMessage(data, request, request == nil, addrWithIP, nil))
+		sendReply(getMessage(data, request, request == nil, ipWithPort, nil))
 		sent++
 	}
 
@@ -159,13 +159,13 @@ func outgoingRunner() {
 	}
 	server.NeighborsLock.RUnlock()
 
-	for addr, addrWithIP := range neighborsTmp {
+	for addr, ipWithPort := range neighborsTmp {
 		var request = getSomeRequestByAddress(addr, false)
 		if request != nil {
-			sendReply(getMessage(nil, request, false, addrWithIP, nil))
+			sendReply(getMessage(nil, request, false, ipWithPort, nil))
 		} else if shouldRequestTip {
 			lastTip = time.Now()
-			sendReply(getMessage(nil, nil, true, addrWithIP, nil))
+			sendReply(getMessage(nil, nil, true, ipWithPort, nil))
 		}
 	}
 }
