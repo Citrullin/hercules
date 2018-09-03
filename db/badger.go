@@ -66,11 +66,11 @@ func NewBadger(config *viper.Viper) (Interface, error) {
 }
 
 func (b *Badger) Lock() {
-	//b.locker.Lock()
+	b.locker.Lock()
 }
 
 func (b *Badger) Unlock() {
-	//b.locker.Unlock()
+	b.locker.Unlock()
 }
 
 func (b *Badger) PutBytes(key, value []byte, ttl *time.Duration) error {
@@ -231,15 +231,15 @@ func (b *Badger) View(fn func(Transaction) error) error {
 // deny locking of new tasks.
 func (b *Badger) Close() error {
 	b.cleanUpTicker.Stop()
-	//b.locker.Lock()
+	b.locker.Lock()
 	time.Sleep(5 * time.Second)
 	return b.db.Close()
 }
 
 func (b *Badger) cleanUp() {
 	logs.Log.Debug("Cleanup database started")
-	//b.locker.Lock()
+	b.locker.Lock()
 	b.db.RunValueLogGC(0.5)
-	//b.locker.Unlock()
+	b.locker.Unlock()
 	logs.Log.Debug("Cleanup database finished")
 }

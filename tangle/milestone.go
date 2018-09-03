@@ -42,7 +42,7 @@ var COO_ADDRESS2_BYTES = convert.TrytesToBytes(COO_ADDRESS2)[:49]
 
 var pendingMilestoneQueue PendingMilestoneQueue
 var LatestMilestone Milestone
-var LatestMilestoneLock = &sync.Mutex{}
+var LatestMilestoneLock = &sync.RWMutex{}
 
 // TODO: remove this? Or add an API interface?
 func LoadMissingMilestonesFromFile(path string) error {
@@ -146,19 +146,19 @@ func loadLatestMilestone() {
 }
 
 func getLatestMilestone() *Milestone {
-	LatestMilestoneLock.Lock()
-	defer LatestMilestoneLock.Unlock()
+	LatestMilestoneLock.RLock()
+	defer LatestMilestoneLock.RUnlock()
 	return &LatestMilestone
 }
 
 func checkIsLatestMilestone(index int, tx *transaction.FastTX) bool {
 	milestone := getLatestMilestone()
 	if milestone.Index < index {
-		LatestMilestoneLock.Lock()
-		defer LatestMilestoneLock.Unlock()
 		// Add milestone hash:
 		trits := convert.BytesToTrits(tx.Bytes)[:8019]
 		tx = transaction.TritsToTX(&trits, tx.Bytes)
+		LatestMilestoneLock.Lock()
+		defer LatestMilestoneLock.Unlock()
 		LatestMilestone = Milestone{tx, index}
 		logs.Log.Infof("Latest milestone changed to: %v", index)
 		return true
@@ -178,8 +178,8 @@ Runs checking of pending milestones.
 */
 func startMilestoneChecker() {
 	total := 0
-	//db.Singleton.Lock()
-	//db.Singleton.Unlock()
+	db.Singleton.Lock()
+	db.Singleton.Unlock()
 	var pairs []PendingMilestone
 	db.Singleton.View(func(tx db.Transaction) error {
 		return tx.ForPrefix([]byte{db.KEY_EVENT_MILESTONE_PENDING}, true, func(key, value []byte) (bool, error) {

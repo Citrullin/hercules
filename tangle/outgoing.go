@@ -63,8 +63,8 @@ func loadPendingRequests() {
 	// TODO: if pending is pending for too long, remove it from the loop?
 	logs.Log.Info("Loading pending requests")
 
-	//db.Singleton.Lock()
-	//defer db.Singleton.Unlock()
+	db.Singleton.Lock()
+	defer db.Singleton.Unlock()
 	RequestQueuesLock.Lock()
 	defer RequestQueuesLock.Unlock()
 
@@ -287,11 +287,12 @@ func getMessage(resp []byte, req []byte, tip bool, IPAddressWithPort string, tx 
 }
 
 func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, save bool) *PendingRequest {
-	PendingRequestsLock.Lock()
-	defer PendingRequestsLock.Unlock()
 
 	key := string(hash)
+
+	PendingRequestsLock.RLock()
 	pendingRequest, ok := PendingRequests[key]
+	PendingRequestsLock.RUnlock()
 
 	if ok {
 		return pendingRequest
@@ -314,19 +315,25 @@ func addPendingRequest(hash []byte, timestamp int64, IPAddressWithPort string, s
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), LastNeighborAddr: addr}
+
+	PendingRequestsLock.Lock()
 	PendingRequests[key] = pendingRequest
+	PendingRequestsLock.Unlock()
+
 	return pendingRequest
 }
 
 func removePendingRequest(hash []byte) bool {
-	PendingRequestsLock.Lock()
-	defer PendingRequestsLock.Unlock()
 
 	key := string(hash)
+	PendingRequestsLock.RLock()
 	_, ok := PendingRequests[key]
+	PendingRequestsLock.RUnlock()
 
 	if ok {
+		PendingRequestsLock.Lock()
 		delete(PendingRequests, key)
+		PendingRequestsLock.Unlock()
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
 		db.Singleton.Remove(key)
 		db.Singleton.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
@@ -335,13 +342,13 @@ func removePendingRequest(hash []byte) bool {
 }
 
 func getOldPending(excludeAddress string) *PendingRequest {
-	PendingRequestsLock.RLock()
-	defer PendingRequestsLock.RUnlock()
-
 	max := 1000
 	if lowEndDevice {
 		max = 200
 	}
+
+	PendingRequestsLock.RLock()
+	defer PendingRequestsLock.RUnlock()
 
 	length := len(PendingRequests)
 	if length < max {
@@ -363,13 +370,14 @@ func getOldPending(excludeAddress string) *PendingRequest {
 }
 
 func getAnyRandomOldPending(excludeAddress string) *PendingRequest {
-	PendingRequestsLock.RLock()
-	defer PendingRequestsLock.RUnlock()
 
 	max := 10000
 	if lowEndDevice {
 		max = 300
 	}
+
+	PendingRequestsLock.RLock()
+	defer PendingRequestsLock.RUnlock()
 
 	length := len(PendingRequests)
 	if length < max {
@@ -399,10 +407,10 @@ if the TX is not received, the requests is deleted. This is probably a fake
 or invalid spam referenced by trunk/branch of a transaction. Just ignore.
 */
 func cleanupStalledRequests() {
-	PendingRequestsLock.Lock()
-	defer PendingRequestsLock.Unlock()
 
-	var toRemove [][]byte
+	var keysToRemove [][]byte
+	var requestsToRemove []string
+
 	db.Singleton.View(func(tx db.Transaction) error {
 		return tx.ForPrefix([]byte{db.KEY_PENDING_REQUESTS}, true, func(key, value []byte) (bool, error) {
 			var times int
@@ -410,13 +418,13 @@ func cleanupStalledRequests() {
 				return true, nil
 			}
 			if times > maxTimesRequest {
-				toRemove = append(toRemove, db.AsKey(key, db.KEY_PENDING_REQUESTS))
+				keysToRemove = append(keysToRemove, db.AsKey(key, db.KEY_PENDING_REQUESTS))
 			}
 			return true, nil
 		})
 	})
 
-	for _, key := range toRemove {
+	for _, key := range keysToRemove {
 		var hash []byte
 		err := db.Singleton.Update(func(tx db.Transaction) error {
 			if err := tx.Remove(key); err != nil {
@@ -446,7 +454,13 @@ func cleanupStalledRequests() {
 			return nil
 		})
 		if err == nil && hash != nil {
-			delete(PendingRequests, string(hash))
+			requestsToRemove = append(requestsToRemove, string(hash))
 		}
 	}
+
+	PendingRequestsLock.Lock()
+	for _, req := range requestsToRemove {
+		delete(PendingRequests, req)
+	}
+	PendingRequestsLock.Unlock()
 }

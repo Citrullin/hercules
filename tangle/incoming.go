@@ -31,8 +31,8 @@ func incomingRunner() {
 
 		incoming++
 
-		//db.Singleton.Lock()
-		//db.Singleton.Unlock()
+		db.Singleton.Lock()
+		db.Singleton.Unlock()
 
 		var hash []byte
 

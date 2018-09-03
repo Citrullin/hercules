@@ -19,8 +19,8 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int) error {
 		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
-	//db.Singleton.Lock()
-	//defer db.Singleton.Unlock()
+	db.Singleton.Lock()
+	defer db.Singleton.Unlock()
 
 	// Give time for other processes to finalize
 	time.Sleep(WAIT_SNAPSHOT_DURATION)

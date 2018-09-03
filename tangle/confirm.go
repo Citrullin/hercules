@@ -65,8 +65,8 @@ func startConfirmThread() {
 			continue
 		}
 		pendingConfirmation := <-confirmQueue
-		//db.Singleton.Lock()
-		//db.Singleton.Unlock()
+		db.Singleton.Lock()
+		db.Singleton.Unlock()
 		confirmed := false
 		err := db.Singleton.Update(func(tx db.Transaction) error {
 			if !addConfirmInProgress(pendingConfirmation.key) {
