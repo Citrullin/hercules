@@ -74,6 +74,12 @@ func (bt *BadgerTransaction) HasKeysFromCategoryBefore(keyCategory byte, timesta
 }
 
 func (bt *BadgerTransaction) Put(key []byte, value interface{}, ttl *time.Duration) error {
+
+	switch value.(type) {
+	case []byte:
+		return bt.PutBytes(key, value.([]byte), ttl)
+	}
+
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err
