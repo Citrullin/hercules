@@ -300,11 +300,6 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 	if !bytes.Equal(t2.Address, COO_ADDRESS2_BYTES) ||
 		!bytes.Equal(t2.TrunkTransaction, t.BranchTransaction) ||
 		!bytes.Equal(t2.Bundle, t.Bundle) {
-
-		logs.Log.Warningf("Condition 1: ", bytes.Equal(t2.Address, COO_ADDRESS2_BYTES))
-		logs.Log.Warning("Condition 2: ", bytes.Equal(t2.TrunkTransaction, t.BranchTransaction))
-		logs.Log.Warning("Condition 3: ", bytes.Equal(t2.Bundle, t.Bundle))
-
 		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(t.Bundle)[:81])
 		discardMilestone()
 		return false
