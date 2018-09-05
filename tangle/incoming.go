@@ -15,8 +15,10 @@ import (
 	"../utils"
 )
 
-const P_TIP_REPLY = 25
-const P_BROADCAST = 10
+const (
+	P_TIP_REPLY = 25
+	P_BROADCAST = 10
+)
 
 func incomingRunner() {
 	for raw := range srv.Incoming {
@@ -25,9 +27,9 @@ func incomingRunner() {
 			continue
 		}
 
-		data := raw.Msg[:1604]
-		req := make([]byte, 49)
-		copy(req, raw.Msg[1604:1650])
+		data := raw.Msg[:DATA_SIZE]
+		req := make([]byte, REQ_HASH_SIZE)
+		copy(req, raw.Msg[DATA_SIZE:PACKET_SIZE])
 
 		incoming++
 
@@ -39,7 +41,7 @@ func incomingRunner() {
 		fingerprint := db.GetByteKey(data, db.KEY_FINGERPRINT)
 		if !hasFingerprint(fingerprint) {
 			// Message was not received in the last time
-			trits := convert.BytesToTrits(data)[:8019]
+			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
 			var tx = transaction.TritsToTX(&trits, data)
 			hash = tx.Hash
 
@@ -68,7 +70,7 @@ func incomingRunner() {
 		}
 
 		var reply []byte = nil
-		var isLookingForTX = !bytes.Equal(req, tipBytes[:49]) && (hash == nil || !bytes.Equal(hash, req))
+		var isLookingForTX = !bytes.Equal(req, tipBytes[:REQ_HASH_SIZE]) && (hash == nil || !bytes.Equal(hash, req))
 
 		if isLookingForTX {
 			reply, _ = db.Singleton.GetBytes(db.GetByteKey(req, db.KEY_BYTES))
@@ -91,6 +93,7 @@ func incomingRunner() {
 func processIncomingTX(incoming IncomingTX) error {
 	t := incoming.TX
 	var pendingMilestone *PendingMilestone
+
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
 		// TODO: catch error defer here
 		var key = db.GetByteKey(t.Hash, db.KEY_HASH)

@@ -7,7 +7,9 @@ import (
 	"../crypt"
 )
 
-var TOTAL_IOTAS int64 = 2779530283277761
+const (
+	TOTAL_IOTAS int64 = 2779530283277761
+)
 
 func IsValidBundleTrytes(trytes []string) bool {
 	// Get transaction objects
