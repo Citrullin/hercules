@@ -72,7 +72,7 @@ func loadPendingRequests() {
 	added := 0
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixBytes(tx, []byte{db.KEY_PENDING_HASH}, true, func(key, hash []byte) (bool, error) {
+		return tx.ForPrefix([]byte{db.KEY_PENDING_HASH}, true, func(key, hash []byte) (bool, error) {
 			total++
 
 			timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_PENDING_TIMESTAMP))

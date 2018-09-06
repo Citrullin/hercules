@@ -80,17 +80,3 @@ func ForPrefixInt(i Iterator, prefix []byte, skipOnError bool, fn func([]byte, i
 		return fn(key, intValue)
 	})
 }
-
-func ForPrefixBytes(i Iterator, prefix []byte, skipOnError bool, fn func([]byte, []byte) (bool, error)) error {
-	return i.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
-		var bytesValue = []byte{}
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&bytesValue); err != nil {
-			if skipOnError {
-				logs.Log.Error("couldn't load key value", key, err)
-				return true, nil
-			}
-			return false, err
-		}
-		return fn(key, bytesValue)
-	})
-}

@@ -49,13 +49,3 @@ func TestForPrefixInt(t *testing.T) {
 		return true, nil
 	}))
 }
-
-func TestForPrefixBytes(t *testing.T) {
-	s := &storage{key: []byte("abc"), value: []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}}
-
-	require.NoError(t, coding.ForPrefixBytes(s, []byte("a"), false, func(key, value []byte) (bool, error) {
-		assert.Equal(t, []byte("abc"), key)
-		assert.Equal(t, []byte{1, 2, 3}, value)
-		return true, nil
-	}))
-}
