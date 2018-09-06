@@ -422,7 +422,7 @@ func cleanupStalledRequests() {
 			k := db.AsKey(key, db.KEY_PENDING_HASH)
 
 			err := error(nil)
-			hash, err = tx.GetBytes(k)
+			hash, err = coding.GetBytes(tx, k)
 			if err != nil {
 				return nil
 			}

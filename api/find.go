@@ -69,7 +69,7 @@ func find(trits []byte, prefix byte) []string {
 		prefix := db.GetByteKey(trits, prefix)
 		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
 			key = db.AsKey(key[16:], db.KEY_HASH)
-			hash, err := tx.GetBytes(key)
+			hash, err := coding.GetBytes(tx, key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}

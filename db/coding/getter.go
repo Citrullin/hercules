@@ -9,6 +9,11 @@ type Getter interface {
 	GetBytes([]byte) ([]byte, error)
 }
 
+func GetBytes(g Getter, key []byte) ([]byte, error) {
+	value, err := g.GetBytes(key)
+	return value, err
+}
+
 func GetBool(g Getter, key []byte) (bool, error) {
 	value, err := g.GetBytes(key)
 	if err != nil {

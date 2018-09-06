@@ -8,6 +8,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../transaction"
@@ -49,7 +50,6 @@ var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
 var tipFastTX = transaction.TritsToTX(&tipTrits, tipBytes)
 var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 
-var srv *server.Server
 var config *viper.Viper
 var LastIncomingTime map[string]time.Time
 var LastIncomingTimeLock = &sync.RWMutex{}
@@ -64,10 +64,12 @@ var incomingProcessed = 0
 var saved = 0
 var discarded = 0
 var outgoing = 0
+var srv *server.Server
 
-func Start(s *server.Server, cfg *viper.Viper) {
+func Start(cfg *viper.Viper) {
 	config = cfg
-	srv = s
+	srv = server.GetServer()
+
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
 	LastIncomingTime = make(map[string]time.Time)
@@ -132,14 +134,14 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		x := 0
 		return tx.ForPrefix([]byte{db.KEY_HASH}, true, func(key, value []byte) (bool, error) {
 			relKey := db.AsKey(key, db.KEY_RELATION)
-			relation, _ := tx.GetBytes(relKey)
+			relation, _ := coding.GetBytes(tx, relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
 				(!tx.HasKey(db.AsKey(relation[:16], db.KEY_HASH)) || !tx.HasKey(db.AsKey(relation[16:], db.KEY_HASH))) {
-				txBytes, _ := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+				txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {

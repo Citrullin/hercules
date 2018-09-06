@@ -40,7 +40,7 @@ func tipOnLoad() {
 func loadTips() {
 	db.Singleton.View(func(tx db.Transaction) error {
 		return coding.ForPrefixInt64(tx, []byte{db.KEY_TIP}, true, func(key []byte, timestamp int64) (bool, error) {
-			hash, err := tx.GetBytes(db.AsKey(key, db.KEY_HASH))
+			hash, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_HASH))
 			if err != nil {
 				return true, nil
 			}
