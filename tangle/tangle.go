@@ -8,6 +8,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../transaction"
@@ -132,14 +133,14 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		x := 0
 		return tx.ForPrefix([]byte{db.KEY_HASH}, true, func(key, value []byte) (bool, error) {
 			relKey := db.AsKey(key, db.KEY_RELATION)
-			relation, _ := tx.GetBytes(relKey)
+			relation, _ := coding.GetBytes(tx, relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
 				(!tx.HasKey(db.AsKey(relation[:16], db.KEY_HASH)) || !tx.HasKey(db.AsKey(relation[16:], db.KEY_HASH))) {
-				txBytes, _ := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+				txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {

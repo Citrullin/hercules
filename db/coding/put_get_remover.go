@@ -17,3 +17,7 @@ func IncrementInt64By(pgr PutGetRemover, key []byte, delta int64, deleteOnZero b
 	err = PutInt64(pgr, key, balance)
 	return balance, err
 }
+
+func Remove(pgr PutGetRemover, key []byte) error {
+	return pgr.Remove(key)
+}
