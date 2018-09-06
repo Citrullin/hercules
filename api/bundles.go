@@ -4,13 +4,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
+
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../tangle"
 	"../transaction"
-	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
 )
 
 func init() {
@@ -46,7 +48,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			// t.Address is the receiving address
 			// only when the transaction value is negative we should check for balance in the receiving address
 			if t.Value < 0 {
-				balance, err := tx.GetInt64(db.GetAddressKey(t.Address, db.KEY_BALANCE))
+				balance, err := coding.GetInt64(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE))
 				if err != nil {
 					addressTrytes := convert.BytesToTrytes(t.Address)
 					return errors.Errorf("Could not read address' balance. Address: %s Message: %s", addressTrytes, err)

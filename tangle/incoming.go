@@ -8,6 +8,7 @@ import (
 	"../convert"
 	"../crypt"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../snapshot"
@@ -21,6 +22,10 @@ const (
 )
 
 func incomingRunner() {
+	if srv == nil {
+		logs.Log.Info("empty")
+	}
+
 	for raw := range srv.Incoming {
 		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
 		if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
@@ -96,7 +101,8 @@ func processIncomingTX(incoming IncomingTX) error {
 
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
 		// TODO: catch error defer here
-		var key = db.GetByteKey(t.Hash, db.KEY_HASH)
+
+		key := db.GetByteKey(t.Hash, db.KEY_HASH)
 		removePendingRequest(t.Hash)
 
 		snapTime := snapshot.GetSnapshotTimestamp(tx)
@@ -105,18 +111,19 @@ func processIncomingTX(incoming IncomingTX) error {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
-			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
-			err := tx.Put(db.AsKey(key, db.KEY_EDGE), int64(snapTime), nil)
+			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING)) // TODO
+			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
 			_checkIncomingError(t, err)
-			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			if err == nil {
 				err = tx.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING))
 				_checkIncomingError(t, err)
 			}
 		}
+
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
 		maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
-		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= t.Timestamp)
+		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
 		if isOutsideOfTimeframe && !tx.HasKey(db.GetByteKey(t.Bundle, db.KEY_PENDING_BUNDLE)) {
 			removeTx()
 			return nil
@@ -132,12 +139,15 @@ func processIncomingTX(incoming IncomingTX) error {
 		}
 
 		if !tx.HasKey(key) {
+			// Tx is not in the database yet
+
 			err := SaveTX(t, incoming.Bytes, tx)
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
 				trunkBytesKey := db.GetByteKey(t.TrunkTransaction, db.KEY_BYTES)
-				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil)
+				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 				_checkIncomingError(t, err)
+
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
 			_, err = requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
@@ -151,11 +161,12 @@ func processIncomingTX(incoming IncomingTX) error {
 			if tx.HasKey(pendingConfirmationKey) {
 				err = tx.Remove(pendingConfirmationKey)
 				_checkIncomingError(t, err)
-				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), t.Timestamp, tx)
+
+				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
 				_checkIncomingError(t, err)
 			}
 
-			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			if err == nil {
 				pendingMilestone = &PendingMilestone{parentKey, db.AsKey(key, db.KEY_BYTES)}
 			}

@@ -25,11 +25,11 @@ func CreateDirectory(directoryPath string) error {
 	return os.MkdirAll(directoryPath, 0777)
 }
 
-func GetHumanReadableTime(timestamp int) string {
+func GetHumanReadableTime(timestamp int64) string {
 	if timestamp <= 0 {
 		return ""
 	} else {
-		unitxTime := time.Unix(int64(timestamp), 0)
+		unitxTime := time.Unix(timestamp, 0)
 		return unitxTime.In(time.UTC).Format(time.RFC822)
 	}
 }

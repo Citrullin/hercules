@@ -23,7 +23,7 @@ type Request struct {
 	Trytes       []string
 	Reference    string
 	Depth        int
-	Timestamp    int
+	Timestamp    int64
 	Filename     string
 	// for attachToTangle
 	TrunkTransaction   string
@@ -160,11 +160,11 @@ func serveHttp(api *gin.Engine, config *viper.Viper) {
 func End() {
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
 			logs.Log.Fatal("API Server Shutdown Error:", err)
 		}
-		logs.Log.Info("API Server exiting...")
+		logs.Log.Info("API Server exited")
+		cancel()
 	}
 }
 

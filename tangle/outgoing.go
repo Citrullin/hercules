@@ -2,11 +2,11 @@ package tangle
 
 import (
 	"bytes"
-	"encoding/gob"
 	"sync"
 	"time"
 
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../utils"
@@ -68,17 +68,10 @@ func loadPendingRequests() {
 	added := 0
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_PENDING_HASH}, true, func(key, value []byte) (bool, error) {
+		return tx.ForPrefix([]byte{db.KEY_PENDING_HASH}, true, func(key, hash []byte) (bool, error) {
 			total++
 
-			var hash []byte
-
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&hash); err != nil {
-				logs.Log.Warning("Could not load pending Tx Hash")
-				return true, nil
-			}
-
-			timestamp, err := tx.GetInt64(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
 			if err != nil {
 				logs.Log.Warning("Could not load pending Tx Timestamp")
 				return true, nil
@@ -193,7 +186,7 @@ func sendReply(msg *Message) {
 		// Probably a good neighbor with transactions. Set this request as sent.
 
 		if time.Now().Sub(msg.Neighbor.LastIncomingTime) < reRequestInterval {
-			db.Singleton.IncrementBy(db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false)
+			coding.IncrementInt64By(db.Singleton, db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false)
 		}
 	}
 
@@ -282,8 +275,8 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 
 	if save {
 		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
-		db.Singleton.Put(key, hash, nil)
-		db.Singleton.Put(db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp, nil)
+		db.Singleton.PutBytes(key, hash)
+		coding.PutInt64(db.Singleton, db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp)
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), Neighbor: neighbor}
@@ -387,11 +380,7 @@ func cleanupStalledRequests() {
 	var requestsToRemove []string
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_PENDING_REQUESTS}, true, func(key, value []byte) (bool, error) {
-			var times int
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&times); err != nil {
-				return true, nil
-			}
+		return coding.ForPrefixInt(tx, []byte{db.KEY_PENDING_REQUESTS}, true, func(key []byte, times int) (bool, error) {
 			if times > maxTimesRequest {
 				keysToRemove = append(keysToRemove, db.AsKey(key, db.KEY_PENDING_REQUESTS))
 			}
@@ -408,7 +397,7 @@ func cleanupStalledRequests() {
 			k := db.AsKey(key, db.KEY_PENDING_HASH)
 
 			err := error(nil)
-			hash, err = tx.GetBytes(k)
+			hash, err = coding.GetBytes(tx, k)
 			if err != nil {
 				return nil
 			}

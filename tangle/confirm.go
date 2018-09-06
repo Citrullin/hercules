@@ -2,53 +2,46 @@ package tangle
 
 import (
 	"bytes"
+	"fmt"
 	"time"
-
-	"encoding/gob"
-	"sync"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../snapshot"
 	"../transaction"
 	"github.com/pkg/errors"
 )
 
-const CONFIRM_CHECK_INTERVAL = time.Duration(100) * time.Millisecond
-const UNKNOWN_CHECK_INTERVAL = time.Duration(60) * time.Second
+const (
+	UNKNOWN_CHECK_INTERVAL = time.Duration(60) * time.Second
+)
+
+var (
+	confirmQueue chan *PendingConfirmation
+)
 
 type PendingConfirmation struct {
 	key       []byte
-	timestamp int
+	timestamp int64
 }
-type ConfirmQueue chan PendingConfirmation
-
-var confirmsInProgress map[string]bool
-var confirmsInProgressLock = &sync.RWMutex{}
-var confirmQueue ConfirmQueue
 
 func confirmOnLoad() {
-	logs.Log.Info("Starting confirmation thread")
-	confirmsInProgress = make(map[string]bool)
-	confirmQueue = make(ConfirmQueue, maxQueueSize)
+	confirmQueue = make(chan *PendingConfirmation, maxQueueSize)
+
 	loadPendingConfirmations()
 	logs.Log.Infof("Loaded %v pending confirmations", len(confirmQueue))
+
+	logs.Log.Info("Starting confirmation thread")
 	go startUnknownVerificationThread()
-	for i := 0; i < nbWorkers; i++ {
-		go startConfirmThread()
-	}
+	go startConfirmThread()
 }
 
 func loadPendingConfirmations() {
 	db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_EVENT_CONFIRMATION_PENDING}, true, func(key, value []byte) (bool, error) {
-			var timestamp int
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&timestamp); err != nil {
-				logs.Log.Error("Couldn't load pending confirmation key value", key, err)
-				return true, nil
-			}
-			confirmQueue <- PendingConfirmation{
+		coding.ForPrefixInt64(tx, []byte{db.KEY_EVENT_CONFIRMATION_PENDING}, true, func(key []byte, timestamp int64) (bool, error) {
+			confirmQueue <- &PendingConfirmation{
 				db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING),
 				timestamp,
 			}
@@ -59,27 +52,26 @@ func loadPendingConfirmations() {
 }
 
 func startConfirmThread() {
-	for {
-		if (lowEndDevice && len(srv.Incoming) > maxIncoming) || len(confirmQueue) < 1 {
-			time.Sleep(CONFIRM_CHECK_INTERVAL)
-			continue
-		}
-		pendingConfirmation := <-confirmQueue
-		db.Singleton.Lock()
-		db.Singleton.Unlock()
+	for pendingConfirmation := range confirmQueue {
 		confirmed := false
-		err := db.Singleton.Update(func(tx db.Transaction) error {
-			if !addConfirmInProgress(pendingConfirmation.key) {
-				return nil
+		retryConfirm := true
+
+		err := db.Singleton.Update(func(tx db.Transaction) (err error) {
+			confirmed, retryConfirm, err = confirm(pendingConfirmation.key, tx)
+			if !retryConfirm {
+				tx.Remove(db.AsKey(pendingConfirmation.key, db.KEY_EVENT_CONFIRMATION_PENDING))
 			}
-			err, c := confirm(pendingConfirmation.key, tx)
-			confirmed = c
-			removeConfirmInProgress(pendingConfirmation.key)
 			return err
 		})
-		if err != nil || db.Singleton.HasKey(pendingConfirmation.key) {
+		if err != nil {
+			logs.Log.Errorf("Error during confirmation: %v", err)
+		}
+
+		if retryConfirm {
 			confirmQueue <- pendingConfirmation
-		} else if confirmed {
+		}
+
+		if confirmed {
 			totalConfirmations++
 		}
 	}
@@ -116,98 +108,104 @@ func startUnknownVerificationThread() {
 	}
 }
 
-func confirm(key []byte, tx db.Transaction) (error, bool) {
-	tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
+func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm bool, err error) {
 
 	if tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) {
-		return nil, false
+		// Already confirmed
+		return false, false, nil
 	}
 
-	data, err := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+	data, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 	if err != nil {
 		// Imminent database inconsistency: Warn!
 		// logs.Log.Error("TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!", key)
-		return errors.New("TX  missing for confirmation!"), false
+		return false, false, errors.New("TX missing for confirmation!")
 	}
+
 	trits := convert.BytesToTrits(data)[:8019]
-	var t = transaction.TritsToFastTX(&trits, data)
+	t := transaction.TritsToFastTX(&trits, data)
 
 	if tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) && !isMaybeMilestonePart(t) {
-		logs.Log.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
+		return false, false, fmt.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
 			t.Timestamp,
 			snapshot.GetSnapshotTimestamp(tx),
 			convert.BytesToTrytes(t.Hash))
-		return nil, false
 	}
 
-	err = tx.Put(db.AsKey(key, db.KEY_CONFIRMED), t.Timestamp, nil)
+	// TODO: This part should be atomic with all the value and confirmes and childs?
+	//		 => If there is a DB error, revert DB commit
+	err = coding.PutInt64(tx, db.AsKey(key, db.KEY_CONFIRMED), int64(t.Timestamp))
 	if err != nil {
-		logs.Log.Errorf("Could not save confirmation status!", err)
-		return errors.New("Could not save confirmation status!"), false
+		return false, true, errors.New("Could not save confirmation status!")
 	}
 
 	if t.Value != 0 {
-		_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+		_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 		if err != nil {
-			logs.Log.Errorf("Could not update account balance: %v", err)
-			return errors.New("Could not update account balance!"), false
+			return false, true, errors.New("Could not update account balance!")
 		}
 		if t.Value < 0 {
-			err := tx.Put(db.GetAddressKey(t.Address, db.KEY_SPENT), true, nil)
+			err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
 			if err != nil {
-				logs.Log.Errorf("Could not update account spent status: %v", err)
-				return errors.New("Could not update account spent status!"), false
+				return false, true, errors.New("Could not update account spent status!")
 			}
 		}
 	}
 
 	err = confirmChild(db.GetByteKey(t.TrunkTransaction, db.KEY_HASH), tx)
 	if err != nil {
-		return err, false
+		return false, true, err
 	}
 	err = confirmChild(db.GetByteKey(t.BranchTransaction, db.KEY_HASH), tx)
 	if err != nil {
-		return err, false
+		return false, true, err
 	}
-	return nil, true
+	return true, false, nil
 }
 
 func confirmChild(key []byte, tx db.Transaction) error {
 	if bytes.Equal(key, tipHashKey) {
+		// Doesn't need confirmation
 		return nil
 	}
 	if tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) {
+		// Already confirmed
 		return nil
 	}
-	timestamp, err := tx.GetInt(db.AsKey(key, db.KEY_TIMESTAMP))
-	k := db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING)
-	if err == nil && !hasConfirmInProgress(k) {
-		err = addPendingConfirmation(k, timestamp, tx)
+
+	keyPending := db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING)
+	if tx.HasKey(keyPending) {
+		// Confirmation is already pending
+		return nil
+	}
+
+	timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP))
+	if err == nil {
+		err = addPendingConfirmation(keyPending, timestamp, tx)
 		if err != nil {
-			logs.Log.Errorf("Could not save child confirm status: %v", err)
-			return errors.New("Could not save child confirm status!")
+			return fmt.Errorf("Could not save child confirm status: %v", err)
 		}
 	} else if !tx.HasKey(db.AsKey(key, db.KEY_EDGE)) && tx.HasKey(db.AsKey(key, db.KEY_PENDING_HASH)) {
-		err = tx.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil)
+		err = coding.PutInt64(tx, db.AsKey(key, db.KEY_PENDING_CONFIRMED), time.Now().Unix())
 		if err != nil {
-			logs.Log.Errorf("Could not save child pending confirm status: %v", err)
-			return errors.New("Could not save child pending confirm status!")
+			return fmt.Errorf("Could not save child pending confirm status: %v", err)
 		}
 	}
 	return nil
 }
 
-func addPendingConfirmation(key []byte, timestamp int, tx db.Transaction) error {
-	err := tx.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp, nil)
+func addPendingConfirmation(key []byte, timestamp int64, tx db.Transaction) error {
+	err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp)
 	if err == nil {
-		confirmQueue <- PendingConfirmation{key, timestamp}
+		confirmQueue <- &PendingConfirmation{key, timestamp}
 	}
 	return err
 }
 
+/*
 func hasConfirmInProgress(key []byte) bool {
-	confirmsInProgressLock.Lock()
-	defer confirmsInProgressLock.Unlock()
+	confirmsInProgressLock.RLock()
+	defer confirmsInProgressLock.RUnlock()
 
 	_, ok := confirmsInProgress[string(key)]
 	return ok
@@ -234,24 +232,25 @@ func removeConfirmInProgress(key []byte) {
 		delete(confirmsInProgress, k)
 	}
 }
+*/
 
 func reapplyConfirmed() {
 	logs.Log.Debug("Reapplying confirmed TXs to balances")
 	db.Singleton.View(func(tx db.Transaction) error {
 		x := 0
 		return tx.ForPrefix([]byte{db.KEY_CONFIRMED}, false, func(key, _ []byte) (bool, error) {
-			txBytes, _ := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+			txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 			trits := convert.BytesToTrits(txBytes)[:8019]
 			t := transaction.TritsToFastTX(&trits, txBytes)
 			if t.Value != 0 {
 				err := db.Singleton.Update(func(tx db.Transaction) error {
-					_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+					_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
 					}
 					if t.Value < 0 {
-						err := tx.Put(db.GetAddressKey(t.Address, db.KEY_SPENT), true, nil)
+						err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
 						if err != nil {
 							logs.Log.Errorf("Could not update account spent status: %v", err)
 							return errors.New("Could not update account spent status!")

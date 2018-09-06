@@ -1,0 +1,11 @@
+goos: linux
+goarch: amd64
+BenchmarkGetBool-4     	  500000	      3005 ns/op	     960 B/op	      18 allocs/op
+BenchmarkGetInt-4      	  500000	      3195 ns/op	     976 B/op	      18 allocs/op
+BenchmarkGetInt64-4    	  500000	      3024 ns/op	     976 B/op	      18 allocs/op
+BenchmarkGetString-4   	  500000	      3227 ns/op	     984 B/op	      19 allocs/op
+BenchmarkPutBool-4     	 1000000	      2040 ns/op	     816 B/op	      10 allocs/op
+BenchmarkPutInt-4      	 1000000	      2148 ns/op	     824 B/op	      11 allocs/op
+BenchmarkPutInt64-4    	  500000	      2279 ns/op	     824 B/op	      11 allocs/op
+BenchmarkPutString-4   	 1000000	      2054 ns/op	     832 B/op	      11 allocs/op
+PASS

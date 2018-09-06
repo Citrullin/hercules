@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../utils"
 	"github.com/spf13/viper"
@@ -24,7 +25,7 @@ var keySnapshotFile = []byte{db.KEY_SNAPSHOT_FILE}
 
 var edgeTransactions chan *[]byte
 var config *viper.Viper
-var CurrentTimestamp = 0
+var CurrentTimestamp int64 = 0
 var InProgress = false
 var lowEndDevice = false
 
@@ -43,8 +44,8 @@ func Start(cfg *viper.Viper) {
 	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
 
-	snapshotPeriod := config.GetInt("snapshots.period")
-	snapshotInterval := config.GetInt("snapshots.interval")
+	snapshotPeriod := config.GetInt64("snapshots.period")
+	snapshotInterval := config.GetInt64("snapshots.interval")
 	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
 
 	go startAutosnapshots(snapshotInterval, snapshotPeriod)
@@ -56,7 +57,7 @@ func loadSnapshotFiles() {
 	snapshotToLoad := config.GetString("snapshots.loadFile")
 	iri1 := config.GetString("snapshots.loadIRIFile")
 	iri2 := config.GetString("snapshots.loadIRISpentFile")
-	iriTimestamp := config.GetInt("snapshots.loadIRITimestamp")
+	iriTimestamp := config.GetInt64("snapshots.loadIRITimestamp")
 	if len(snapshotToLoad) > 0 {
 		LoadSnapshot(snapshotToLoad)
 	} else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0 {
@@ -71,12 +72,12 @@ func loadSnapshotFiles() {
 /*
 Sets the current snapshot date in the database
 */
-func SetSnapshotTimestamp(timestamp int, tx db.Transaction) error {
+func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
 		defer tx.Discard()
 	}
-	err := tx.Put(keySnapshotDate, timestamp, nil)
+	err := coding.PutInt64(tx, keySnapshotDate, timestamp)
 	if err == nil {
 		CurrentTimestamp = timestamp
 	}
@@ -87,7 +88,7 @@ func SetSnapshotTimestamp(timestamp int, tx db.Transaction) error {
 Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
 */
-func IsLocked(tx db.Transaction) (timestamp int, filename string) {
+func IsLocked(tx db.Transaction) (timestamp int64, filename string) {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
 		defer tx.Discard()
@@ -98,18 +99,18 @@ func IsLocked(tx db.Transaction) (timestamp int, filename string) {
 /*
 Creates a snapshot lock in the database
 */
-func Lock(timestamp int, filename string, tx db.Transaction) error {
+func Lock(timestamp int64, filename string, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
 		defer tx.Discard()
 	}
 
 	InProgress = true
-	err := tx.Put(keySnapshotLock, timestamp, nil)
+	err := coding.PutInt64(tx, keySnapshotLock, timestamp)
 	if err != nil {
 		return err
 	}
-	return tx.Put(keySnapshotFile, filename, nil)
+	return coding.PutString(tx, keySnapshotFile, filename)
 }
 
 /*
@@ -127,13 +128,13 @@ func Unlock(tx db.Transaction) error {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotLock(tx db.Transaction) int {
+func GetSnapshotLock(tx db.Transaction) int64 {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
 		defer tx.Discard()
 	}
 
-	timestamp, err := tx.GetInt(keySnapshotLock)
+	timestamp, err := coding.GetInt64(tx, keySnapshotLock)
 	if err != nil {
 		return -1
 	}
@@ -143,7 +144,7 @@ func GetSnapshotLock(tx db.Transaction) int {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotTimestamp(tx db.Transaction) int {
+func GetSnapshotTimestamp(tx db.Transaction) int64 {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
 		defer tx.Discard()
@@ -153,7 +154,7 @@ func GetSnapshotTimestamp(tx db.Transaction) int {
 		return CurrentTimestamp
 	}
 
-	timestamp, err := tx.GetInt(keySnapshotDate)
+	timestamp, err := coding.GetInt64(tx, keySnapshotDate)
 	if err != nil {
 		return -1
 	}
@@ -169,7 +170,7 @@ func GetSnapshotFileLock(tx db.Transaction) string {
 		defer tx.Discard()
 	}
 
-	filename, err := tx.GetString(keySnapshotFile)
+	filename, err := coding.GetString(tx, keySnapshotFile)
 	if err != nil {
 		return ""
 	}
@@ -179,7 +180,7 @@ func GetSnapshotFileLock(tx db.Transaction) string {
 /*
 Starts a periodic snapshot runner
 */
-func startAutosnapshots(snapshotInterval, snapshotPeriod int) {
+func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 	if snapshotInterval <= 0 {
 		return
 	}
@@ -211,14 +212,14 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int) {
 	}
 }
 
-var timeLeftToSnapshotSeconds = 0
+var timeLeftToSnapshotSeconds int64 = 0
 
 /*
 When a snapshot is missing:
 - If node is synced: Makes a snapshot when last snapshot made is older than the snapshotPeriod
 - If node is not synced: TODO Get snapshot from synced hercules neighbor
 */
-func ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod int) {
+func ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod int64) {
 	if snapshotInterval <= 0 || CurrentTimestamp <= 0 {
 		return
 	}
@@ -244,7 +245,7 @@ func ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod int) {
 	}
 }
 
-func getNextSnapshotTimestamp(snapshotPeriod int) int {
+func getNextSnapshotTimestamp(snapshotPeriod int64) int64 {
 	snapshotPeriodSeconds := snapshotPeriod * 3600
-	return int(time.Now().Unix()) - snapshotPeriodSeconds
+	return time.Now().Unix() - snapshotPeriodSeconds
 }

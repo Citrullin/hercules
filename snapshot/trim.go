@@ -1,12 +1,11 @@
 package snapshot
 
 import (
-	"bytes"
-	"encoding/gob"
 	"time"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -47,16 +46,10 @@ func trimData(timestamp int64) error {
 	var found = 0
 
 	err := db.Singleton.View(func(tx db.Transaction) error {
-		err := tx.ForPrefix([]byte{db.KEY_TIMESTAMP}, true, func(k, v []byte) (bool, error) {
-			var txTimestamp = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(v)).Decode(&txTimestamp); err != nil {
-				logs.Log.Error("Could not parse a TX timestamp value!")
-				return false, err
-			}
-
+		err := coding.ForPrefixInt64(tx, []byte{db.KEY_TIMESTAMP}, false, func(k []byte, txTimestamp int64) (bool, error) {
 			// TODO: since the milestone timestamps are often zero, it might be a good idea to keep them..?
 			// Theoretically, they are not needed any longer. :-/
-			if int64(txTimestamp) <= timestamp {
+			if txTimestamp <= timestamp {
 				key := db.AsKey(k, db.KEY_EVENT_TRIM_PENDING)
 				if !tx.HasKey(key) {
 					txs = append(txs, key)
@@ -78,11 +71,11 @@ func trimData(timestamp int64) error {
 	logs.Log.Infof("Scheduling to trim %v transactions", found)
 	tx := db.Singleton.NewTransaction(true)
 	for _, k := range txs {
-		if err := tx.Put(k, true, nil); err != nil {
+		if err := coding.PutBool(tx, k, true); err != nil {
 			if err == db.ErrTransactionTooBig {
 				_ = tx.Commit()
 				tx = db.Singleton.NewTransaction(true)
-				if err := tx.Put(k, true, nil); err != nil {
+				if err := coding.PutBool(tx, k, true); err != nil {
 					return err
 				}
 			} else {

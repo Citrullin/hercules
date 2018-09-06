@@ -10,6 +10,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"github.com/pkg/errors"
 )
@@ -26,11 +27,11 @@ func LoadSnapshot(path string) error {
 	}
 	logs.Log.Debug("Timestamp:", timestamp)
 
-	if !IsNewerThanSnapshot(int(timestamp), nil) {
+	if !IsNewerThanSnapshot(timestamp, nil) {
 		logs.Log.Infof("The given snapshot (%v) timestamp is older than the current one. Skipping", path)
 		return nil
 	}
-	Lock(int(timestamp), path, nil)
+	Lock(timestamp, path, nil)
 
 	db.Singleton.Lock()
 	defer db.Singleton.Unlock()
@@ -52,7 +53,7 @@ func LoadSnapshot(path string) error {
 
 	if checkDatabaseSnapshot() {
 		return db.Singleton.Update(func(tx db.Transaction) error {
-			err := SetSnapshotTimestamp(int(timestamp), tx)
+			err := SetSnapshotTimestamp(timestamp, tx)
 			if err != nil {
 				return err
 			}
@@ -70,11 +71,11 @@ func LoadSnapshot(path string) error {
 
 func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
 	addressKey := db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE)
-	err := tx.Put(addressKey, value, nil)
+	err := coding.PutInt64(tx, addressKey, value)
 	if err != nil {
 		return err
 	}
-	err = tx.Put(db.GetAddressKey(address, db.KEY_BALANCE), value, nil)
+	err = coding.PutInt64(tx, db.GetAddressKey(address, db.KEY_BALANCE), value)
 	if err != nil {
 		return err
 	}
@@ -82,15 +83,15 @@ func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
 }
 
 func loadSpentSnapshot(address []byte, tx db.Transaction) error {
-	err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address, nil)
+	// err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address)
+	// if err != nil {
+	// 	return err
+	// }
+	err := coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true)
 	if err != nil {
 		return err
 	}
-	err = tx.Put(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true, nil)
-	if err != nil {
-		return err
-	}
-	err = tx.Put(db.GetAddressKey(address, db.KEY_SPENT), true, nil)
+	err = coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SPENT), true)
 	if err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func loadSpentSnapshot(address []byte, tx db.Transaction) error {
 }
 
 func loadKey(key []byte, timestamp int64) error {
-	return db.Singleton.Put(key, timestamp, nil)
+	return coding.PutInt64(db.Singleton, key, timestamp)
 }
 
 func doLoadSnapshot(path string, timestamp int64) error {

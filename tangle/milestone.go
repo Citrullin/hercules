@@ -3,7 +3,6 @@ package tangle
 import (
 	"bufio"
 	"bytes"
-	"encoding/gob"
 	"errors"
 	"io"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -87,7 +87,7 @@ func LoadMissingMilestonesFromFile(path string) error {
 					trits := convert.BytesToTrits(bits)[:8019]
 					tx := transaction.TritsToTX(&trits, bits)
 					trunkBytesKey := db.GetByteKey(tx.TrunkTransaction, db.KEY_BYTES)
-					err = db.Singleton.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil)
+					err = db.Singleton.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 					pendingMilestone := &PendingMilestone{key, trunkBytesKey}
 					logs.Log.Debugf("Added missing milestone: %v", convert.BytesToTrytes(tx.Hash)[:81])
 					addPendingMilestoneToQueue(pendingMilestone)
@@ -117,17 +117,13 @@ func loadLatestMilestone() {
 		latest := 0
 		LatestMilestone = Milestone{tipFastTX, latest}
 
-		return tx.ForPrefix([]byte{db.KEY_MILESTONE}, true, func(key, value []byte) (bool, error) {
-			var ms = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ms); err != nil {
-				return true, nil
-			}
+		return coding.ForPrefixInt(tx, []byte{db.KEY_MILESTONE}, true, func(key []byte, ms int) (bool, error) {
 			if ms <= latest {
 				return true, nil
 			}
 
 			key = db.AsKey(key, db.KEY_BYTES)
-			txBytes, err := tx.GetBytes(key)
+			txBytes, err := coding.GetBytes(tx, key)
 			if err != nil {
 				return true, nil
 			}
@@ -232,7 +228,7 @@ func incomingMilestone(pendingMilestone *PendingMilestone) {
 		key := db.AsKey(pendingMilestone.Key, db.KEY_EVENT_MILESTONE_PENDING)
 		TX2BytesKey := pendingMilestone.TX2BytesKey
 		if TX2BytesKey == nil {
-			relation, err := tx.GetBytes(db.AsKey(key, db.KEY_RELATION))
+			relation, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_RELATION))
 			if err != nil {
 				// The 0-index milestone TX relations doesn't exist.
 				// Clearly an error here!
@@ -250,9 +246,9 @@ func incomingMilestone(pendingMilestone *PendingMilestone) {
 func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) int {
 	var txBytesKey = db.AsKey(key, db.KEY_BYTES)
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
+	tx2Bytes, err := coding.GetBytes(tx, TX2BytesKey)
 	if err != nil {
-		err := tx.Put(db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key, nil)
+		err := tx.PutBytes(db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key)
 		if err != nil {
 			logs.Log.Errorf("Could not add pending milestone pair: %v", err)
 			panic(err)
@@ -260,7 +256,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) int {
 	}
 
 	// 3. Check that the 0-index TX also exists.
-	txBytes, err := tx.GetBytes(txBytesKey)
+	txBytes, err := coding.GetBytes(tx, txBytesKey)
 	if err != nil {
 		// The 0-index milestone TX doesn't exist.
 		// Clearly an error here!
@@ -319,7 +315,7 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 		logs.Log.Errorf("Could not remove pending milestone: %v", err)
 		panic(err)
 	}
-	err = tx.Put(db.AsKey(key, db.KEY_MILESTONE), milestoneIndex, nil)
+	err = coding.PutInt(tx, db.AsKey(key, db.KEY_MILESTONE), milestoneIndex)
 	if err != nil {
 		logs.Log.Errorf("Could not save milestone: %v", err)
 		panic(err)
@@ -327,7 +323,7 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 	checkIsLatestMilestone(milestoneIndex, t)
 
 	// Trigger confirmations
-	err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), t.Timestamp, tx)
+	err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
 	if err != nil {
 		logs.Log.Errorf("Could not save pending confirmation: %v", err)
 		panic(err)
@@ -381,11 +377,7 @@ func GetMilestoneKeyByIndex(index int, acceptNearest bool) []byte {
 	currentIndex := LatestMilestone.Index + 1
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_MILESTONE}, true, func(key, value []byte) (bool, error) {
-			var ms = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ms); err != nil {
-				return true, nil
-			}
+		return coding.ForPrefixInt(tx, []byte{db.KEY_MILESTONE}, true, func(key []byte, ms int) (bool, error) {
 			if ms == index {
 				milestoneKey = db.AsKey(key, db.KEY_HASH)
 				return false, nil

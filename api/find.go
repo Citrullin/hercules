@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"../convert"
 	"../db"
-	"github.com/gin-gonic/gin"
+	"../db/coding"
 )
 
 func init() {
@@ -53,7 +55,7 @@ func findAddresses(trits []byte, single bool) []string {
 	hashes := find(trits, db.KEY_ADDRESS)
 	if single && len(hashes) == 0 {
 		// Workaround for IOTA wallet support. Fake transactions for positive addresses:
-		balance, err := db.Singleton.GetInt64(db.GetAddressKey(trits, db.KEY_BALANCE))
+		balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey(trits, db.KEY_BALANCE))
 		if err == nil && balance > 0 {
 			return []string{dummyHash}
 		}
@@ -67,7 +69,7 @@ func find(trits []byte, prefix byte) []string {
 		prefix := db.GetByteKey(trits, prefix)
 		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
 			key = db.AsKey(key[16:], db.KEY_HASH)
-			hash, err := tx.GetBytes(key)
+			hash, err := coding.GetBytes(tx, key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}

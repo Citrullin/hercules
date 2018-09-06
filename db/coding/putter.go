@@ -3,11 +3,14 @@ package coding
 import (
 	"bytes"
 	"encoding/gob"
-	"time"
 )
 
 type Putter interface {
-	PutBytes([]byte, []byte, *time.Duration) error
+	PutBytes([]byte, []byte) error
+}
+
+func PutBytes(p Putter, key, value []byte) error {
+	return p.PutBytes(key, value)
 }
 
 func PutBool(p Putter, key []byte, value bool) error {
@@ -15,7 +18,15 @@ func PutBool(p Putter, key []byte, value bool) error {
 	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err
 	}
-	return p.PutBytes(key, buf.Bytes(), nil)
+	return p.PutBytes(key, buf.Bytes())
+}
+
+func PutInt(p Putter, key []byte, value int) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
+		return err
+	}
+	return p.PutBytes(key, buf.Bytes())
 }
 
 func PutInt64(p Putter, key []byte, value int64) error {
@@ -23,7 +34,7 @@ func PutInt64(p Putter, key []byte, value int64) error {
 	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err
 	}
-	return p.PutBytes(key, buf.Bytes(), nil)
+	return p.PutBytes(key, buf.Bytes())
 }
 
 func PutString(p Putter, key []byte, value string) error {
@@ -31,5 +42,5 @@ func PutString(p Putter, key []byte, value string) error {
 	if err := gob.NewEncoder(&buf).Encode(value); err != nil {
 		return err
 	}
-	return p.PutBytes(key, buf.Bytes(), nil)
+	return p.PutBytes(key, buf.Bytes())
 }

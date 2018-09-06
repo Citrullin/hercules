@@ -1,12 +1,11 @@
 package tangle
 
 import (
-	"bytes"
-	"encoding/gob"
 	"sync"
 	"time"
 
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 
@@ -28,13 +27,8 @@ func loadTips() {
 	defer TipsLock.Unlock()
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_TIP}, true, func(key, value []byte) (bool, error) {
-			var timestamp int64
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&timestamp); err != nil {
-				return true, nil
-			}
-
-			hash, err := tx.GetBytes(db.AsKey(key, db.KEY_HASH))
+		return coding.ForPrefixInt64(tx, []byte{db.KEY_TIP}, true, func(key []byte, timestamp int64) (bool, error) {
+			hash, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_HASH))
 			if err != nil {
 				return true, nil
 			}
@@ -113,7 +107,7 @@ func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error 
 	tipAge := time.Duration(time.Now().Sub(time.Unix(int64(t.Timestamp), 0)))
 
 	if tipAge < maxTipAge && db.Singleton.CountPrefix(key) < 1 {
-		err := db.Singleton.Put(db.AsKey(key, db.KEY_TIP), t.Timestamp, nil)
+		err := coding.PutInt64(db.Singleton, db.AsKey(key, db.KEY_TIP), int64(t.Timestamp))
 		if err != nil {
 			return err
 		}

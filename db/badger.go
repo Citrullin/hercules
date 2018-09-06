@@ -5,12 +5,14 @@ import (
 	"sync"
 	"time"
 
+	"../db/coding"
+	"../logs"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/spf13/viper"
-
-	"../logs"
 )
+
+var dbWaitGroup = &sync.WaitGroup{}
 
 func init() {
 	RegisterImplementation("badger", NewBadger)
@@ -73,84 +75,35 @@ func (b *Badger) Unlock() {
 	b.dbLock.Unlock()
 }
 
-func (b *Badger) PutBytes(key, value []byte, ttl *time.Duration) error {
+func (b *Badger) PutBytes(key, value []byte) error {
 	return b.Update(func(t Transaction) error {
-		return t.PutBytes(key, value, ttl)
+		return coding.PutBytes(t, key, value)
 	})
 }
 
 func (b *Badger) GetBytes(key []byte) ([]byte, error) {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
-	return tx.GetBytes(key)
-}
-
-func (b *Badger) GetBytesRaw(key []byte) ([]byte, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetBytesRaw(key)
+	return coding.GetBytes(tx, key)
 }
 
 func (b *Badger) HasKey(key []byte) bool {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
 	return tx.HasKey(key)
 }
 
-func (b *Badger) HasKeysFromCategoryBefore(keyCategory byte, timestamp int) bool {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.HasKeysFromCategoryBefore(keyCategory, timestamp)
-}
-
-func (b *Badger) Put(key []byte, value interface{}, ttl *time.Duration) error {
-	return b.Update(func(t Transaction) error {
-		return t.Put(key, value, ttl)
-	})
-}
-
-func (b *Badger) Get(key []byte, value interface{}) error {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.Get(key, value)
-}
-
-func (b *Badger) GetString(key []byte) (string, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetString(key)
-}
-
-func (b *Badger) GetInt(key []byte) (int, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetInt(key)
-}
-
-func (b *Badger) GetBool(key []byte) (bool, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetBool(key)
-}
-
-func (b *Badger) GetInt64(key []byte) (int64, error) {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.GetInt64(key)
-}
-
 func (b *Badger) Remove(key []byte) error {
 	return b.Update(func(t Transaction) error {
-		return t.Remove(key)
+		return coding.Remove(t, key)
 	})
 }
 
@@ -160,14 +113,6 @@ func (b *Badger) RemoveKeyCategory(keyCategory byte) error {
 	})
 }
 
-func (b *Badger) RemoveKeysFromCategoryBefore(keyCategory byte, timestamp int64) (count int) {
-	b.Update(func(t Transaction) error {
-		count = t.RemoveKeysFromCategoryBefore(keyCategory, timestamp)
-		return nil
-	})
-	return
-}
-
 func (b *Badger) RemovePrefix(prefix []byte) error {
 	return b.Update(func(t Transaction) error {
 		return t.RemovePrefix(prefix)
@@ -175,6 +120,9 @@ func (b *Badger) RemovePrefix(prefix []byte) error {
 }
 
 func (b *Badger) CountKeyCategory(keyCategory byte) int {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
@@ -182,28 +130,19 @@ func (b *Badger) CountKeyCategory(keyCategory byte) int {
 }
 
 func (b *Badger) CountPrefix(prefix []byte) int {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
 	return tx.CountPrefix(prefix)
 }
 
-func (b *Badger) SumInt64FromCategory(keyCategory byte) int64 {
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.SumInt64FromCategory(keyCategory)
-}
-
-func (b *Badger) IncrementBy(key []byte, delta int64, deleteOnZero bool) (value int64, err error) {
-	err = b.Update(func(t Transaction) error {
-		value, err = t.IncrementBy(key, delta, deleteOnZero)
-		return err
-	})
-	return
-}
-
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
@@ -215,12 +154,18 @@ func (b *Badger) NewTransaction(update bool) Transaction {
 }
 
 func (b *Badger) Update(fn func(Transaction) error) error {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	return b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
 	})
 }
 
 func (b *Badger) View(fn func(Transaction) error) error {
+	dbWaitGroup.Add(1)
+	defer dbWaitGroup.Add(-1)
+
 	return b.db.View(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
 	})
@@ -242,4 +187,8 @@ func (b *Badger) cleanUp() {
 	b.db.RunValueLogGC(0.5)
 	b.dbLock.Unlock()
 	logs.Log.Debug("Cleanup database finished")
+}
+
+func (b *Badger) End() {
+	dbWaitGroup.Wait()
 }

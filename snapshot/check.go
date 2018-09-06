@@ -8,17 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../utils"
-
-	"github.com/pkg/errors"
 )
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+func IsNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
 	current := GetSnapshotTimestamp(tx)
 	return timestamp > current
 }
@@ -26,7 +27,7 @@ func IsNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsEqualOrNewerThanSnapshot(timestamp int, tx db.Transaction) bool {
+func IsEqualOrNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
 	current := GetSnapshotTimestamp(tx)
 	return timestamp >= current
 }
@@ -45,14 +46,14 @@ func IsSynchronized() bool {
 Checks outstanding pending confirmations that node is beyond the snapshot horizon.
 This is just an additional measure to prevent tangle inconsistencies.
 */
-func CanSnapshot(timestamp int) bool {
-	return !db.Singleton.HasKeysFromCategoryBefore(db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
+func CanSnapshot(timestamp int64) bool {
+	return !coding.HasKeyInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
 }
 
 func checkDatabaseSnapshot() bool {
 	logs.Log.Info("Checking database snapshot integrity")
 
-	total := db.Singleton.SumInt64FromCategory(db.KEY_SNAPSHOT_BALANCE)
+	total := coding.SumInt64InCategory(db.Singleton, db.KEY_SNAPSHOT_BALANCE)
 	if total == TOTAL_IOTAS {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true
@@ -71,15 +72,15 @@ func checkSnapshotFile(path string) (timestamp int64, err error) {
 		return 0, err
 	}
 
-	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)", header.Version, utils.GetHumanReadableTime(int(header.Timestamp)), header.Timestamp)
+	logs.Log.Debugf("Loaded Header v.%v, timestamp: %v (%v)", header.Version, utils.GetHumanReadableTime(header.Timestamp), header.Timestamp)
 
 	timestamp = header.Timestamp
 
-	current, err := db.Singleton.GetInt([]byte{db.KEY_SNAPSHOT_DATE})
-	if err == nil && int64(current) > timestamp {
+	current, err := coding.GetInt64(db.Singleton, []byte{db.KEY_SNAPSHOT_DATE})
+	if err == nil && current > timestamp {
 		logs.Log.Errorf(
 			"The current snapshot (%v) is more recent than the one being loaded (%v)!",
-			time.Unix(int64(current), 0),
+			time.Unix(current, 0),
 			time.Unix(timestamp, 0))
 		return 0, errors.New("current snapshot more recent")
 	}
