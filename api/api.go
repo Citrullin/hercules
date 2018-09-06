@@ -23,7 +23,7 @@ type Request struct {
 	Trytes       []string
 	Reference    string
 	Depth        int
-	Timestamp    int
+	Timestamp    int64
 	Filename     string
 	// for attachToTangle
 	TrunkTransaction   string

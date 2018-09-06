@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"time"
 
-	"encoding/gob"
 	"sync"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../snapshot"
 	"../transaction"
@@ -20,7 +20,7 @@ const UNKNOWN_CHECK_INTERVAL = time.Duration(60) * time.Second
 
 type PendingConfirmation struct {
 	key       []byte
-	timestamp int
+	timestamp int64
 }
 type ConfirmQueue chan PendingConfirmation
 
@@ -42,12 +42,7 @@ func confirmOnLoad() {
 
 func loadPendingConfirmations() {
 	db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_EVENT_CONFIRMATION_PENDING}, true, func(key, value []byte) (bool, error) {
-			var timestamp int
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&timestamp); err != nil {
-				logs.Log.Error("Couldn't load pending confirmation key value", key, err)
-				return true, nil
-			}
+		coding.ForPrefixInt64(tx, []byte{db.KEY_EVENT_CONFIRMATION_PENDING}, true, func(key []byte, timestamp int64) (bool, error) {
 			confirmQueue <- PendingConfirmation{
 				db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING),
 				timestamp,
@@ -77,6 +72,9 @@ func startConfirmThread() {
 			removeConfirmInProgress(pendingConfirmation.key)
 			return err
 		})
+		if err != nil {
+			logs.Log.Errorf("Error during confirmation: %v", err)
+		}
 		if err != nil || db.Singleton.HasKey(pendingConfirmation.key) {
 			confirmQueue <- pendingConfirmation
 		} else if confirmed {
@@ -140,20 +138,20 @@ func confirm(key []byte, tx db.Transaction) (error, bool) {
 		return nil, false
 	}
 
-	err = tx.Put(db.AsKey(key, db.KEY_CONFIRMED), t.Timestamp, nil)
+	err = coding.PutInt64(tx, db.AsKey(key, db.KEY_CONFIRMED), int64(t.Timestamp))
 	if err != nil {
 		logs.Log.Errorf("Could not save confirmation status!", err)
 		return errors.New("Could not save confirmation status!"), false
 	}
 
 	if t.Value != 0 {
-		_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+		_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 		if err != nil {
 			logs.Log.Errorf("Could not update account balance: %v", err)
 			return errors.New("Could not update account balance!"), false
 		}
 		if t.Value < 0 {
-			err := tx.Put(db.GetAddressKey(t.Address, db.KEY_SPENT), true, nil)
+			err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
 			if err != nil {
 				logs.Log.Errorf("Could not update account spent status: %v", err)
 				return errors.New("Could not update account spent status!"), false
@@ -179,7 +177,7 @@ func confirmChild(key []byte, tx db.Transaction) error {
 	if tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) {
 		return nil
 	}
-	timestamp, err := tx.GetInt(db.AsKey(key, db.KEY_TIMESTAMP))
+	timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP))
 	k := db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING)
 	if err == nil && !hasConfirmInProgress(k) {
 		err = addPendingConfirmation(k, timestamp, tx)
@@ -188,7 +186,7 @@ func confirmChild(key []byte, tx db.Transaction) error {
 			return errors.New("Could not save child confirm status!")
 		}
 	} else if !tx.HasKey(db.AsKey(key, db.KEY_EDGE)) && tx.HasKey(db.AsKey(key, db.KEY_PENDING_HASH)) {
-		err = tx.Put(db.AsKey(key, db.KEY_PENDING_CONFIRMED), int(time.Now().Unix()), nil)
+		err = coding.PutInt64(tx, db.AsKey(key, db.KEY_PENDING_CONFIRMED), time.Now().Unix())
 		if err != nil {
 			logs.Log.Errorf("Could not save child pending confirm status: %v", err)
 			return errors.New("Could not save child pending confirm status!")
@@ -197,8 +195,8 @@ func confirmChild(key []byte, tx db.Transaction) error {
 	return nil
 }
 
-func addPendingConfirmation(key []byte, timestamp int, tx db.Transaction) error {
-	err := tx.Put(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp, nil)
+func addPendingConfirmation(key []byte, timestamp int64, tx db.Transaction) error {
+	err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp)
 	if err == nil {
 		confirmQueue <- PendingConfirmation{key, timestamp}
 	}
@@ -245,13 +243,13 @@ func reapplyConfirmed() {
 			t := transaction.TritsToFastTX(&trits, txBytes)
 			if t.Value != 0 {
 				err := db.Singleton.Update(func(tx db.Transaction) error {
-					_, err := tx.IncrementBy(db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+					_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
 					}
 					if t.Value < 0 {
-						err := tx.Put(db.GetAddressKey(t.Address, db.KEY_SPENT), true, nil)
+						err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
 						if err != nil {
 							logs.Log.Errorf("Could not update account spent status: %v", err)
 							return errors.New("Could not update account spent status!")

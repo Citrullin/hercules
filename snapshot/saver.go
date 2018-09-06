@@ -2,8 +2,6 @@ package snapshot
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"os"
 	"path"
@@ -12,13 +10,14 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../utils"
 )
 
 const currentHeaderVersion = "1"
 
-func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
+func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
 	utils.CreateDirectory(snapshotDir)
 
@@ -66,19 +65,13 @@ func SaveSnapshot(snapshotDir string, timestamp int, filename string) error {
 	}
 
 	err = db.Singleton.View(func(tx db.Transaction) error {
-		err := tx.ForPrefix([]byte{db.KEY_SNAPSHOT_BALANCE}, true, func(key, value []byte) (bool, error) {
-			var v int64 = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
-				logs.Log.Error("Could not parse a snapshot value from database!", err)
-				return false, err
-			}
-
+		err := coding.ForPrefixInt64(tx, []byte{db.KEY_SNAPSHOT_BALANCE}, false, func(key []byte, value int64) (bool, error) {
 			// Do not save zero-value addresses
-			if v == 0 {
+			if value == 0 {
 				return true, nil
 			}
 
-			line := convert.BytesToTrytes(key[1:])[:81] + ";" + strconv.FormatInt(int64(v), 10)
+			line := convert.BytesToTrytes(key[1:])[:81] + ";" + strconv.FormatInt(value, 10)
 			addToBuffer(line)
 
 			return true, nil

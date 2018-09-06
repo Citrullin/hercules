@@ -1,16 +1,15 @@
 package api
 
 import (
-	"bytes"
-	"encoding/gob"
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"../convert"
 	"../db"
-	"../logs"
+	"../db/coding"
 	"../tangle"
-	"github.com/gin-gonic/gin"
 )
 
 func init() {
@@ -34,7 +33,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 			balances = append(balances, 0)
 			continue
 		}
-		balance, err := db.Singleton.GetInt64(db.GetAddressKey(addressBytes, db.KEY_BALANCE))
+		balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey(addressBytes, db.KEY_BALANCE))
 		if err != nil {
 			balances = append(balances, 0)
 			continue
@@ -52,18 +51,12 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 func listAllAccounts(request Request, c *gin.Context, t time.Time) {
 	var accounts = make(map[string]interface{})
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_BALANCE}, true, func(key, value []byte) (bool, error) {
-			var v int64 = 0
-			if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&v); err != nil {
-				logs.Log.Error("Could not parse a snapshot value from database!", err)
-				return false, err
-			}
-
-			if v == 0 {
+		return coding.ForPrefixInt64(tx, []byte{db.KEY_BALANCE}, false, func(key []byte, value int64) (bool, error) {
+			if value == 0 {
 				return true, nil
 			}
 
-			accounts[convert.BytesToTrytes(key[1:])[:81]] = v
+			accounts[convert.BytesToTrytes(key[1:])[:81]] = value
 
 			return true, nil
 		})

@@ -22,6 +22,19 @@ func GetBool(g Getter, key []byte) (bool, error) {
 	return result, nil
 }
 
+func GetInt(g Getter, key []byte) (int, error) {
+	value, err := g.GetBytes(key)
+	if err != nil {
+		return 0, err
+	}
+
+	var result = 0
+	if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&result); err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
 func GetInt64(g Getter, key []byte) (int64, error) {
 	value, err := g.GetBytes(key)
 	if err != nil {

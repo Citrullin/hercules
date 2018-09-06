@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"math"
 	"math/rand"
-
-	"time"
-
 	"sync"
+	"time"
 
 	"../convert"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../transaction"
 )
@@ -274,7 +273,7 @@ func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, tran
 		if value < 0 {
 			_, ok := ledgerState[addrString]
 			if !ok {
-				balance, err := db.Singleton.GetInt64(db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
+				balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
 				if err != nil {
 					balance = 0
 				}
@@ -359,7 +358,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
-					db.Singleton.Put(db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix(), nil)
+					coding.PutInt64(db.Singleton, db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix())
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer

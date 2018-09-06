@@ -8,6 +8,7 @@ import (
 	"../convert"
 	"../crypt"
 	"../db"
+	"../db/coding"
 	"../logs"
 	"../server"
 	"../snapshot"
@@ -103,7 +104,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
-			err := tx.Put(db.AsKey(key, db.KEY_EDGE), int64(snapTime), nil)
+			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
 			_checkIncomingError(t, err)
 			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			if err == nil {
@@ -113,7 +114,7 @@ func processIncomingTX(incoming IncomingTX) error {
 		}
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
 		maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
-		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= t.Timestamp)
+		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
 		if isOutsideOfTimeframe && !tx.HasKey(db.GetByteKey(t.Bundle, db.KEY_PENDING_BUNDLE)) {
 			removeTx()
 			return nil
@@ -133,7 +134,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
 				trunkBytesKey := db.GetByteKey(t.TrunkTransaction, db.KEY_BYTES)
-				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey, nil)
+				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 				_checkIncomingError(t, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
@@ -148,7 +149,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			if tx.HasKey(pendingConfirmationKey) {
 				err = tx.Remove(pendingConfirmationKey)
 				_checkIncomingError(t, err)
-				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), t.Timestamp, tx)
+				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
 				_checkIncomingError(t, err)
 			}
 

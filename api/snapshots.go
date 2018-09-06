@@ -178,7 +178,7 @@ func getInfoIfValidSnapshot(dir string, file os.FileInfo) gin.H {
 			if err == nil {
 				return gin.H{
 					"timestamp":         timestamp,
-					"TimeHumanReadable": utils.GetHumanReadableTime(int(timestamp)),
+					"TimeHumanReadable": utils.GetHumanReadableTime(timestamp),
 					"path":              "/snapshots/" + fileName,
 					"checksum":          checksum,
 				}
@@ -190,7 +190,7 @@ func getInfoIfValidSnapshot(dir string, file os.FileInfo) gin.H {
 }
 
 func makeSnapshot(request Request, c *gin.Context, t time.Time) {
-	if request.Timestamp < 1525017600 || request.Timestamp > int(time.Now().Unix()) {
+	if request.Timestamp < 1525017600 || request.Timestamp > time.Now().Unix() {
 		ReplyError("Wrong UNIX timestamp provided", c)
 		return
 	}
