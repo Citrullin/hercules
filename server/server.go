@@ -33,18 +33,19 @@ type Neighbor struct {
 	ConnectionType    string // Formatted like: udp
 	PreferIPv6        bool
 	KnownIPs          []*IPAddress
+	LastIncomingTime  time.Time
 }
 
 type Message struct {
-	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
-	Msg               []byte
+	Neighbor *Neighbor
+	Msg      []byte
 }
 
 type NeighborTrackingMessage struct {
-	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
-	Incoming          int
-	New               int
-	Invalid           int
+	Neighbor *Neighbor
+	Incoming int
+	New      int
+	Invalid  int
 }
 
 type messageQueue chan *Message
@@ -132,13 +133,8 @@ func Start(serverConfig *viper.Viper) {
 			if ended {
 				break
 			}
-			if len(msg.IPAddressWithPort) > 0 {
-				NeighborsLock.RLock()
-				neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
-				NeighborsLock.RUnlock()
-				if neighborExists {
-					go neighbor.Write(msg)
-				}
+			if msg.Neighbor != nil {
+				msg.Neighbor.Write(msg)
 			} else {
 				server.Write(msg)
 			}
@@ -178,7 +174,7 @@ func (server Server) Write(msg *Message) {
 
 	for _, neighbor := range Neighbors {
 		if neighbor != nil {
-			go neighbor.Write(msg)
+			neighbor.Write(msg)
 		}
 	}
 }
@@ -206,10 +202,11 @@ func (server Server) receive() {
 
 		NeighborsLock.RLock()
 
+		var neighbor *Neighbor
 		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 		if !neighborExists {
 			// Check all known addresses => slower
-			var neighbor *Neighbor
+
 			neighborExists, neighbor = checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
 
 			NeighborsLock.RUnlock()
@@ -223,7 +220,7 @@ func (server Server) receive() {
 		}
 
 		if neighborExists {
-			handleMessage(&Message{IPAddressWithPort: ipAddressWithPort, Msg: msg})
+			handleMessage(&Message{Neighbor: neighbor, Msg: msg})
 		} else {
 			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
 		}
@@ -233,7 +230,7 @@ func (server Server) receive() {
 
 func handleMessage(msg *Message) {
 	server.Incoming <- msg
-	NeighborTrackingQueue <- &NeighborTrackingMessage{IPAddressWithPort: msg.IPAddressWithPort, Incoming: 1}
+	NeighborTrackingQueue <- &NeighborTrackingMessage{Neighbor: msg.Neighbor, Incoming: 1}
 	atomic.AddUint64(&incTxPerSec, 1)
 }
 

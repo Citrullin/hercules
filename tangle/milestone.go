@@ -71,7 +71,7 @@ func LoadMissingMilestonesFromFile(path string) error {
 			continue
 		}
 		hash = hash[:49]
-		has, err := requestIfMissing(hash, "")
+		has, err := requestIfMissing(hash, nil)
 		if err == nil {
 			if !has {
 				//logs.Log.Warning("MISSING", line)

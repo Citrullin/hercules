@@ -14,6 +14,8 @@ import (
 	"./server"
 	"./snapshot"
 	"./tangle"
+
+	"github.com/pkg/profile"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -30,6 +32,7 @@ func init() {
 }
 
 func main() {
+	defer profile.Start().Stop()
 	Hello()
 	time.Sleep(time.Duration(500) * time.Millisecond)
 	StartHercules()

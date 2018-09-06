@@ -22,12 +22,18 @@ const (
 	tipRemoverInterval = time.Duration(1) * time.Minute
 	cleanupInterval    = time.Duration(10) * time.Second
 	maxTipAge          = time.Duration(1) * time.Hour
+	TRYTES_SIZE        = 2673
+	PACKET_SIZE        = 1650
+	REQ_HASH_SIZE      = 46
+	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
+	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
+	TX_TRITS_LENGTH    = 8019
 )
 
 type Message struct {
-	Bytes             *[]byte
-	Requested         *[]byte
-	IPAddressWithPort string
+	Bytes     *[]byte
+	Requested *[]byte
+	Neighbor  *server.Neighbor
 }
 
 type Request struct {
@@ -36,35 +42,37 @@ type Request struct {
 }
 
 type IncomingTX struct {
-	TX                *transaction.FastTX
-	IPAddressWithPort string
-	Bytes             *[]byte
+	TX       *transaction.FastTX
+	Neighbor *server.Neighbor
+	Bytes    *[]byte
 }
 
 type RequestQueue chan *Request
 
-// "constants"
-var nbWorkers = runtime.NumCPU()
-var tipBytes = convert.TrytesToBytes(strings.Repeat("9", 2673))[:1604]
-var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
-var tipFastTX = transaction.TritsToTX(&tipTrits, tipBytes)
-var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
+var (
+	// "constants"
+	nbWorkers  = runtime.NumCPU()
+	tipBytes   = convert.TrytesToBytes(strings.Repeat("9", TRYTES_SIZE))[:DATA_SIZE]
+	tipTrits   = convert.BytesToTrits(tipBytes)[:TX_TRITS_LENGTH]
+	tipFastTX  = transaction.TritsToTX(&tipTrits, tipBytes)
+	tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 
-var config *viper.Viper
-var LastIncomingTime map[string]time.Time
-var LastIncomingTimeLock = &sync.RWMutex{}
-var RequestQueues map[string]*RequestQueue
-var RequestQueuesLock = &sync.RWMutex{}
-
-var lowEndDevice = false
-var totalTransactions int64 = 0
-var totalConfirmations int64 = 0
-var incoming = 0
-var incomingProcessed = 0
-var saved = 0
-var discarded = 0
-var outgoing = 0
-var srv *server.Server
+	// vars
+	srv                  *server.Server
+	config               *viper.Viper
+	LastIncomingTime     map[string]time.Time
+	LastIncomingTimeLock = &sync.RWMutex{}
+	RequestQueues        map[string]*RequestQueue
+	RequestQueuesLock          = &sync.RWMutex{}
+	lowEndDevice               = false
+	totalTransactions    int64 = 0
+	totalConfirmations   int64 = 0
+	incoming                   = 0
+	incomingProcessed          = 0
+	saved                      = 0
+	discarded                  = 0
+	outgoing                   = 0
+)
 
 func Start(cfg *viper.Viper) {
 	config = cfg
@@ -145,8 +153,8 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {
-					requestIfMissing(t.TrunkTransaction, "")
-					requestIfMissing(t.BranchTransaction, "")
+					requestIfMissing(t.TrunkTransaction, nil)
+					requestIfMissing(t.BranchTransaction, nil)
 					return nil
 				})
 			}

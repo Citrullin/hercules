@@ -39,7 +39,6 @@ func NewBadger(config *viper.Viper) (Interface, error) {
 	opts.TableLoadingMode = options.FileIO
 	if light {
 		// Source: https://github.com/dgraph-io/badger#memory-usage
-		opts := badger.DefaultOptions
 		opts.NumMemtables = 1
 		opts.NumLevelZeroTables = 1
 		opts.NumLevelZeroTablesStall = 2
