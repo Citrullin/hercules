@@ -106,7 +106,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
 			_checkIncomingError(t, err)
-			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			if err == nil {
 				err = tx.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING))
 				_checkIncomingError(t, err)
@@ -153,7 +153,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				_checkIncomingError(t, err)
 			}
 
-			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 			if err == nil {
 				pendingMilestone = &PendingMilestone{parentKey, db.AsKey(key, db.KEY_BYTES)}
 			}

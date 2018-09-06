@@ -77,7 +77,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 					return true, nil
 				}
 
-				txBytes, err := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+				txBytes, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 				if err != nil {
 					return false, err
 				}
@@ -121,7 +121,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		var trimKey []byte
 		err := db.Singleton.Update(func(tx db.Transaction) error {
 			// First: update snapshot balances
-			address, err := tx.GetBytes(db.AsKey(kv.key, db.KEY_ADDRESS_HASH))
+			address, err := coding.GetBytes(tx, db.AsKey(kv.key, db.KEY_ADDRESS_HASH))
 			if err != nil {
 				return err
 			}

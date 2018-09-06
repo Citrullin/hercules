@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"../db/coding"
+	"../logs"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/spf13/viper"
-
-	"../logs"
 )
 
 func init() {
@@ -76,7 +76,7 @@ func (b *Badger) Unlock() {
 
 func (b *Badger) PutBytes(key, value []byte) error {
 	return b.Update(func(t Transaction) error {
-		return t.PutBytes(key, value)
+		return coding.PutBytes(t, key, value)
 	})
 }
 
@@ -84,7 +84,7 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
-	return tx.GetBytes(key)
+	return coding.GetBytes(tx, key)
 }
 
 func (b *Badger) HasKey(key []byte) bool {
@@ -96,7 +96,7 @@ func (b *Badger) HasKey(key []byte) bool {
 
 func (b *Badger) Remove(key []byte) error {
 	return b.Update(func(t Transaction) error {
-		return t.Remove(key)
+		return coding.Remove(t, key)
 	})
 }
 

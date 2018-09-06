@@ -121,7 +121,7 @@ func confirm(key []byte, tx db.Transaction) (error, bool) {
 		return nil, false
 	}
 
-	data, err := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+	data, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 	if err != nil {
 		// Imminent database inconsistency: Warn!
 		// logs.Log.Error("TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!", key)
@@ -238,7 +238,7 @@ func reapplyConfirmed() {
 	db.Singleton.View(func(tx db.Transaction) error {
 		x := 0
 		return tx.ForPrefix([]byte{db.KEY_CONFIRMED}, false, func(key, _ []byte) (bool, error) {
-			txBytes, _ := tx.GetBytes(db.AsKey(key, db.KEY_BYTES))
+			txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
 			trits := convert.BytesToTrits(txBytes)[:8019]
 			t := transaction.TritsToFastTX(&trits, txBytes)
 			if t.Value != 0 {
