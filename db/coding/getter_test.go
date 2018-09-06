@@ -9,14 +9,6 @@ import (
 	"."
 )
 
-func TestGetBytes(t *testing.T) {
-	s := &storage{key: testKey, value: []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}}
-
-	value, err := coding.GetBytes(s, testKey)
-	require.NoError(t, err)
-	assert.Equal(t, []byte{1, 2, 3}, value)
-}
-
 func TestGetBool(t *testing.T) {
 	value, err := coding.GetBool(&storage{key: testKey, value: []byte{0x03, 0x02, 0x00, 0x00}}, testKey)
 	require.NoError(t, err)
@@ -49,17 +41,6 @@ func TestGetString(t *testing.T) {
 	value, err := coding.GetString(s, testKey)
 	require.NoError(t, err)
 	assert.Equal(t, "test", value)
-}
-
-func BenchmarkGetBytes(b *testing.B) {
-	s := &storage{key: testKey, value: []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}}
-	value := []byte(nil)
-	b.ResetTimer()
-	for index := 0; index < b.N; index++ {
-		value, _ = coding.GetBytes(s, testKey)
-	}
-	b.StopTimer()
-	assert.Equal(b, []byte{1, 2, 3}, value)
 }
 
 func BenchmarkGetBool(b *testing.B) {

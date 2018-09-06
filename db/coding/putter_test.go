@@ -9,13 +9,6 @@ import (
 	"."
 )
 
-func TestPutBytes(t *testing.T) {
-	s := &storage{}
-
-	require.NoError(t, coding.PutBytes(s, testKey, []byte{1, 2, 3}))
-	assert.Equal(t, []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}, s.value)
-}
-
 func TestPutBool(t *testing.T) {
 	s := &storage{}
 
@@ -45,19 +38,6 @@ func TestPutString(t *testing.T) {
 
 	require.NoError(t, coding.PutString(s, testKey, "test"))
 	assert.Equal(t, []byte{0x07, 0x0c, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74}, s.value)
-}
-
-func BenchmarkPutBytes(b *testing.B) {
-	s := &storage{}
-	value := []byte{1, 2, 3}
-
-	b.ResetTimer()
-	for index := 0; index < b.N; index++ {
-		coding.PutBytes(s, testKey, value)
-	}
-	b.StopTimer()
-
-	assert.Equal(b, []byte{0x06, 0x0a, 0x00, 0x03, 0x01, 0x02, 0x03}, s.value)
 }
 
 func BenchmarkPutBool(b *testing.B) {

@@ -246,9 +246,9 @@ func incomingMilestone(pendingMilestone *PendingMilestone) {
 func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) int {
 	var txBytesKey = db.AsKey(key, db.KEY_BYTES)
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := coding.GetBytes(tx, TX2BytesKey)
+	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
 	if err != nil {
-		err := coding.PutBytes(tx, db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key)
+		err := tx.PutBytes(db.AsKey(TX2BytesKey, db.KEY_EVENT_MILESTONE_PAIR_PENDING), key)
 		if err != nil {
 			logs.Log.Errorf("Could not add pending milestone pair: %v", err)
 			panic(err)
@@ -256,7 +256,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) int {
 	}
 
 	// 3. Check that the 0-index TX also exists.
-	txBytes, err := coding.GetBytes(tx, txBytesKey)
+	txBytes, err := tx.GetBytes(txBytesKey)
 	if err != nil {
 		// The 0-index milestone TX doesn't exist.
 		// Clearly an error here!
