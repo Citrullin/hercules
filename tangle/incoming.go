@@ -94,7 +94,8 @@ func processIncomingTX(incoming IncomingTX) error {
 	var pendingMilestone *PendingMilestone
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
 		// TODO: catch error defer here
-		var key = db.GetByteKey(t.Hash, db.KEY_HASH)
+
+		key := db.GetByteKey(t.Hash, db.KEY_HASH)
 		removePendingRequest(t.Hash)
 
 		snapTime := snapshot.GetSnapshotTimestamp(tx)
@@ -103,7 +104,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
-			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING)) // TODO
 			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
 			_checkIncomingError(t, err)
 			parentKey, err := tx.GetBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
@@ -112,6 +113,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				_checkIncomingError(t, err)
 			}
 		}
+
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
 		maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
 		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
@@ -130,16 +132,20 @@ func processIncomingTX(incoming IncomingTX) error {
 		}
 
 		if !tx.HasKey(key) {
+			// Tx is not in the database yet
+
 			err := SaveTX(t, incoming.Bytes, tx)
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
 				trunkBytesKey := db.GetByteKey(t.TrunkTransaction, db.KEY_BYTES)
 				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
 				_checkIncomingError(t, err)
+
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
 			_, err = requestIfMissing(t.TrunkTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(t, err)
+
 			_, err = requestIfMissing(t.BranchTransaction, incoming.IPAddressWithPort)
 			_checkIncomingError(t, err)
 
@@ -149,6 +155,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			if tx.HasKey(pendingConfirmationKey) {
 				err = tx.Remove(pendingConfirmationKey)
 				_checkIncomingError(t, err)
+
 				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
 				_checkIncomingError(t, err)
 			}
