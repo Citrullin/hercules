@@ -72,6 +72,9 @@ func startConfirmThread() {
 			removeConfirmInProgress(pendingConfirmation.key)
 			return err
 		})
+		if err != nil {
+			logs.Log.Errorf("Error during confirmation: %v", err)
+		}
 		if err != nil || db.Singleton.HasKey(pendingConfirmation.key) {
 			confirmQueue <- pendingConfirmation
 		} else if confirmed {
