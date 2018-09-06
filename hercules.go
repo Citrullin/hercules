@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"./api"
@@ -34,35 +35,22 @@ func main() {
 	StartHercules()
 }
 
-func StartHercules() {
-	logs.Log.Info("Starting Hercules. Please wait...")
-	if err := db.LoadSingleton(config); err != nil {
-		logs.Log.Fatal(err)
-	}
-	srv := server.Create(config)
+var herculesDeathWaitGroup = &sync.WaitGroup{}
 
+func StartHercules() {
+	herculesDeathWaitGroup.Add(1)
+
+	logs.Log.Info("Starting Hercules. Please wait...")
+
+	db.Start(config)
 	snapshot.Start(config)
-	tangle.Start(srv, config)
-	server.Start()
+
+	server.Start(config)
+	tangle.Start(config)
 	api.Start(config)
 
-	ch := make(chan os.Signal, 10)
-	signal.Notify(ch, os.Interrupt)
-	signal.Notify(ch, os.Kill)
-	for range ch {
-		// Clean exit
-		logs.Log.Info("Hercules is shutting down. Please wait...")
-		go func() {
-			time.Sleep(time.Duration(5000) * time.Millisecond)
-			logs.Log.Info("Bye!")
-			os.Exit(0)
-		}()
-		go api.End()
-		go server.End()
-		if err := db.Singleton.Close(); err != nil {
-			logs.Log.Fatal(err)
-		}
-	}
+	go gracefullyDies()
+	herculesDeathWaitGroup.Wait()
 }
 
 /*
@@ -243,4 +231,20 @@ func Hello() {
 	logs.Log.Info("88~~~88 88~~~~~ 88`8b   8b      88    88 88      88~~~~~   `Y8b.")
 	logs.Log.Info("88   88 88.     88 `88. Y8b  d8 88b  d88 88booo. 88.     db   8D")
 	logs.Log.Info("YP   YP Y88888P 88   YD  `Y88P' ~Y8888P' Y88888P Y88888P `8888Y'")
+}
+
+func gracefullyDies() {
+	ch := make(chan os.Signal, 10)
+	signal.Notify(ch, os.Interrupt)
+	signal.Notify(ch, os.Kill)
+
+	<-ch // waits for death signal
+
+	logs.Log.Info("Hercules is shutting down. Please wait...")
+	api.End()
+	server.End()
+	db.End()
+
+	logs.Log.Info("Bye!")
+	herculesDeathWaitGroup.Add(-1)
 }

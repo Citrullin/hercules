@@ -20,6 +20,10 @@ const P_TIP_REPLY = 25
 const P_BROADCAST = 10
 
 func incomingRunner() {
+	if srv == nil {
+		logs.Log.Info("empty")
+	}
+
 	for raw := range srv.Incoming {
 		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
 		if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
