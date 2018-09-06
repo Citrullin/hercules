@@ -37,6 +37,7 @@ type Interface interface {
 	Update(func(Transaction) error) error
 	View(func(Transaction) error) error
 	Close() error
+	End()
 }
 
 type Transaction interface {

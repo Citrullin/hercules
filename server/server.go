@@ -69,8 +69,7 @@ var NeighborsLock = &sync.RWMutex{}
 var connection net.PacketConn
 var ended = false
 
-func Create(serverConfig *viper.Viper) *Server {
-	config = serverConfig
+func create() *Server {
 	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
@@ -93,7 +92,11 @@ func Create(serverConfig *viper.Viper) *Server {
 	return server
 }
 
-func Start() {
+func Start(serverConfig *viper.Viper) {
+	config = serverConfig
+
+	create()
+
 	workers := 1
 	if !config.GetBool("light") {
 		workers = nbWorkers
@@ -145,22 +148,31 @@ func Start() {
 
 func End() {
 	ended = true
-	time.Sleep(time.Duration(5) * time.Second)
 	connection.Close()
 	atomic.AddUint64(&totalIncTx, incTxPerSec)
 	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
+	logs.Log.Info("Neighbor server exited")
 }
 
 func (neighbor Neighbor) Write(msg *Message) {
+	if ended {
+		return
+	}
 	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
 	if err != nil {
-		logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
+		if !ended { // Check again
+			logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
+		}
 	} else {
 		atomic.AddUint64(&outTxPerSec, 1)
 	}
 }
 
 func (server Server) Write(msg *Message) {
+	if ended {
+		return
+	}
+
 	NeighborsLock.RLock()
 	defer NeighborsLock.RUnlock()
 
@@ -184,7 +196,10 @@ func (server Server) receive() {
 		msg := make([]byte, UDPPacketSize)
 		_, addr, err := connection.ReadFrom(msg[0:])
 		if err != nil {
-			logs.Log.Errorf("Error reading incoming packet: %v", err)
+			// Check again (there might be messages received before ending)
+			if !ended {
+				logs.Log.Errorf("Error reading incoming packet: %v", err)
+			}
 			continue
 		}
 		ipAddressWithPort := addr.String() // Format <ip>:<port>
@@ -224,4 +239,8 @@ func handleMessage(msg *Message) {
 
 func report() {
 	logs.Log.Debugf("Incoming TX/s: %d, Outgoing TX/s: %d\n", incTxPerSec, outTxPerSec)
+}
+
+func GetServer() *Server {
+	return server
 }

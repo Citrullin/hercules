@@ -3,18 +3,18 @@ package db
 import (
 	"fmt"
 
+	"../logs"
 	"github.com/spf13/viper"
 )
 
 var Singleton Interface
 
-func LoadSingleton(config *viper.Viper) error {
+func Start(config *viper.Viper) {
 	database, err := Load(config)
 	if err != nil {
-		return err
+		logs.Log.Fatal(err)
 	}
 	Singleton = database
-	return nil
 }
 
 func Load(config *viper.Viper) (Interface, error) {
@@ -31,4 +31,12 @@ func Load(config *viper.Viper) (Interface, error) {
 	}
 
 	return database, nil
+}
+
+var ended = false
+
+func End() {
+	ended = true
+	Singleton.End()
+	logs.Log.Info("DB exited")
 }

@@ -50,7 +50,6 @@ var tipTrits = convert.BytesToTrits(tipBytes)[:8019]
 var tipFastTX = transaction.TritsToTX(&tipTrits, tipBytes)
 var tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
 
-var srv *server.Server
 var config *viper.Viper
 var LastIncomingTime map[string]time.Time
 var LastIncomingTimeLock = &sync.RWMutex{}
@@ -65,10 +64,12 @@ var incomingProcessed = 0
 var saved = 0
 var discarded = 0
 var outgoing = 0
+var srv *server.Server
 
-func Start(s *server.Server, cfg *viper.Viper) {
+func Start(cfg *viper.Viper) {
 	config = cfg
-	srv = s
+	srv = server.GetServer()
+
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
 	LastIncomingTime = make(map[string]time.Time)
