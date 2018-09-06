@@ -16,10 +16,12 @@ func init() {
 
 func getTips(request Request, c *gin.Context, t time.Time) {
 	var tips = []string{}
-	for _, tip := range tangle.Tips {
+	tangle.TipsLock.RLock()
+	for hash := range tangle.Tips {
 		//if i >= 25 { break }
-		tips = append(tips, convert.BytesToTrytes(tip.Hash)[:81])
+		tips = append(tips, convert.BytesToTrytes([]byte(hash))[:81])
 	}
+	tangle.TipsLock.RUnlock()
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   tips,
 		"duration": getDuration(t),

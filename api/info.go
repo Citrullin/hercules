@@ -25,6 +25,10 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 	neighborsCnt := len(server.Neighbors)
 	server.NeighborsLock.RUnlock()
 
+	tangle.TipsLock.RLock()
+	tipsCnt := len(tangle.Tips)
+	tangle.TipsLock.RUnlock()
+
 	milestone := convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81]
 	index := tangle.LatestMilestone.Index
 	solid := dummyHash
@@ -47,7 +51,7 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"currentSnapshotTimestamp":           snapshot.CurrentTimestamp,
 		"currentSnapshotTimeHumanReadable":   utils.GetHumanReadableTime(snapshot.CurrentTimestamp),
 		"isSynchronized":                     snapshot.IsSynchronized(),
-		"tips":                               len(tangle.Tips),
+		"tips":                               tipsCnt,
 		"time":                               time.Now().Unix(),
 		"duration":                           getDuration(t),
 	})
