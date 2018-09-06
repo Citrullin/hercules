@@ -73,14 +73,10 @@ func RemoveNeighbor(address string) error {
 }
 
 func TrackNeighbor(msg *NeighborTrackingMessage) {
-	NeighborsLock.RLock()
-	defer NeighborsLock.RUnlock()
-
-	neighborExists, neighbor := checkNeighbourExistsByIPAddressWithPort(msg.IPAddressWithPort, false)
-	if neighborExists {
-		neighbor.Incoming += msg.Incoming
-		neighbor.New += msg.New
-		neighbor.Invalid += msg.Invalid
+	if msg.Neighbor != nil {
+		msg.Neighbor.Incoming += msg.Incoming
+		msg.Neighbor.New += msg.New
+		msg.Neighbor.Invalid += msg.Invalid
 	}
 }
 

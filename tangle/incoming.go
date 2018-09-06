@@ -28,7 +28,7 @@ func incomingRunner() {
 		}
 
 		data := raw.Msg[:DATA_SIZE]
-		req := make([]byte, REQ_HASH_SIZE)
+		req := make([]byte, HASH_SIZE)
 		copy(req, raw.Msg[DATA_SIZE:PACKET_SIZE])
 
 		incoming++
@@ -49,16 +49,16 @@ func incomingRunner() {
 				// Tx was not a tip
 				if !crypt.IsValidPoW(tx.Hash, MWM) {
 					// POW invalid => Track invalid messages from neighbor
-					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: raw.IPAddressWithPort, Invalid: 1}
+					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: raw.Neighbor, Invalid: 1}
 				} else {
 					// POW valid => Process the message
-					err := processIncomingTX(IncomingTX{TX: tx, IPAddressWithPort: raw.IPAddressWithPort, Bytes: &data})
+					err := processIncomingTX(IncomingTX{TX: tx, Neighbor: raw.Neighbor, Bytes: &data})
 					if err == nil {
 						incomingProcessed++
 						addFingerprint(fingerprint)
-						LastIncomingTimeLock.Lock()
-						LastIncomingTime[raw.IPAddressWithPort] = time.Now()
-						LastIncomingTimeLock.Unlock()
+						if raw.Neighbor != nil {
+							raw.Neighbor.LastIncomingTime = time.Now()
+						}
 					}
 				}
 			}
@@ -70,7 +70,7 @@ func incomingRunner() {
 		}
 
 		var reply []byte = nil
-		var isLookingForTX = !bytes.Equal(req, tipBytes[:REQ_HASH_SIZE]) && (hash == nil || !bytes.Equal(hash, req))
+		var isLookingForTX = !bytes.Equal(req, tipBytes[:HASH_SIZE]) && (hash == nil || !bytes.Equal(hash, req))
 
 		if isLookingForTX {
 			reply, _ = db.Singleton.GetBytes(db.GetByteKey(req, db.KEY_BYTES))
@@ -79,14 +79,14 @@ func incomingRunner() {
 			continue
 		}
 
-		request := getSomeRequestByIPAddressWithPort(raw.IPAddressWithPort, false)
+		request := getSomeRequestByNeighbor(raw.Neighbor, false)
 		if isLookingForTX && request == nil && reply == nil {
 			// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
 			// then do not reply. If we do not have it, but have something to ask, then ask.
 			continue
 		}
 
-		sendReply(getMessage(reply, request, request == nil, raw.IPAddressWithPort, nil))
+		sendReply(getMessage(reply, request, request == nil, raw.Neighbor, nil))
 	}
 }
 
@@ -123,9 +123,9 @@ func processIncomingTX(incoming IncomingTX) error {
 		}
 
 		if tx.HasKey(db.AsKey(key, db.KEY_SNAPSHOTTED)) {
-			_, err := requestIfMissing(t.TrunkTransaction, incoming.IPAddressWithPort)
+			_, err := requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
 			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, incoming.IPAddressWithPort)
+			_, err = requestIfMissing(t.BranchTransaction, incoming.Neighbor)
 			_checkIncomingError(t, err)
 			removeTx()
 			return nil
@@ -140,9 +140,9 @@ func processIncomingTX(incoming IncomingTX) error {
 				_checkIncomingError(t, err)
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(t.TrunkTransaction, incoming.IPAddressWithPort)
+			_, err = requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
 			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, incoming.IPAddressWithPort)
+			_, err = requestIfMissing(t.BranchTransaction, incoming.Neighbor)
 			_checkIncomingError(t, err)
 
 			// EVENTS:
@@ -163,10 +163,10 @@ func processIncomingTX(incoming IncomingTX) error {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if (!lowEndDevice || len(srv.Incoming) < maxIncoming) && utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(t.Bytes, incoming.IPAddressWithPort)
+				Broadcast(t.Bytes, incoming.Neighbor)
 			}
 
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: 1}
+			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: incoming.Neighbor, New: 1}
 			saved++
 			atomic.AddInt64(&totalTransactions, 1)
 		} else {
@@ -180,10 +180,10 @@ func processIncomingTX(incoming IncomingTX) error {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		addPendingRequest(t.Hash, 0, incoming.IPAddressWithPort, true)
+		addPendingRequest(t.Hash, 0, incoming.Neighbor, true)
 
 		atomic.AddInt64(&totalTransactions, -1)
-		server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{IPAddressWithPort: incoming.IPAddressWithPort, New: -1}
+		server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: incoming.Neighbor, New: -1}
 	}
 	return err
 }
@@ -206,14 +206,11 @@ func cleanupRequestQueues() {
 	RequestQueuesLock.RUnlock()
 
 	RequestQueuesLock.Lock()
-	LastIncomingTimeLock.Lock()
 	if toRemove != nil && len(toRemove) > 0 {
 		for _, address := range toRemove {
 			logs.Log.Debug("Removing gone neighbor queue for:", address)
 			delete(RequestQueues, address)
-			delete(LastIncomingTime, address)
 		}
 	}
 	RequestQueuesLock.Unlock()
-	LastIncomingTimeLock.Unlock()
 }

@@ -24,14 +24,15 @@ const (
 	TRYTES_SIZE        = 2673
 	PACKET_SIZE        = 1650
 	REQ_HASH_SIZE      = 46
+	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
 	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
 	TX_TRITS_LENGTH    = 8019
 )
 
 type Message struct {
-	Bytes             *[]byte
-	Requested         *[]byte
-	IPAddressWithPort string
+	Bytes     *[]byte
+	Requested *[]byte
+	Neighbor  *server.Neighbor
 }
 
 type Request struct {
@@ -40,9 +41,9 @@ type Request struct {
 }
 
 type IncomingTX struct {
-	TX                *transaction.FastTX
-	IPAddressWithPort string
-	Bytes             *[]byte
+	TX       *transaction.FastTX
+	Neighbor *server.Neighbor
+	Bytes    *[]byte
 }
 
 type RequestQueue chan *Request
@@ -150,8 +151,8 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {
-					requestIfMissing(t.TrunkTransaction, "")
-					requestIfMissing(t.BranchTransaction, "")
+					requestIfMissing(t.TrunkTransaction, nil)
+					requestIfMissing(t.BranchTransaction, nil)
 					return nil
 				})
 			}
