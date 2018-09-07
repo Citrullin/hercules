@@ -5,10 +5,14 @@ import (
 	"time"
 )
 
-const fingerprintTTL = time.Duration(10) * time.Second
+const (
+	fingerprintTTL = time.Duration(10) * time.Second
+)
 
-var fingerprints map[string]time.Time
-var fingerprintsLock = &sync.RWMutex{}
+var (
+	fingerprints     map[string]time.Time
+	fingerprintsLock = &sync.RWMutex{}
+)
 
 func fingerprintsOnLoad() {
 	fingerprints = make(map[string]time.Time)

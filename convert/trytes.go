@@ -2,36 +2,38 @@ package convert
 
 import "math"
 
-var TRYTES = "NOPQRSTUVWXYZ9ABCDEFGHIJKLM"
-var trytesToTritsMap = map[rune][]int{
-	'9': []int{0, 0, 0},
-	'A': []int{1, 0, 0},
-	'B': []int{-1, 1, 0},
-	'C': []int{0, 1, 0},
-	'D': []int{1, 1, 0},
-	'E': []int{-1, -1, 1},
-	'F': []int{0, -1, 1},
-	'G': []int{1, -1, 1},
-	'H': []int{-1, 0, 1},
-	'I': []int{0, 0, 1},
-	'J': []int{1, 0, 1},
-	'K': []int{-1, 1, 1},
-	'L': []int{0, 1, 1},
-	'M': []int{1, 1, 1},
-	'N': []int{-1, -1, -1},
-	'O': []int{0, -1, -1},
-	'P': []int{1, -1, -1},
-	'Q': []int{-1, 0, -1},
-	'R': []int{0, 0, -1},
-	'S': []int{1, 0, -1},
-	'T': []int{-1, 1, -1},
-	'U': []int{0, 1, -1},
-	'V': []int{1, 1, -1},
-	'W': []int{-1, -1, 0},
-	'X': []int{0, -1, 0},
-	'Y': []int{1, -1, 0},
-	'Z': []int{-1, 0, 0},
-}
+var (
+	TRYTES           = "NOPQRSTUVWXYZ9ABCDEFGHIJKLM"
+	trytesToTritsMap = map[rune][]int{
+		'9': []int{0, 0, 0},
+		'A': []int{1, 0, 0},
+		'B': []int{-1, 1, 0},
+		'C': []int{0, 1, 0},
+		'D': []int{1, 1, 0},
+		'E': []int{-1, -1, 1},
+		'F': []int{0, -1, 1},
+		'G': []int{1, -1, 1},
+		'H': []int{-1, 0, 1},
+		'I': []int{0, 0, 1},
+		'J': []int{1, 0, 1},
+		'K': []int{-1, 1, 1},
+		'L': []int{0, 1, 1},
+		'M': []int{1, 1, 1},
+		'N': []int{-1, -1, -1},
+		'O': []int{0, -1, -1},
+		'P': []int{1, -1, -1},
+		'Q': []int{-1, 0, -1},
+		'R': []int{0, 0, -1},
+		'S': []int{1, 0, -1},
+		'T': []int{-1, 1, -1},
+		'U': []int{0, 1, -1},
+		'V': []int{1, 1, -1},
+		'W': []int{-1, -1, 0},
+		'X': []int{0, -1, 0},
+		'Y': []int{1, -1, 0},
+		'Z': []int{-1, 0, 0},
+	}
+)
 
 func TritsToTrytes(trits []int) string {
 	l := len(trits)

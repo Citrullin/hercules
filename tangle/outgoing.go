@@ -22,16 +22,18 @@ const (
 	maxTimesRequest    = 100
 )
 
+var (
+	lastTip             = time.Now()
+	PendingRequests     map[string]*PendingRequest
+	PendingRequestsLock = &sync.RWMutex{}
+)
+
 type PendingRequest struct {
 	Hash      []byte
 	Timestamp int
 	LastTried time.Time
 	Neighbor  *server.Neighbor
 }
-
-var lastTip = time.Now()
-var PendingRequests map[string]*PendingRequest
-var PendingRequestsLock = &sync.RWMutex{}
 
 func Broadcast(data []byte, excludeNeighbor *server.Neighbor) int {
 	sent := 0

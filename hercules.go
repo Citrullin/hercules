@@ -18,7 +18,9 @@ import (
 	"github.com/pkg/profile"
 )
 
-var herculesDeathWaitGroup = &sync.WaitGroup{}
+var (
+	herculesDeathWaitGroup = &sync.WaitGroup{}
+)
 
 func main() {
 	herculesDeathWaitGroup.Add(1)

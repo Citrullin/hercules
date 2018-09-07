@@ -22,17 +22,19 @@ const (
 	MaxTimestampValue = 3812798742493 //int64(3^27 - 1) / 2
 )
 
-var powLock = &sync.Mutex{}
-var maxMinWeightMagnitude = 0
-var maxTransactions = 0
-var usePowSrv = false
-var powClient *powsrv.PowClient
-var interruptAttachToTangle = false
-var powInitialized = false
-var powFunc giota.PowFunc
-var powType string
-var powVersion string
-var serverVersion string
+var (
+	powLock                 = &sync.Mutex{}
+	maxMinWeightMagnitude   = 0
+	maxTransactions         = 0
+	usePowSrv               = false
+	powClient               *powsrv.PowClient
+	interruptAttachToTangle = false
+	powInitialized          = false
+	powFunc                 giota.PowFunc
+	powType                 string
+	powVersion              string
+	serverVersion           string
+)
 
 func init() {
 	startAttach()

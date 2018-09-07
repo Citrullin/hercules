@@ -6,7 +6,9 @@ import (
 	"../logs"
 )
 
-var Singleton Interface
+var (
+	Singleton Interface
+)
 
 func Start() {
 	database, err := loadDB()

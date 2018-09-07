@@ -19,15 +19,18 @@ const (
 	MAX_LATEST_TRANSACTION_AGE = 300
 )
 
-var TOTAL_IOTAS int64 = 2779530283277761
-var keySnapshotDate = []byte{ns.NamespaceSnapshotDate}
-var keySnapshotLock = []byte{ns.NamespaceSnapshotLock}
-var keySnapshotFile = []byte{ns.NamespaceSnapshotFile}
+var (
+	TOTAL_IOTAS     int64 = 2779530283277761
+	keySnapshotDate       = []byte{ns.NamespaceSnapshotDate}
+	keySnapshotLock       = []byte{ns.NamespaceSnapshotLock}
+	keySnapshotFile       = []byte{ns.NamespaceSnapshotFile}
 
-var edgeTransactions chan *[]byte
-var CurrentTimestamp int64 = 0
-var InProgress = false
-var lowEndDevice = false
+	edgeTransactions          chan *[]byte
+	CurrentTimestamp          int64
+	InProgress                = false
+	lowEndDevice              = false
+	timeLeftToSnapshotSeconds int64
+)
 
 func Start() {
 	logs.Log.Debug("Loading snapshots module")
@@ -210,8 +213,6 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 
 	}
 }
-
-var timeLeftToSnapshotSeconds int64 = 0
 
 /*
 When a snapshot is missing:

@@ -7,8 +7,10 @@ import (
 	"../convert"
 )
 
-const kerlTrytes = "BXFYVMRKNEEVRQKZECFSIZRFKDH9HTZTGIKFXMUEIIWFLOYXHFLJTEX9TXKAUPIRMPXQGUSLHUREZ9999"
-const cooAddress = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
+const (
+	kerlTrytes = "BXFYVMRKNEEVRQKZECFSIZRFKDH9HTZTGIKFXMUEIIWFLOYXHFLJTEX9TXKAUPIRMPXQGUSLHUREZ9999"
+	cooAddress = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU"
+)
 
 func TestKerl(t *testing.T) {
 	expected := []int{0, -1, -1, 1, 1, 0, 0, 1, 0, 1, -1, 0, 0, 0, 0, 0, 1, -1, 0, -1, 0, 0, 0, -1, 0, -1, -1, 0, 0, 0, 0, -1, 0, -1, 0, 1, 0, -1, -1, 0, 1, 1, -1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, -1, 1, 1, -1, 0, 1, 1, 0, -1, 1, -1, -1, -1, 1, -1, 1, 1, 0, 0, 1, -1, 0, 1, -1, 1, 0, -1, 1, 1, 1, -1, -1, 1, 0, 1, 1, -1, 0, -1, 0, -1, 1, -1, 0, 1, -1, 1, 1, 0, -1, 0, 1, 0, 1, 0, -1, 0, 1, 1, -1, -1, -1, 1, 1, 1, 1, -1, 0, 1, -1, 1, 0, 0, -1, 1, 0, -1, -1, -1, -1, 1, 1, -1, -1, 1, -1, 0, 0, 0, -1, -1, 0, -1, -1, -1, 1, -1, 1, -1, -1, -1, 1, 0, -1, 1, -1, -1, 1, 0, -1, 0, 0, -1, -1, 0, 0, 0, 1, 0, -1, -1, -1, -1, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, -1, 1, 1, -1, 1, 0, 1, 0, 0, 1, -1, 0, -1, 1, 1, 1, 1, 0, 1, 0, 0, -1, 1, -1, 0, 0, 0, 1, -1, 0, -1, 1, 1, 0, -1, 0, 0, -1, 1, -1, 0, 0, 0, 0, 0, -1, 1, -1, 0, -1, 0, 0, 0, 1, 0}
