@@ -9,6 +9,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../tangle"
 )
 
@@ -33,7 +34,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 			balances = append(balances, 0)
 			continue
 		}
-		balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey(addressBytes, db.KEY_BALANCE))
+		balance, err := coding.GetInt64(db.Singleton, ns.AddressKey(addressBytes, ns.NamespaceBalance))
 		if err != nil {
 			balances = append(balances, 0)
 			continue
@@ -51,7 +52,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 func listAllAccounts(request Request, c *gin.Context, t time.Time) {
 	var accounts = make(map[string]interface{})
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt64(tx, []byte{db.KEY_BALANCE}, false, func(key []byte, value int64) (bool, error) {
+		return coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceBalance), false, func(key []byte, value int64) (bool, error) {
 			if value == 0 {
 				return true, nil
 			}

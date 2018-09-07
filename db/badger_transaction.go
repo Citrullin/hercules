@@ -46,10 +46,6 @@ func (bt *BadgerTransaction) Remove(key []byte) error {
 	return err
 }
 
-func (bt *BadgerTransaction) RemoveKeyCategory(keyCategory byte) error {
-	return bt.RemovePrefix([]byte{keyCategory})
-}
-
 func (bt *BadgerTransaction) RemovePrefix(prefix []byte) error {
 	keys := [][]byte{}
 	bt.ForPrefix(prefix, false, func(itemKey, _ []byte) (bool, error) {
@@ -66,10 +62,6 @@ func (bt *BadgerTransaction) RemovePrefix(prefix []byte) error {
 	}
 
 	return nil
-}
-
-func (bt *BadgerTransaction) CountKeyCategory(keyCategory byte) int {
-	return bt.CountPrefix([]byte{keyCategory})
 }
 
 func (bt *BadgerTransaction) CountPrefix(prefix []byte) int {

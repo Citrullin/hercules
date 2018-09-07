@@ -9,6 +9,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 )
 
 func init() {
@@ -29,21 +30,21 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 			ReplyError("Wrong bundle trytes", c)
 			return
 		}
-		hashes = append(hashes, find(convert.TrytesToBytes(bundle)[:49], db.KEY_BUNDLE)...)
+		hashes = append(hashes, find(convert.TrytesToBytes(bundle)[:49], ns.NamespaceBundle)...)
 	}
 	for _, approvee := range request.Approvees {
 		if !convert.IsTrytes(approvee, 81) {
 			ReplyError("Wrong approvee trytes", c)
 			return
 		}
-		hashes = append(hashes, find(convert.TrytesToBytes(approvee)[:49], db.KEY_APPROVEE)...)
+		hashes = append(hashes, find(convert.TrytesToBytes(approvee)[:49], ns.NamespaceApprovee)...)
 	}
 	for _, tag := range request.Tags {
 		if !convert.IsTrytes(tag, 81) {
 			ReplyError("Wrong tag trytes", c)
 			return
 		}
-		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], db.KEY_TAG)...)
+		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], ns.NamespaceTag)...)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   hashes,
@@ -52,10 +53,10 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 }
 
 func findAddresses(trits []byte, single bool) []string {
-	hashes := find(trits, db.KEY_ADDRESS)
+	hashes := find(trits, ns.NamespaceAddress)
 	if single && len(hashes) == 0 {
 		// Workaround for IOTA wallet support. Fake transactions for positive addresses:
-		balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey(trits, db.KEY_BALANCE))
+		balance, err := coding.GetInt64(db.Singleton, ns.AddressKey(trits, ns.NamespaceBalance))
 		if err == nil && balance > 0 {
 			return []string{dummyHash}
 		}
@@ -66,9 +67,9 @@ func findAddresses(trits []byte, single bool) []string {
 func find(trits []byte, prefix byte) []string {
 	var response = []string{}
 	db.Singleton.View(func(tx db.Transaction) error {
-		prefix := db.GetByteKey(trits, prefix)
+		prefix := ns.HashKey(trits, prefix)
 		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
-			key = db.AsKey(key[16:], db.KEY_HASH)
+			key = ns.Key(key[16:], ns.NamespaceHash)
 			hash, err := coding.GetBytes(tx, key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])

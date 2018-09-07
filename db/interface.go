@@ -3,8 +3,6 @@ package db
 import (
 	"fmt"
 
-	"./coding"
-
 	"github.com/spf13/viper"
 )
 
@@ -20,11 +18,11 @@ func RegisterImplementation(name string, constructor Constructor) {
 type Constructor func(*viper.Viper) (Interface, error)
 
 type Manipulator interface {
-	coding.PutGetRemover
+	GetBytes([]byte) ([]byte, error)
+	PutBytes([]byte, []byte) error
 	HasKey([]byte) bool
+	Remove([]byte) error
 	RemovePrefix([]byte) error
-	RemoveKeyCategory(byte) error
-	CountKeyCategory(byte) int
 	CountPrefix([]byte) int
 	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
 }

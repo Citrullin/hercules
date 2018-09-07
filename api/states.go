@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"../convert"
 	"../db"
-	"github.com/gin-gonic/gin"
+	"../db/ns"
 )
 
 func init() {
@@ -22,7 +24,7 @@ func getInclusionStates(request Request, c *gin.Context, t time.Time) {
 				ReplyError("Wrong hash trytes", c)
 				return nil
 			}
-			states = append(states, tx.HasKey(db.GetByteKey(convert.TrytesToBytes(hash)[:49], db.KEY_CONFIRMED)))
+			states = append(states, tx.HasKey(ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceConfirmed)))
 		}
 		return nil
 	})
@@ -40,7 +42,7 @@ func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
 				ReplyError("Wrong hash trytes", c)
 				return nil
 			}
-			states = append(states, tx.HasKey(db.GetAddressKey(convert.TrytesToBytes(hash)[:49], db.KEY_SPENT)))
+			states = append(states, tx.HasKey(ns.AddressKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceSpent)))
 		}
 		return nil
 	})

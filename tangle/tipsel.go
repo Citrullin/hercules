@@ -10,6 +10,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../transaction"
 )
@@ -45,7 +46,7 @@ var transactions = make(map[string]*transaction.FastTX)
 
 func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
-		key := db.GetByteKey(reference, db.KEY_HASH)
+		key := ns.HashKey(reference, ns.NamespaceHash)
 		if db.Singleton.HasKey(key) {
 			return key
 		}
@@ -66,8 +67,8 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 	tKey := string(reference)
 	tx, ok := transactions[tKey]
 	if !ok {
-		txBytes, err := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_BYTES))
-		hash, err2 := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_HASH))
+		txBytes, err := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceBytes))
+		hash, err2 := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceHash))
 		if err != nil || err2 != nil {
 			graph.Valid = false
 			return graph
@@ -112,8 +113,8 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 func findApprovees(key []byte) [][]byte {
 	var response [][]byte
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_APPROVEE}, false, func(key, _ []byte) (bool, error) {
-			response = append(response, db.AsKey(key[16:], db.KEY_HASH))
+		return ns.ForNamespace(tx, ns.NamespaceApprovee, false, func(key, _ []byte) (bool, error) {
+			response = append(response, ns.Key(key[16:], ns.NamespaceHash))
 			return true, nil
 		})
 	})
@@ -129,12 +130,12 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if currentDepth > maxDepth {
 		return false
 	}
-	if db.Singleton.HasKey(db.AsKey(reference, db.KEY_CONFIRMED)) || db.Singleton.HasKey(db.AsKey(reference, db.KEY_GTTA)) {
+	if db.Singleton.HasKey(ns.Key(reference, ns.NamespaceConfirmed)) || db.Singleton.HasKey(ns.Key(reference, ns.NamespaceGTTA)) {
 		seen[key] = true
 		return true
 	}
 	/*/
-	timestamp, err := db.GetInt64(db.AsKey(reference, db.KEY_TIMESTAMP), nil)
+	timestamp, err := db.GetInt64(ns.Key(reference, ns.NamespaceTimestamp), nil)
 	if err != nil || (timestamp > 0 && time.Now().Sub(time.Unix(timestamp, 0)) > MaxTipAge)     {
 		seen[key] = false
 		return false
@@ -143,8 +144,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 
 	tx, ok := transactions[key]
 	if !ok {
-		txBytes, err := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_BYTES))
-		hash, err2 := db.Singleton.GetBytes(db.AsKey(reference, db.KEY_HASH))
+		txBytes, err := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceBytes))
+		hash, err2 := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceHash))
 		if err != nil || err2 != nil {
 			return false
 		}
@@ -167,8 +168,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 		seen[key] = false
 		return false
 	}
-	trunkOk := hasConfirmedParent(db.GetByteKey(tx.TrunkTransaction, db.KEY_HASH), maxDepth, currentDepth+1, seen, transactions)
-	branchOk := hasConfirmedParent(db.GetByteKey(tx.BranchTransaction, db.KEY_HASH), maxDepth, currentDepth+1, seen, transactions)
+	trunkOk := hasConfirmedParent(ns.HashKey(tx.TrunkTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions)
+	branchOk := hasConfirmedParent(ns.HashKey(tx.BranchTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions)
 	ok = trunkOk && branchOk
 	seen[key] = ok
 	return ok
@@ -248,8 +249,8 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 }
 
 func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
-	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (db.Singleton.HasKey(db.AsKey(rating.Graph.Key, db.KEY_CONFIRMED)) ||
-		db.Singleton.HasKey(db.AsKey(rating.Graph.Key, db.KEY_GTTA)) ||
+	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (db.Singleton.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceConfirmed)) ||
+		db.Singleton.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceGTTA)) ||
 		isConsistent([]*GraphRating{rating}, ledgerState, transactions))
 }
 
@@ -273,7 +274,7 @@ func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, tran
 		if value < 0 {
 			_, ok := ledgerState[addrString]
 			if !ok {
-				balance, err := coding.GetInt64(db.Singleton, db.GetAddressKey([]byte(addrString), db.KEY_BALANCE))
+				balance, err := coding.GetInt64(db.Singleton, ns.AddressKey([]byte(addrString), ns.NamespaceBalance))
 				if err != nil {
 					balance = 0
 				}
@@ -358,7 +359,7 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 			if len(results) >= 2 {
 				var answer [][]byte
 				for _, r := range results {
-					coding.PutInt64(db.Singleton, db.AsKey(r.Graph.Key, db.KEY_GTTA), time.Now().Unix())
+					coding.PutInt64(db.Singleton, ns.Key(r.Graph.Key, ns.NamespaceGTTA), time.Now().Unix())
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
 						return answer

@@ -6,6 +6,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../transaction"
 )
@@ -17,8 +18,8 @@ func trimTXRunner() {
 	}
 	logs.Log.Debug("Loading trimmable TXs", len(edgeTransactions))
 	db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_EVENT_TRIM_PENDING}, false, func(key, _ []byte) (bool, error) {
-			hashKey := db.AsKey(key, db.KEY_HASH)
+		ns.ForNamespace(tx, ns.NamespaceEventTrimPending, false, func(key, _ []byte) (bool, error) {
+			hashKey := ns.Key(key, ns.NamespaceHash)
 			edgeTransactions <- &hashKey
 			return true, nil
 		})
@@ -46,11 +47,11 @@ func trimData(timestamp int64) error {
 	var found = 0
 
 	err := db.Singleton.View(func(tx db.Transaction) error {
-		err := coding.ForPrefixInt64(tx, []byte{db.KEY_TIMESTAMP}, false, func(k []byte, txTimestamp int64) (bool, error) {
+		err := coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTimestamp), false, func(k []byte, txTimestamp int64) (bool, error) {
 			// TODO: since the milestone timestamps are often zero, it might be a good idea to keep them..?
 			// Theoretically, they are not needed any longer. :-/
 			if txTimestamp <= timestamp {
-				key := db.AsKey(k, db.KEY_EVENT_TRIM_PENDING)
+				key := ns.Key(k, ns.NamespaceEventTrimPending)
 				if !tx.HasKey(key) {
 					txs = append(txs, key)
 					found++
@@ -82,7 +83,7 @@ func trimData(timestamp int64) error {
 				return err
 			}
 		}
-		hashKey := db.AsKey(k, db.KEY_HASH)
+		hashKey := ns.Key(k, ns.NamespaceHash)
 		edgeTransactions <- &hashKey
 	}
 	_ = tx.Commit()
@@ -91,7 +92,7 @@ func trimData(timestamp int64) error {
 }
 
 func trimTX(hashKey []byte) error {
-	key := db.AsKey(hashKey, db.KEY_BYTES)
+	key := ns.Key(hashKey, ns.NamespaceBytes)
 	tBytes, err := db.Singleton.GetBytes(key)
 	var t *transaction.FastTX
 	if err == nil {
@@ -101,23 +102,23 @@ func trimTX(hashKey []byte) error {
 	//logs.Log.Debug("TRIMMING", hashKey)
 	return db.Singleton.Update(func(tx db.Transaction) error {
 		tx.Remove(hashKey)
-		tx.Remove(db.AsKey(hashKey, db.KEY_EVENT_TRIM_PENDING))
-		tx.Remove(db.AsKey(hashKey, db.KEY_EVENT_CONFIRMATION_PENDING))
-		tx.Remove(db.AsKey(hashKey, db.KEY_TIMESTAMP))
-		tx.Remove(db.AsKey(hashKey, db.KEY_BYTES))
-		tx.Remove(db.AsKey(hashKey, db.KEY_VALUE))
-		tx.Remove(db.AsKey(hashKey, db.KEY_ADDRESS_HASH))
-		tx.Remove(db.AsKey(hashKey, db.KEY_RELATION))
-		tx.Remove(db.AsKey(hashKey, db.KEY_CONFIRMED))
-		tx.Remove(db.AsKey(hashKey, db.KEY_MILESTONE))
-		tx.Remove(db.AsKey(hashKey, db.KEY_RELATION))
-		tx.Remove(db.AsKey(hashKey, db.KEY_GTTA))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceEventTrimPending))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceEventConfirmationPending))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceTimestamp))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceBytes))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceValue))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceAddressHash))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceRelation))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceConfirmed))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceMilestone))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceRelation))
+		tx.Remove(ns.Key(hashKey, ns.NamespaceGTTA))
 		if tx != nil {
-			tx.Remove(append(db.GetByteKey(t.TrunkTransaction, db.KEY_APPROVEE), hashKey...))
-			tx.Remove(append(db.GetByteKey(t.BranchTransaction, db.KEY_APPROVEE), hashKey...))
-			tx.Remove(append(db.GetByteKey(t.Bundle, db.KEY_BUNDLE), hashKey...))
-			tx.Remove(append(db.GetByteKey(t.Tag, db.KEY_TAG), hashKey...))
-			tx.Remove(append(db.GetByteKey(t.Address, db.KEY_ADDRESS), hashKey...))
+			tx.Remove(append(ns.HashKey(t.TrunkTransaction, ns.NamespaceApprovee), hashKey...))
+			tx.Remove(append(ns.HashKey(t.BranchTransaction, ns.NamespaceApprovee), hashKey...))
+			tx.Remove(append(ns.HashKey(t.Bundle, ns.NamespaceBundle), hashKey...))
+			tx.Remove(append(ns.HashKey(t.Tag, ns.NamespaceTag), hashKey...))
+			tx.Remove(append(ns.HashKey(t.Address, ns.NamespaceAddress), hashKey...))
 		}
 		return nil
 	})
