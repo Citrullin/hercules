@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var dbWaitGroup = &sync.WaitGroup{}
-
 func init() {
 	RegisterImplementation("badger", NewBadger)
 }
@@ -22,6 +20,7 @@ type Badger struct {
 	db            *badger.DB
 	dbLock        *sync.Mutex
 	cleanUpTicker *time.Ticker
+	waitGroup     sync.WaitGroup
 }
 
 func NewBadger(config *viper.Viper) (Interface, error) {
@@ -82,8 +81,8 @@ func (b *Badger) PutBytes(key, value []byte) error {
 }
 
 func (b *Badger) GetBytes(key []byte) ([]byte, error) {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -92,8 +91,8 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 }
 
 func (b *Badger) HasKey(key []byte) bool {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -114,8 +113,8 @@ func (b *Badger) RemovePrefix(prefix []byte) error {
 }
 
 func (b *Badger) CountPrefix(prefix []byte) int {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -124,8 +123,8 @@ func (b *Badger) CountPrefix(prefix []byte) int {
 }
 
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -138,8 +137,8 @@ func (b *Badger) NewTransaction(update bool) Transaction {
 }
 
 func (b *Badger) Update(fn func(Transaction) error) error {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	return b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -147,8 +146,8 @@ func (b *Badger) Update(fn func(Transaction) error) error {
 }
 
 func (b *Badger) View(fn func(Transaction) error) error {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
+	b.waitGroup.Add(1)
+	defer b.waitGroup.Add(-1)
 
 	return b.db.View(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -174,5 +173,5 @@ func (b *Badger) cleanUp() {
 }
 
 func (b *Badger) End() {
-	dbWaitGroup.Wait()
+	b.waitGroup.Wait()
 }
