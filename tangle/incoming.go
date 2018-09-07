@@ -112,7 +112,6 @@ func processIncomingTX(incoming IncomingTX) error {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			tx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
 			tx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
-			tx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending)) // TODO
 			err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEdge), snapTime)
 			_checkIncomingError(t, err)
 			parentKey, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceEventMilestonePairPending))
@@ -120,6 +119,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				err = tx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
 				_checkIncomingError(t, err)
 			}
+			tx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 		}
 
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
