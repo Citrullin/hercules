@@ -67,7 +67,7 @@ func Start() {
 		if err == nil {
 			caseInsensitiveCommand := strings.ToLower(request.Command)
 			if triesToAccessLimited(caseInsensitiveCommand, c) {
-				logs.Log.Warningf("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
+				logs.Log.Infof("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
 				ReplyError("Limited remote command access", c)
 				return
 			}
