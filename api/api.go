@@ -148,18 +148,6 @@ func getDuration(t time.Time) int32 {
 	return int32(time.Now().Sub(t).Nanoseconds() / int64(time.Millisecond))
 }
 
-func configureLimitAccess() {
-	localLimitAccess := config.AppConfig.GetStringSlice("api.limitRemoteAccess")
-
-	if len(localLimitAccess) > 0 {
-		for _, limitAccessEntry := range localLimitAccess {
-			limitAccess = append(limitAccess, strings.ToLower(limitAccessEntry))
-		}
-
-		logs.Log.Debug("Limited remote access to:", localLimitAccess)
-	}
-}
-
 type APIImplementation func(request Request, c *gin.Context, t time.Time)
 
 func createAPIEndpoint(endpointPath string, endpointImplementation map[string]APIImplementation) {
@@ -195,6 +183,18 @@ func createAPIEndpoint(endpointPath string, endpointImplementation map[string]AP
 func addAPICall(apiCall string, implementation APIImplementation, implementations map[string]APIImplementation) {
 	caseInsensitiveAPICall := strings.ToLower(apiCall)
 	implementations[caseInsensitiveAPICall] = implementation
+}
+
+func configureLimitAccess() {
+	localLimitAccess := config.AppConfig.GetStringSlice("api.limitRemoteAccess")
+
+	if len(localLimitAccess) > 0 {
+		for _, limitAccessEntry := range localLimitAccess {
+			limitAccess = append(limitAccess, strings.ToLower(limitAccessEntry))
+		}
+
+		logs.Log.Debug("Limited remote access to:", localLimitAccess)
+	}
 }
 
 func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
