@@ -85,8 +85,8 @@ func Start(cfg *viper.Viper) {
 
 	lowEndDevice = config.GetBool("light")
 
-	totalTransactions = int64(db.Singleton.CountKeyCategory(ns.NamespaceHash))
-	totalConfirmations = int64(db.Singleton.CountKeyCategory(ns.NamespaceConfirmed))
+	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
+	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))
 
 	// reapplyConfirmed()
 	fingerprintsOnLoad()
@@ -136,8 +136,8 @@ func cleanup() {
 func checkConsistency(skipRequests bool, skipConfirmations bool) {
 	logs.Log.Info("Checking database consistency")
 	if !skipRequests {
-		db.Singleton.RemoveKeyCategory(ns.NamespacePendingHash)
-		db.Singleton.RemoveKeyCategory(ns.NamespacePendingTimestamp)
+		ns.Remove(db.Singleton, ns.NamespacePendingHash)
+		ns.Remove(db.Singleton, ns.NamespacePendingTimestamp)
 	}
 	db.Singleton.View(func(tx db.Transaction) (e error) {
 		x := 0

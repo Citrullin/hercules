@@ -23,8 +23,6 @@ type Manipulator interface {
 	HasKey([]byte) bool
 	Remove([]byte) error
 	RemovePrefix([]byte) error
-	RemoveKeyCategory(byte) error
-	CountKeyCategory(byte) int
 	CountPrefix([]byte) int
 	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
 }

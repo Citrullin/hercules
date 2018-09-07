@@ -38,9 +38,9 @@ Returns whether the current tangle is synchronized
 */
 // TODO: this check is too slow on bigger databases. The counters should be moved to memory.
 func IsSynchronized() bool {
-	return db.Singleton.CountKeyCategory(ns.NamespacePendingConfirmed) < 10 &&
-		db.Singleton.CountKeyCategory(ns.NamespaceEventConfirmationPending) < 10 &&
-		db.Singleton.CountKeyCategory(ns.NamespaceEventMilestonePending) < 5
+	return ns.Count(db.Singleton, ns.NamespacePendingConfirmed) < 10 &&
+		ns.Count(db.Singleton, ns.NamespaceEventConfirmationPending) < 10 &&
+		ns.Count(db.Singleton, ns.NamespaceEventMilestonePending) < 5
 }
 
 /*

@@ -97,8 +97,11 @@ func loadIRISnapshotValues(valuesPath string) error {
 	}
 	defer f.Close()
 
-	err = db.Singleton.RemoveKeyCategory(ns.NamespaceBalance)
-	err = db.Singleton.RemoveKeyCategory(ns.NamespaceSnapshotBalance)
+	err = ns.Remove(db.Singleton, ns.NamespaceBalance)
+	if err != nil {
+		return err
+	}
+	err = ns.Remove(db.Singleton, ns.NamespaceSnapshotBalance)
 	if err != nil {
 		return err
 	}

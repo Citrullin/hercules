@@ -112,8 +112,11 @@ func doLoadSnapshot(path string, timestamp int64) error {
 	}
 	defer f.Close()
 
-	err = db.Singleton.RemoveKeyCategory(ns.NamespaceBalance)
-	err = db.Singleton.RemoveKeyCategory(ns.NamespaceSnapshotBalance)
+	err = ns.Remove(db.Singleton, ns.NamespaceBalance)
+	if err != nil {
+		return err
+	}
+	err = ns.Remove(db.Singleton, ns.NamespaceSnapshotBalance)
 	if err != nil {
 		return err
 	}

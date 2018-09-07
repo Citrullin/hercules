@@ -182,7 +182,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 			if err != nil {
 				return err
 			}
-			tx.RemoveKeyCategory(ns.NamespaceEdge)
+			ns.Remove(tx, ns.NamespaceEdge)
 			path := config.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil {
