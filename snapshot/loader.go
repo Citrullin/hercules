@@ -19,7 +19,7 @@ import (
 func LoadSnapshot(path string) error {
 	logs.Log.Info("Loading snapshot from", path)
 	if CurrentTimestamp > 0 {
-		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
+		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
 	timestamp, err := checkSnapshotFile(path)

@@ -17,7 +17,7 @@ import (
 func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error {
 	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer", valuesPath)
 	if CurrentTimestamp > 0 {
-		logs.Log.Warning("It seems that the the tangle database already exists. Skipping snapshot load from file.")
+		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
 	db.Singleton.Lock()
