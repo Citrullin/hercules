@@ -38,7 +38,7 @@
     }
   },
   "log": {
-    "hello": true,
+    "hello": false,
     "level": "INFO",
     "useRollingLogFile" : false,
     "logFile": "hercules.log",
