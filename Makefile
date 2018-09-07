@@ -16,6 +16,9 @@ $(config_path): $(name).config.json
 	mkdir -p `dirname $(config_path)`
 	cp $< $(config_path)
 
+test:
+	$(GO) test -v ./...
+
 run: $(binary_path) $(config_path)
 	mkdir -p $(target_path)/data
 	cd $(target_path) && bin/$(name) -c etc/$(name).config.json
