@@ -141,7 +141,7 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 	}
 	db.Singleton.View(func(tx db.Transaction) (e error) {
 		x := 0
-		return tx.ForPrefix([]byte{ns.NamespaceHash}, true, func(key, value []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
 			relKey := ns.Key(key, ns.NamespaceRelation)
 			relation, _ := coding.GetBytes(tx, relKey)
 

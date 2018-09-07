@@ -66,7 +66,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		Lock(timestamp, "", tx)
 
 		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
-		err := coding.ForPrefixInt64(tx, []byte{ns.NamespaceTimestamp}, false, func(k []byte, txTimestamp int64) (bool, error) {
+		err := coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTimestamp), false, func(k []byte, txTimestamp int64) (bool, error) {
 			if txTimestamp > timestamp {
 				return true, nil
 			}

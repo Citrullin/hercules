@@ -5,5 +5,5 @@ type Remover interface {
 }
 
 func Remove(r Remover, namespace byte) error {
-	return r.RemovePrefix([]byte{namespace})
+	return r.RemovePrefix(Prefix(namespace))
 }

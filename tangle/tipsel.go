@@ -113,7 +113,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 func findApprovees(key []byte) [][]byte {
 	var response [][]byte
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{ns.NamespaceApprovee}, false, func(key, _ []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespaceApprovee, false, func(key, _ []byte) (bool, error) {
 			response = append(response, ns.Key(key[16:], ns.NamespaceHash))
 			return true, nil
 		})

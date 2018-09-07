@@ -26,3 +26,15 @@ func (s *storage) RemovePrefix(prefix []byte) error {
 	}
 	return nil
 }
+
+func (s *storage) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
+	if bytes.HasPrefix(s.key, prefix) {
+		if fetchValues {
+			_, err := fn(s.key, s.value)
+			return err
+		}
+		_, err := fn(s.key, nil)
+		return err
+	}
+	return nil
+}

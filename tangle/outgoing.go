@@ -69,7 +69,7 @@ func loadPendingRequests() {
 	added := 0
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{ns.NamespacePendingHash}, true, func(key, hash []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespacePendingHash, true, func(key, hash []byte) (bool, error) {
 			total++
 
 			timestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespacePendingTimestamp))
@@ -381,7 +381,7 @@ func cleanupStalledRequests() {
 	var requestsToRemove []string
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt(tx, []byte{ns.NamespacePendingRequests}, true, func(key []byte, times int) (bool, error) {
+		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespacePendingRequests), true, func(key []byte, times int) (bool, error) {
 			if times > maxTimesRequest {
 				keysToRemove = append(keysToRemove, ns.Key(key, ns.NamespacePendingRequests))
 			}

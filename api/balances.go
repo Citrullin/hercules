@@ -52,7 +52,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 func listAllAccounts(request Request, c *gin.Context, t time.Time) {
 	var accounts = make(map[string]interface{})
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt64(tx, []byte{ns.NamespaceBalance}, false, func(key []byte, value int64) (bool, error) {
+		return coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceBalance), false, func(key []byte, value int64) (bool, error) {
 			if value == 0 {
 				return true, nil
 			}

@@ -41,7 +41,7 @@ func confirmOnLoad() {
 
 func loadPendingConfirmations() {
 	db.Singleton.View(func(tx db.Transaction) error {
-		coding.ForPrefixInt64(tx, []byte{ns.NamespaceEventConfirmationPending}, true, func(key []byte, timestamp int64) (bool, error) {
+		coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceEventConfirmationPending), true, func(key []byte, timestamp int64) (bool, error) {
 			confirmQueue <- &PendingConfirmation{
 				ns.Key(key, ns.NamespaceEventConfirmationPending),
 				timestamp,
@@ -83,7 +83,7 @@ func startUnknownVerificationThread() {
 	for range removeOrphanedPendingTicker.C {
 		db.Singleton.View(func(tx db.Transaction) error {
 			var toRemove [][]byte
-			tx.ForPrefix([]byte{ns.NamespacePendingConfirmed}, false, func(key, _ []byte) (bool, error) {
+			ns.ForNamespace(tx, ns.NamespacePendingConfirmed, false, func(key, _ []byte) (bool, error) {
 				if tx.HasKey(ns.Key(key, ns.NamespaceHash)) {
 					k := make([]byte, len(key))
 					copy(k, key)
@@ -239,7 +239,7 @@ func reapplyConfirmed() {
 	logs.Log.Debug("Reapplying confirmed TXs to balances")
 	db.Singleton.View(func(tx db.Transaction) error {
 		x := 0
-		return tx.ForPrefix([]byte{ns.NamespaceConfirmed}, false, func(key, _ []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespaceConfirmed, false, func(key, _ []byte) (bool, error) {
 			txBytes, _ := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
 			trits := convert.BytesToTrits(txBytes)[:8019]
 			t := transaction.TritsToFastTX(&trits, txBytes)

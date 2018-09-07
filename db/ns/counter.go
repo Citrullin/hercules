@@ -5,5 +5,5 @@ type Counter interface {
 }
 
 func Count(c Counter, namespace byte) int {
-	return c.CountPrefix([]byte{namespace})
+	return c.CountPrefix(Prefix(namespace))
 }

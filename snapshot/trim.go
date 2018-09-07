@@ -18,7 +18,7 @@ func trimTXRunner() {
 	}
 	logs.Log.Debug("Loading trimmable TXs", len(edgeTransactions))
 	db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{ns.NamespaceEventTrimPending}, false, func(key, _ []byte) (bool, error) {
+		ns.ForNamespace(tx, ns.NamespaceEventTrimPending, false, func(key, _ []byte) (bool, error) {
 			hashKey := ns.Key(key, ns.NamespaceHash)
 			edgeTransactions <- &hashKey
 			return true, nil
@@ -47,7 +47,7 @@ func trimData(timestamp int64) error {
 	var found = 0
 
 	err := db.Singleton.View(func(tx db.Transaction) error {
-		err := coding.ForPrefixInt64(tx, []byte{ns.NamespaceTimestamp}, false, func(k []byte, txTimestamp int64) (bool, error) {
+		err := coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTimestamp), false, func(k []byte, txTimestamp int64) (bool, error) {
 			// TODO: since the milestone timestamps are often zero, it might be a good idea to keep them..?
 			// Theoretically, they are not needed any longer. :-/
 			if txTimestamp <= timestamp {

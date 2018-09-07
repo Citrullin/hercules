@@ -118,7 +118,7 @@ func loadLatestMilestone() {
 		latest := 0
 		LatestMilestone = Milestone{tipFastTX, latest}
 
-		return coding.ForPrefixInt(tx, []byte{ns.NamespaceMilestone}, true, func(key []byte, ms int) (bool, error) {
+		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, ms int) (bool, error) {
 			if ms <= latest {
 				return true, nil
 			}
@@ -179,7 +179,7 @@ func startMilestoneChecker() {
 	db.Singleton.Unlock()
 	var pairs []PendingMilestone
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{ns.NamespaceEventMilestonePending}, true, func(key, value []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespaceEventMilestonePending, true, func(key, value []byte) (bool, error) {
 			k := make([]byte, len(key))
 			v := make([]byte, len(value))
 			copy(k, key)
@@ -378,7 +378,7 @@ func GetMilestoneKeyByIndex(index int, acceptNearest bool) []byte {
 	currentIndex := LatestMilestone.Index + 1
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt(tx, []byte{ns.NamespaceMilestone}, true, func(key []byte, ms int) (bool, error) {
+		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, ms int) (bool, error) {
 			if ms == index {
 				milestoneKey = ns.Key(key, ns.NamespaceHash)
 				return false, nil
