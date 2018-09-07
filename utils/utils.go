@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
-var rng *rand.Rand
-var randLock = &sync.Mutex{}
+var (
+	randLock = &sync.Mutex{}
+	rng      *rand.Rand
+)
 
 func init() {
 	rng = rand.New(rand.NewSource(time.Now().UnixNano()))

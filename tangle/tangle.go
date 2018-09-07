@@ -31,25 +31,6 @@ const (
 	TX_TRITS_LENGTH    = 8019
 )
 
-type Message struct {
-	Bytes     *[]byte
-	Requested *[]byte
-	Neighbor  *server.Neighbor
-}
-
-type Request struct {
-	Requested []byte
-	Tip       bool
-}
-
-type IncomingTX struct {
-	TX       *transaction.FastTX
-	Neighbor *server.Neighbor
-	Bytes    *[]byte
-}
-
-type RequestQueue chan *Request
-
 var (
 	// "constants"
 	nbWorkers  = runtime.NumCPU()
@@ -73,6 +54,25 @@ var (
 	discarded                  = 0
 	outgoing                   = 0
 )
+
+type Message struct {
+	Bytes     *[]byte
+	Requested *[]byte
+	Neighbor  *server.Neighbor
+}
+
+type Request struct {
+	Requested []byte
+	Tip       bool
+}
+
+type IncomingTX struct {
+	TX       *transaction.FastTX
+	Neighbor *server.Neighbor
+	Bytes    *[]byte
+}
+
+type RequestQueue chan *Request
 
 func Start() {
 	srv = server.GetServer()

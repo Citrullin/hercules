@@ -20,6 +20,21 @@ const (
 	TCP                     = "tcp"
 )
 
+var (
+	incTxPerSec           uint64
+	outTxPerSec           uint64
+	totalIncTx            uint64
+	nbWorkers             = runtime.NumCPU()
+	reportTicker          *time.Ticker
+	hostnameRefreshTicker *time.Ticker
+	NeighborTrackingQueue neighborTrackingQueue
+	server                *Server
+	Neighbors             map[string]*Neighbor
+	NeighborsLock         = &sync.RWMutex{}
+	connection            net.PacketConn
+	ended                 = false
+)
+
 type Message struct {
 	Neighbor *Neighbor
 	Msg      []byte
@@ -34,19 +49,6 @@ type NeighborTrackingMessage struct {
 
 type messageQueue chan *Message
 type neighborTrackingQueue chan *NeighborTrackingMessage
-
-var incTxPerSec uint64
-var outTxPerSec uint64
-var totalIncTx uint64
-var nbWorkers = runtime.NumCPU()
-var reportTicker *time.Ticker
-var hostnameRefreshTicker *time.Ticker
-var NeighborTrackingQueue neighborTrackingQueue
-var server *Server
-var Neighbors map[string]*Neighbor
-var NeighborsLock = &sync.RWMutex{}
-var connection net.PacketConn
-var ended = false
 
 type Server struct {
 	Incoming messageQueue

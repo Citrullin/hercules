@@ -4,27 +4,29 @@ import (
 	"strings"
 	"testing"
 
+	"../config"
 	"../logs"
-
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-var expectedConnectionType = "udp"
-var expectedIdentifier = "77.55.235.204"
-var expectedHostname = "field.deviota.com"
-var expectedPort = "443"
-var invalidConnectionType = "tcp"
+var (
+	expectedConnectionType = "udp"
+	expectedIdentifier     = "77.55.235.204"
+	expectedHostname       = "field.deviota.com"
+	expectedPort           = "443"
+	invalidConnectionType  = "tcp"
 
-var addresses = []string{
-	expectedIdentifier + ":" + expectedPort,
-	expectedIdentifier,
+	addresses = []string{
+		expectedIdentifier + ":" + expectedPort,
+		expectedIdentifier,
 
-	expectedConnectionType + "://" + expectedIdentifier,
-	expectedConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
+		expectedConnectionType + "://" + expectedIdentifier,
+		expectedConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
 
-	invalidConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
-}
+		invalidConnectionType + "://" + expectedIdentifier + ":" + expectedPort,
+	}
+)
 
 func TestGetConnectionTypeAndIdentifierAndPort(t *testing.T) {
 	restartConfig()
@@ -42,7 +44,7 @@ func TestGetConnectionTypeAndIdentifierAndPort(t *testing.T) {
 					t.Error("An invalid port was returned!")
 				}
 			} else {
-				if port != config.GetString("node.port") {
+				if port != config.AppConfig.GetString("node.port") {
 					t.Error("An invalid port was returned!")
 				}
 			}
@@ -76,7 +78,7 @@ func TestAddNeighbor(t *testing.T) {
 						t.Errorf("Add neighbor %v does not match with loaded %v", neighbor.Addr, addr)
 					}
 				} else {
-					configPort := config.GetString("node.port")
+					configPort := config.AppConfig.GetString("node.port")
 					addressWithConfigPort := addr + ":" + configPort
 					if neighbor.Addr != addressWithConfigPort {
 						t.Errorf("Add neighbor %v does not match with loaded %v", neighbor.Addr, addressWithConfigPort)
@@ -196,8 +198,8 @@ func TestGetIpAndHostname(t *testing.T) {
 }
 
 func restartConfig() {
-	config = viper.New()
+	config.AppConfig = viper.New()
 	flag.IntP("node.port", "u", 14600, "UDP Node port")
 	flag.Parse()
-	config.BindPFlags(flag.CommandLine)
+	config.AppConfig.BindPFlags(flag.CommandLine)
 }

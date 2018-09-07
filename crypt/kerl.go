@@ -8,11 +8,15 @@ import (
 	"github.com/tonnerre/golang-go.crypto/sha3"
 )
 
-const BIT_HASH_LENGTH = 384
-const BYTE_HASH_LENGTH = BIT_HASH_LENGTH / 8
+const (
+	BIT_HASH_LENGTH  = 384
+	BYTE_HASH_LENGTH = BIT_HASH_LENGTH / 8
+)
 
-var one = big.NewInt(1)
-var minusOne = big.NewInt(-1)
+var (
+	one      = big.NewInt(1)
+	minusOne = big.NewInt(-1)
+)
 
 type Kerl struct {
 	Hash

@@ -4,7 +4,9 @@ import (
 	"bytes"
 )
 
-var testKey = []byte("test")
+var (
+	testKey = []byte("test")
+)
 
 type storage struct {
 	key   []byte

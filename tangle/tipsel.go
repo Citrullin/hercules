@@ -25,6 +25,12 @@ const (
 	maxTipSearchRetries = 15
 )
 
+var (
+	gTTALock     = &sync.Mutex{}
+	txCache      = make(map[string]time.Time)
+	transactions = make(map[string]*transaction.FastTX)
+)
+
 // 1. Get reference: either one provided or latest milestone - 15 milestones back
 
 type GraphNode struct {
@@ -39,10 +45,6 @@ type GraphRating struct {
 	Rating int
 	Graph  *GraphNode
 }
-
-var gTTALock = &sync.Mutex{}
-var txCache = make(map[string]time.Time)
-var transactions = make(map[string]*transaction.FastTX)
 
 func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
