@@ -14,8 +14,8 @@ import (
 )
 
 func init() {
-	addAPICall("getBalances", getBalances)
-	addAPICall("listAllAccounts", listAllAccounts)
+	addAPICall("getBalances", getBalances, mainAPICalls)
+	addAPICall("listAllAccounts", listAllAccounts, mainAPICalls)
 }
 
 func getBalances(request Request, c *gin.Context, t time.Time) {
@@ -26,7 +26,7 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 	var balances = []int64{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
-			ReplyError("Wrong trytes", c)
+			replyError("Wrong trytes", c)
 			return
 		}
 		addressBytes := convert.TrytesToBytes(address)[:49]

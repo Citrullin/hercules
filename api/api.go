@@ -31,15 +31,13 @@ type Request struct {
 	MinWeightMagnitude int
 }
 
-var api *gin.Engine
-var srv *http.Server
-var limitAccess []string
-var authEnabled = false
-var dummyHash = strings.Repeat("9", 81)
-var apiCalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
-
-// TODO: Add attach/interrupt attaching api
-// TODO: limit requests, lists, etc.
+var (
+	api          = gin.Default()
+	dummyHash    = strings.Repeat("9", 81)
+	mainAPICalls = make(map[string]APIImplementation)
+	srv          *http.Server
+	limitAccess  []string
+)
 
 func Start() {
 
@@ -48,46 +46,14 @@ func Start() {
 	}
 
 	configureLimitAccess()
+	configureAPIUserAuthentication()
+	configureCORSMiddleware()
 
-	api = gin.Default()
-
-	username := config.AppConfig.GetString("api.auth.username")
-	password := config.AppConfig.GetString("api.auth.password")
-	if len(username) > 0 && len(password) > 0 {
-		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
-	}
-
-	api.Use(CORSMiddleware(config.AppConfig.GetBool("api.cors.setAllowOriginToAll")))
-
-	api.POST("/", func(c *gin.Context) {
-		t := time.Now()
-
-		var request Request
-		err := c.ShouldBindJSON(&request)
-		if err == nil {
-			caseInsensitiveCommand := strings.ToLower(request.Command)
-			if triesToAccessLimited(caseInsensitiveCommand, c) {
-				logs.Log.Infof("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
-				ReplyError("Limited remote command access", c)
-				return
-			}
-
-			apiCall, apiCallExists := apiCalls[caseInsensitiveCommand]
-			if apiCallExists {
-				apiCall(request, c, t)
-			} else {
-				logs.Log.Error("Unknown command", request.Command)
-				ReplyError("No known command provided", c)
-			}
-
-		} else {
-			logs.Log.Error("ERROR request", err)
-			ReplyError("Wrongly formed JSON", c)
-		}
-	})
+	createAPIEndpoint("", mainAPICalls)
 
 	if config.AppConfig.GetBool("snapshots.enableapi") {
-		enableSnapshotApi(api)
+		createAPIEndpoint("/snapshots", snapshotAPICalls)
+		enableSnapshotAPI(api)
 	}
 
 	useHTTP := config.AppConfig.GetBool("api.http.useHttp")
@@ -106,8 +72,18 @@ func Start() {
 	}
 }
 
-func CORSMiddleware(setAllowOriginToAll bool) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func configureAPIUserAuthentication() {
+	username := config.AppConfig.GetString("api.auth.username")
+	password := config.AppConfig.GetString("api.auth.password")
+	if len(username) > 0 && len(password) > 0 {
+		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
+	}
+}
+
+func configureCORSMiddleware() {
+	setAllowOriginToAll := config.AppConfig.GetBool("api.cors.setAllowOriginToAll")
+
+	corsMiddleware := func(c *gin.Context) {
 		if setAllowOriginToAll {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
@@ -122,6 +98,7 @@ func CORSMiddleware(setAllowOriginToAll bool) gin.HandlerFunc {
 
 		c.Next()
 	}
+	api.Use(corsMiddleware)
 }
 
 func serveHttps(api *gin.Engine) {
@@ -161,7 +138,7 @@ func End() {
 	}
 }
 
-func ReplyError(message string, c *gin.Context) {
+func replyError(message string, c *gin.Context) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error": message,
 	})
@@ -183,6 +160,43 @@ func configureLimitAccess() {
 	}
 }
 
+type APIImplementation func(request Request, c *gin.Context, t time.Time)
+
+func createAPIEndpoint(endpointPath string, endpointImplementation map[string]APIImplementation) {
+	api.POST(endpointPath, func(c *gin.Context) {
+		t := time.Now()
+
+		var request Request
+		err := c.ShouldBindJSON(&request)
+		if err == nil {
+			caseInsensitiveCommand := strings.ToLower(request.Command)
+			if triesToAccessLimited(caseInsensitiveCommand, c) {
+				logs.Log.Infof("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
+				replyError("Limited remote command access", c)
+				return
+			}
+
+			implementation, apiCallExists := endpointImplementation[caseInsensitiveCommand]
+			if apiCallExists {
+				implementation(request, c, t)
+			} else {
+				logs.Log.Error("Unknown command", request.Command)
+				replyError("No known command provided", c)
+			}
+
+		} else {
+			logs.Log.Error("ERROR request", err)
+			replyError("Wrongly formed JSON", c)
+		}
+	})
+
+}
+
+func addAPICall(apiCall string, implementation APIImplementation, implementations map[string]APIImplementation) {
+	caseInsensitiveAPICall := strings.ToLower(apiCall)
+	implementations[caseInsensitiveAPICall] = implementation
+}
+
 func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 	if c.Request.RemoteAddr[:9] == "127.0.0.1" {
 		return false
@@ -193,9 +207,4 @@ func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 		}
 	}
 	return false
-}
-
-func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
-	caseInsensitiveAPICall := strings.ToLower(apiCall)
-	apiCalls[caseInsensitiveAPICall] = implementation
 }

@@ -12,8 +12,8 @@ import (
 )
 
 func init() {
-	addAPICall("getInclusionStates", getInclusionStates)
-	addAPICall("wereAddressesSpentFrom", wereAddressesSpentFrom)
+	addAPICall("getInclusionStates", getInclusionStates, mainAPICalls)
+	addAPICall("wereAddressesSpentFrom", wereAddressesSpentFrom, mainAPICalls)
 }
 
 func getInclusionStates(request Request, c *gin.Context, t time.Time) {
@@ -21,7 +21,7 @@ func getInclusionStates(request Request, c *gin.Context, t time.Time) {
 	db.Singleton.View(func(tx db.Transaction) error {
 		for _, hash := range request.Transactions {
 			if !convert.IsTrytes(hash, 81) {
-				ReplyError("Wrong hash trytes", c)
+				replyError("Wrong hash trytes", c)
 				return nil
 			}
 			states = append(states, tx.HasKey(ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceConfirmed)))
@@ -39,7 +39,7 @@ func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
 	db.Singleton.View(func(tx db.Transaction) error {
 		for _, hash := range request.Addresses {
 			if !convert.IsTrytes(hash, 81) {
-				ReplyError("Wrong hash trytes", c)
+				replyError("Wrong hash trytes", c)
 				return nil
 			}
 			states = append(states, tx.HasKey(ns.AddressKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceSpent)))
