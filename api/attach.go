@@ -35,7 +35,7 @@ var powVersion string
 var serverVersion string
 
 func init() {
-	addStartModule(startAttach)
+	startAttach()
 
 	addAPICall("attachToTangle", attachToTangle)
 	addAPICall("interruptAttachingToTangle", interruptAttachingToTangle)

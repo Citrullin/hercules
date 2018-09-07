@@ -240,5 +240,5 @@ func End() {
 	connection.Close()
 	atomic.AddUint64(&totalIncTx, incTxPerSec)
 	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
-	logs.Log.Info("Neighbor server exited")
+	logs.Log.Debug("Neighbor server exited")
 }

@@ -37,7 +37,6 @@ var limitAccess []string
 var authEnabled = false
 var dummyHash = strings.Repeat("9", 81)
 var apiCalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
-var startModules []func()
 
 // TODO: Add attach/interrupt attaching api
 // TODO: limit requests, lists, etc.
@@ -49,11 +48,6 @@ func Start() {
 	}
 
 	configureLimitAccess()
-
-	// pass config to modules if they need it
-	for _, f := range startModules {
-		f()
-	}
 
 	api = gin.Default()
 
@@ -162,7 +156,7 @@ func End() {
 		if err := srv.Shutdown(ctx); err != nil {
 			logs.Log.Fatal("API Server Shutdown Error:", err)
 		}
-		logs.Log.Info("API Server exited")
+		logs.Log.Debug("API Server exited")
 		cancel()
 	}
 }
@@ -204,8 +198,4 @@ func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
 	caseInsensitiveAPICall := strings.ToLower(apiCall)
 	apiCalls[caseInsensitiveAPICall] = implementation
-}
-
-func addStartModule(implementation func()) {
-	startModules = append(startModules, implementation)
 }

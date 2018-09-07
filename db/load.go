@@ -37,5 +37,5 @@ var ended = false
 func End() {
 	ended = true
 	Singleton.End()
-	logs.Log.Info("DB exited")
+	logs.Log.Debug("DB exited")
 }
