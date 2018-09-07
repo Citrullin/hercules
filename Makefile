@@ -34,5 +34,4 @@ clean:
 
 .SILENT: download-snapshot
 download-snapshot:
-	mkdir -p `dirname $(snapshot_path)`
 	./download_snapshot.sh $(snapshot_path)
