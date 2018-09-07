@@ -217,12 +217,12 @@ func cleanupRequestQueues() {
 	}
 	RequestQueuesLock.RUnlock()
 
-	RequestQueuesLock.Lock()
 	if toRemove != nil && len(toRemove) > 0 {
+		RequestQueuesLock.Lock()
 		for _, address := range toRemove {
 			logs.Log.Debug("Removing gone neighbor queue for:", address)
 			delete(RequestQueues, address)
 		}
+		RequestQueuesLock.Unlock()
 	}
-	RequestQueuesLock.Unlock()
 }
