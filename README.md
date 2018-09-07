@@ -151,10 +151,6 @@ By default, the authentication is disabled.
 Defines if the CORS Header 'Access-Control-Allow-Origin' is set to '*'.
 By default, this option is enabled. Otherwise it is not set at all.
 
-#### --api.debug
-
-Log each request that is made to the API. Default is off
-
 #### --api.http.useHttp=false
 
 Node will NOT accept API requests using HTTP. Default is on.
@@ -205,6 +201,10 @@ Path to an configuration file in JSON format.
 #### --database.path="data"
 
 Path where the database will be stored.
+
+#### --debug
+
+Run hercules when debugging the source-code. Default is off
 
 #### --light
 

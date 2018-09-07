@@ -44,7 +44,7 @@ var startModules []func()
 
 func Start() {
 
-	if !config.AppConfig.GetBool("api.debug") {
+	if !config.AppConfig.GetBool("debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
 

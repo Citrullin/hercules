@@ -28,6 +28,8 @@ func Start() {
 	//config.SetDefault("test", 0)
 
 	// 2. Get command line arguments
+	flag.Bool("debug", false, "Run hercules when debugging the source-code")
+
 	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. Try to optimize accordingly.")
 
 	declareApiConfigs()
@@ -98,8 +100,6 @@ func Start() {
 }
 
 func declareApiConfigs() {
-	flag.Bool("api.debug", false, "Whether to log api access")
-
 	flag.String("api.auth.username", "", "API Access Username")
 	flag.String("api.auth.password", "", "API Access Password")
 

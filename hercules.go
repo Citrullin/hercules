@@ -23,7 +23,9 @@ var herculesDeathWaitGroup = &sync.WaitGroup{}
 func main() {
 	herculesDeathWaitGroup.Add(1)
 
-	defer profile.Start().Stop()
+	if config.AppConfig.GetBool("debug") {
+		defer profile.Start().Stop()
+	}
 
 	startBasicFunctionality()
 	logs.Log.Info("Starting Hercules. Please wait...")
