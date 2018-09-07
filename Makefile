@@ -1,16 +1,17 @@
 
 GO ?= go
+DOCKER ?= docker
 
 name := hercules
 target_path := target
 binary_path := $(target_path)/bin/$(name)
 config_path := $(target_path)/etc/$(name).config.json
-snapshot_path := $(target_path)/snapshots/latest
+snapshot_path := $(target_path)/latest
 
 all: $(binary_path)
 
 $(binary_path):
-	$(GO) build -v -o $(binary_path) hercules.go
+	CGO_ENABLED=0 $(GO) build -a -installsuffix cgo -ldflags="-w -s" -o $(binary_path) hercules.go
 
 $(config_path): $(name).config.json
 	mkdir -p `dirname $(config_path)`
@@ -20,8 +21,13 @@ test:
 	$(GO) test -v ./...
 
 run: $(binary_path) $(config_path)
+	rm -rf $(target_path)/data
 	mkdir -p $(target_path)/data
-	cd $(target_path) && bin/$(name) -c etc/$(name).config.json
+	mkdir -p $(target_path)/snapshots
+	cd $(target_path) && bin/$(name) -c etc/$(name).config.json --snapshots.loadFile latest.snap
+
+image: $(binary_path)
+	$(DOCKER) build -t $(name) .
 
 clean:
 	rm -f $(binary_path) $(config_path)
