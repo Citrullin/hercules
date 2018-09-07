@@ -11,6 +11,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"github.com/pkg/errors"
 )
@@ -70,12 +71,12 @@ func LoadSnapshot(path string) error {
 }
 
 func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
-	addressKey := db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE)
+	addressKey := ns.AddressKey(address, ns.NamespaceSnapshotBalance)
 	err := coding.PutInt64(tx, addressKey, value)
 	if err != nil {
 		return err
 	}
-	err = coding.PutInt64(tx, db.GetAddressKey(address, db.KEY_BALANCE), value)
+	err = coding.PutInt64(tx, ns.AddressKey(address, ns.NamespaceBalance), value)
 	if err != nil {
 		return err
 	}
@@ -83,15 +84,15 @@ func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
 }
 
 func loadSpentSnapshot(address []byte, tx db.Transaction) error {
-	// err := tx.PutBytes(db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), address)
+	// err := tx.PutBytes(ns.AddressKey(address, ns.NamespaceSnapshotSpent), address)
 	// if err != nil {
 	// 	return err
 	// }
-	err := coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true)
+	err := coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
 	if err != nil {
 		return err
 	}
-	err = coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SPENT), true)
+	err = coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSpent), true)
 	if err != nil {
 		return err
 	}
@@ -111,8 +112,11 @@ func doLoadSnapshot(path string, timestamp int64) error {
 	}
 	defer f.Close()
 
-	err = db.Singleton.RemoveKeyCategory(db.KEY_BALANCE)
-	err = db.Singleton.RemoveKeyCategory(db.KEY_SNAPSHOT_BALANCE)
+	err = ns.Remove(db.Singleton, ns.NamespaceBalance)
+	if err != nil {
+		return err
+	}
+	err = ns.Remove(db.Singleton, ns.NamespaceSnapshotBalance)
 	if err != nil {
 		return err
 	}

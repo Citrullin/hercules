@@ -6,6 +6,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../transaction"
 )
@@ -16,53 +17,53 @@ func SaveTX(t *transaction.FastTX, raw *[]byte, tx db.Transaction) (e error) {
 			e = errors.New("Failed saving TX!")
 		}
 	}()
-	key := db.GetByteKey(t.Hash, db.KEY_HASH)
-	trunkKey := db.GetByteKey(t.TrunkTransaction, db.KEY_HASH)
-	branchKey := db.GetByteKey(t.BranchTransaction, db.KEY_HASH)
+	key := ns.HashKey(t.Hash, ns.NamespaceHash)
+	trunkKey := ns.HashKey(t.TrunkTransaction, ns.NamespaceHash)
+	branchKey := ns.HashKey(t.BranchTransaction, ns.NamespaceHash)
 
 	// TODO: check which of these are still needed. Maybe just bytes can be used...
 	err := tx.PutBytes(key, t.Hash)
 	_checkSaveError(t, err)
 
-	err = coding.PutInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP), int64(t.Timestamp))
+	err = coding.PutInt64(tx, ns.Key(key, ns.NamespaceTimestamp), int64(t.Timestamp))
 	_checkSaveError(t, err)
 
-	err = tx.PutBytes(db.AsKey(key, db.KEY_BYTES), (*raw)[:1604])
+	err = tx.PutBytes(ns.Key(key, ns.NamespaceBytes), (*raw)[:1604])
 	_checkSaveError(t, err)
 
-	err = coding.PutInt64(tx, db.AsKey(key, db.KEY_VALUE), t.Value)
+	err = coding.PutInt64(tx, ns.Key(key, ns.NamespaceValue), t.Value)
 	_checkSaveError(t, err)
 
-	err = tx.PutBytes(db.AsKey(key, db.KEY_ADDRESS_HASH), t.Address)
+	err = tx.PutBytes(ns.Key(key, ns.NamespaceAddressHash), t.Address)
 	_checkSaveError(t, err)
 
 	err = coding.PutInt(tx,
-		append(db.GetByteKey(t.Bundle, db.KEY_BUNDLE), db.AsKey(key, db.KEY_HASH)...),
+		append(ns.HashKey(t.Bundle, ns.NamespaceBundle), ns.Key(key, ns.NamespaceHash)...),
 		t.CurrentIndex)
 	_checkSaveError(t, err)
 
 	err = coding.PutString(tx,
-		append(db.GetByteKey(t.Tag, db.KEY_TAG), db.AsKey(key, db.KEY_HASH)...),
+		append(ns.HashKey(t.Tag, ns.NamespaceTag), ns.Key(key, ns.NamespaceHash)...),
 		"")
 	_checkSaveError(t, err)
 
 	err = coding.PutInt64(tx,
-		append(db.GetByteKey(t.Address, db.KEY_ADDRESS), db.AsKey(key, db.KEY_HASH)...),
+		append(ns.HashKey(t.Address, ns.NamespaceAddress), ns.Key(key, ns.NamespaceHash)...),
 		t.Value)
 	_checkSaveError(t, err)
 
 	err = tx.PutBytes(
-		db.AsKey(key, db.KEY_RELATION),
+		ns.Key(key, ns.NamespaceRelation),
 		append(trunkKey, branchKey...))
 	_checkSaveError(t, err)
 
 	err = coding.PutBool(tx,
-		append(db.AsKey(trunkKey, db.KEY_APPROVEE), db.AsKey(key, db.KEY_HASH)...),
+		append(ns.Key(trunkKey, ns.NamespaceApprovee), ns.Key(key, ns.NamespaceHash)...),
 		true)
 	_checkSaveError(t, err)
 
 	err = coding.PutBool(tx,
-		append(db.AsKey(branchKey, db.KEY_APPROVEE), db.AsKey(key, db.KEY_HASH)...),
+		append(ns.Key(branchKey, ns.NamespaceApprovee), ns.Key(key, ns.NamespaceHash)...),
 		false)
 	_checkSaveError(t, err)
 

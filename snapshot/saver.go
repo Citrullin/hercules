@@ -11,6 +11,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../utils"
 )
@@ -65,7 +66,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 	}
 
 	err = db.Singleton.View(func(tx db.Transaction) error {
-		err := coding.ForPrefixInt64(tx, []byte{db.KEY_SNAPSHOT_BALANCE}, false, func(key []byte, value int64) (bool, error) {
+		err := coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceSnapshotBalance), false, func(key []byte, value int64) (bool, error) {
 			// Do not save zero-value addresses
 			if value == 0 {
 				return true, nil
@@ -86,7 +87,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
 	err = db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_SNAPSHOT_SPENT}, false, func(key, _ []byte) (bool, error) {
+		ns.ForNamespace(tx, ns.NamespaceSnapshotSpent, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key[1:])[:81]
 			addToBuffer(line)
 			return true, nil
@@ -100,7 +101,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
 	err = db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_PENDING_BUNDLE}, false, func(key, _ []byte) (bool, error) {
+		ns.ForNamespace(tx, ns.NamespacePendingBundle, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key)
 			addToBuffer(line)
 			return true, nil
@@ -114,7 +115,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 
 	fmt.Fprintln(w, SNAPSHOT_SEPARATOR)
 	err = db.Singleton.View(func(tx db.Transaction) error {
-		tx.ForPrefix([]byte{db.KEY_SNAPSHOTTED}, false, func(key, _ []byte) (bool, error) {
+		ns.ForNamespace(tx, ns.NamespaceSnapshotted, false, func(key, _ []byte) (bool, error) {
 			line := convert.BytesToTrytes(key)
 			addToBuffer(line)
 			return true, nil

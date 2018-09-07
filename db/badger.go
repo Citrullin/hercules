@@ -107,26 +107,10 @@ func (b *Badger) Remove(key []byte) error {
 	})
 }
 
-func (b *Badger) RemoveKeyCategory(keyCategory byte) error {
-	return b.Update(func(t Transaction) error {
-		return t.RemoveKeyCategory(keyCategory)
-	})
-}
-
 func (b *Badger) RemovePrefix(prefix []byte) error {
 	return b.Update(func(t Transaction) error {
 		return t.RemovePrefix(prefix)
 	})
-}
-
-func (b *Badger) CountKeyCategory(keyCategory byte) int {
-	dbWaitGroup.Add(1)
-	defer dbWaitGroup.Add(-1)
-
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
-
-	return tx.CountKeyCategory(keyCategory)
 }
 
 func (b *Badger) CountPrefix(prefix []byte) int {

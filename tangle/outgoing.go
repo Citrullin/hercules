@@ -7,6 +7,7 @@ import (
 
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../server"
 	"../utils"
@@ -68,10 +69,10 @@ func loadPendingRequests() {
 	added := 0
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return tx.ForPrefix([]byte{db.KEY_PENDING_HASH}, true, func(key, hash []byte) (bool, error) {
+		return ns.ForNamespace(tx, ns.NamespacePendingHash, true, func(key, hash []byte) (bool, error) {
 			total++
 
-			timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			timestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespacePendingTimestamp))
 			if err != nil {
 				logs.Log.Warning("Could not load pending Tx Timestamp")
 				return true, nil
@@ -152,8 +153,8 @@ func requestIfMissing(hash []byte, neighbor *server.Neighbor) (has bool, err err
 	if bytes.Equal(hash, tipFastTX.Hash) {
 		return has, nil
 	}
-	key := db.GetByteKey(hash, db.KEY_HASH)
-	if !db.Singleton.HasKey(key) && !db.Singleton.HasKey(db.AsKey(key, db.KEY_PENDING_TIMESTAMP)) {
+	key := ns.HashKey(hash, ns.NamespaceHash)
+	if !db.Singleton.HasKey(key) && !db.Singleton.HasKey(ns.Key(key, ns.NamespacePendingTimestamp)) {
 		pending := addPendingRequest(hash, 0, neighbor, true)
 		if pending != nil {
 			if neighbor != nil {
@@ -186,7 +187,7 @@ func sendReply(msg *Message) {
 		// Probably a good neighbor with transactions. Set this request as sent.
 
 		if time.Now().Sub(msg.Neighbor.LastIncomingTime) < reRequestInterval {
-			coding.IncrementInt64By(db.Singleton, db.GetByteKey(hash, db.KEY_PENDING_REQUESTS), 1, false)
+			coding.IncrementInt64By(db.Singleton, ns.HashKey(hash, ns.NamespacePendingRequests), 1, false)
 		}
 	}
 
@@ -211,12 +212,12 @@ func getMessage(resp []byte, req []byte, tip bool, neighbor *server.Neighbor, tx
 	}
 	/*/ Otherwise, latest (youngest) TX
 	if resp == nil {
-		key, _, _ := db.GetLatestKey(db.KEY_TIMESTAMP, false, txn)
+		key, _, _ := db.GetLatestKey(ns.NamespaceTimestamp, false, txn)
 		if key != nil {
-			key = db.AsKey(key, db.KEY_BYTES)
+			key = ns.Key(key, ns.NamespaceBytes)
 			resp, _ = db.GetBytes(key, txn)
 			if req == nil {
-				key = db.AsKey(key, db.KEY_HASH)
+				key = ns.Key(key, ns.NamespaceHash)
 				hash, _ = db.GetBytes(key, txn)
 			}
 		}
@@ -274,9 +275,9 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 	}
 
 	if save {
-		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
+		key := ns.HashKey(hash, ns.NamespacePendingHash)
 		db.Singleton.PutBytes(key, hash)
-		coding.PutInt64(db.Singleton, db.AsKey(key, db.KEY_PENDING_TIMESTAMP), timestamp)
+		coding.PutInt64(db.Singleton, ns.Key(key, ns.NamespacePendingTimestamp), timestamp)
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), Neighbor: neighbor}
@@ -301,9 +302,9 @@ func removePendingRequest(hash []byte) bool {
 		PendingRequestsLock.Lock()
 		delete(PendingRequests, key)
 		PendingRequestsLock.Unlock()
-		key := db.GetByteKey(hash, db.KEY_PENDING_HASH)
+		key := ns.HashKey(hash, ns.NamespacePendingHash)
 		db.Singleton.Remove(key)
-		db.Singleton.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+		db.Singleton.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
 	}
 	return ok
 }
@@ -380,9 +381,9 @@ func cleanupStalledRequests() {
 	var requestsToRemove []string
 
 	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt(tx, []byte{db.KEY_PENDING_REQUESTS}, true, func(key []byte, times int) (bool, error) {
+		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespacePendingRequests), true, func(key []byte, times int) (bool, error) {
 			if times > maxTimesRequest {
-				keysToRemove = append(keysToRemove, db.AsKey(key, db.KEY_PENDING_REQUESTS))
+				keysToRemove = append(keysToRemove, ns.Key(key, ns.NamespacePendingRequests))
 			}
 			return true, nil
 		})
@@ -394,7 +395,7 @@ func cleanupStalledRequests() {
 			if err := tx.Remove(key); err != nil {
 				return err
 			}
-			k := db.AsKey(key, db.KEY_PENDING_HASH)
+			k := ns.Key(key, ns.NamespacePendingHash)
 
 			err := error(nil)
 			hash, err = coding.GetBytes(tx, k)
@@ -402,15 +403,15 @@ func cleanupStalledRequests() {
 				return nil
 			}
 
-			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_HASH))
+			err = tx.Remove(ns.Key(key, ns.NamespacePendingHash))
 			if err != nil {
 				return err
 			}
-			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_TIMESTAMP))
+			err = tx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
 			if err != nil {
 				return err
 			}
-			err = tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
+			err = tx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
 			if err != nil {
 				return err
 			}
