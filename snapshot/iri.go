@@ -10,6 +10,7 @@ import (
 
 	"../convert"
 	"../db"
+	"../db/ns"
 	"../logs"
 )
 
@@ -96,8 +97,8 @@ func loadIRISnapshotValues(valuesPath string) error {
 	}
 	defer f.Close()
 
-	err = db.Singleton.RemoveKeyCategory(db.KEY_BALANCE)
-	err = db.Singleton.RemoveKeyCategory(db.KEY_SNAPSHOT_BALANCE)
+	err = db.Singleton.RemoveKeyCategory(ns.NamespaceBalance)
+	err = db.Singleton.RemoveKeyCategory(ns.NamespaceSnapshotBalance)
 	if err != nil {
 		return err
 	}

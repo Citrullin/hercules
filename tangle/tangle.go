@@ -9,6 +9,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../server"
 	"../transaction"
@@ -55,7 +56,7 @@ var (
 	tipBytes   = convert.TrytesToBytes(strings.Repeat("9", TRYTES_SIZE))[:DATA_SIZE]
 	tipTrits   = convert.BytesToTrits(tipBytes)[:TX_TRITS_LENGTH]
 	tipFastTX  = transaction.TritsToTX(&tipTrits, tipBytes)
-	tipHashKey = db.GetByteKey(tipFastTX.Hash, db.KEY_HASH)
+	tipHashKey = ns.HashKey(tipFastTX.Hash, ns.NamespaceHash)
 
 	// vars
 	srv                  *server.Server
@@ -84,8 +85,8 @@ func Start(cfg *viper.Viper) {
 
 	lowEndDevice = config.GetBool("light")
 
-	totalTransactions = int64(db.Singleton.CountKeyCategory(db.KEY_HASH))
-	totalConfirmations = int64(db.Singleton.CountKeyCategory(db.KEY_CONFIRMED))
+	totalTransactions = int64(db.Singleton.CountKeyCategory(ns.NamespaceHash))
+	totalConfirmations = int64(db.Singleton.CountKeyCategory(ns.NamespaceConfirmed))
 
 	// reapplyConfirmed()
 	fingerprintsOnLoad()
@@ -135,21 +136,21 @@ func cleanup() {
 func checkConsistency(skipRequests bool, skipConfirmations bool) {
 	logs.Log.Info("Checking database consistency")
 	if !skipRequests {
-		db.Singleton.RemoveKeyCategory(db.KEY_PENDING_HASH)
-		db.Singleton.RemoveKeyCategory(db.KEY_PENDING_TIMESTAMP)
+		db.Singleton.RemoveKeyCategory(ns.NamespacePendingHash)
+		db.Singleton.RemoveKeyCategory(ns.NamespacePendingTimestamp)
 	}
 	db.Singleton.View(func(tx db.Transaction) (e error) {
 		x := 0
-		return tx.ForPrefix([]byte{db.KEY_HASH}, true, func(key, value []byte) (bool, error) {
-			relKey := db.AsKey(key, db.KEY_RELATION)
+		return tx.ForPrefix([]byte{ns.NamespaceHash}, true, func(key, value []byte) (bool, error) {
+			relKey := ns.Key(key, ns.NamespaceRelation)
 			relation, _ := coding.GetBytes(tx, relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
-				(!tx.HasKey(db.AsKey(relation[:16], db.KEY_HASH)) || !tx.HasKey(db.AsKey(relation[16:], db.KEY_HASH))) {
-				txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
+				(!tx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !tx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
+				txBytes, _ := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {
@@ -161,7 +162,7 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 
 			// Re-confirm children
 			if !skipConfirmations {
-				if tx.HasKey(db.AsKey(relKey, db.KEY_CONFIRMED)) {
+				if tx.HasKey(ns.Key(relKey, ns.NamespaceConfirmed)) {
 					db.Singleton.Update(func(tx db.Transaction) error {
 						confirmChild(relation[:16], tx)
 						confirmChild(relation[16:], tx)

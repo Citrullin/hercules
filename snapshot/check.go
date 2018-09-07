@@ -12,6 +12,7 @@ import (
 
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../utils"
 )
@@ -37,9 +38,9 @@ Returns whether the current tangle is synchronized
 */
 // TODO: this check is too slow on bigger databases. The counters should be moved to memory.
 func IsSynchronized() bool {
-	return db.Singleton.CountKeyCategory(db.KEY_PENDING_CONFIRMED) < 10 &&
-		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING) < 10 &&
-		db.Singleton.CountKeyCategory(db.KEY_EVENT_MILESTONE_PENDING) < 5
+	return db.Singleton.CountKeyCategory(ns.NamespacePendingConfirmed) < 10 &&
+		db.Singleton.CountKeyCategory(ns.NamespaceEventConfirmationPending) < 10 &&
+		db.Singleton.CountKeyCategory(ns.NamespaceEventMilestonePending) < 5
 }
 
 /*
@@ -47,13 +48,13 @@ Checks outstanding pending confirmations that node is beyond the snapshot horizo
 This is just an additional measure to prevent tangle inconsistencies.
 */
 func CanSnapshot(timestamp int64) bool {
-	return !coding.HasKeyInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_EVENT_CONFIRMATION_PENDING, timestamp)
+	return !coding.HasKeyInCategoryWithInt64LowerEqual(db.Singleton, ns.NamespaceEventConfirmationPending, timestamp)
 }
 
 func checkDatabaseSnapshot() bool {
 	logs.Log.Info("Checking database snapshot integrity")
 
-	total := coding.SumInt64InCategory(db.Singleton, db.KEY_SNAPSHOT_BALANCE)
+	total := coding.SumInt64InCategory(db.Singleton, ns.NamespaceSnapshotBalance)
 	if total == TOTAL_IOTAS {
 		logs.Log.Info("Database snapshot integrity check passed")
 		return true
@@ -76,7 +77,7 @@ func checkSnapshotFile(path string) (timestamp int64, err error) {
 
 	timestamp = header.Timestamp
 
-	current, err := coding.GetInt64(db.Singleton, []byte{db.KEY_SNAPSHOT_DATE})
+	current, err := coding.GetInt64(db.Singleton, []byte{ns.NamespaceSnapshotDate})
 	if err == nil && current > timestamp {
 		logs.Log.Errorf(
 			"The current snapshot (%v) is more recent than the one being loaded (%v)!",
@@ -180,7 +181,7 @@ func checkPendingSnapshot() {
 Returns whether a transaction from the database can be snapshotted
 */
 func canBeSnapshotted(key []byte, tx db.Transaction) bool {
-	return tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) &&
-		!tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) &&
-		!tx.HasKey(db.AsKey(key, db.KEY_SNAPSHOTTED))
+	return tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) &&
+		!tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) &&
+		!tx.HasKey(ns.Key(key, ns.NamespaceSnapshotted))
 }

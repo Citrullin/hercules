@@ -6,6 +6,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../transaction"
 	"github.com/pkg/errors"
@@ -65,19 +66,19 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		Lock(timestamp, "", tx)
 
 		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
-		err := coding.ForPrefixInt64(tx, []byte{db.KEY_TIMESTAMP}, false, func(k []byte, txTimestamp int64) (bool, error) {
+		err := coding.ForPrefixInt64(tx, []byte{ns.NamespaceTimestamp}, false, func(k []byte, txTimestamp int64) (bool, error) {
 			if txTimestamp > timestamp {
 				return true, nil
 			}
 
-			key := db.AsKey(k, db.KEY_CONFIRMED)
-			if tx.HasKey(key) && !tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) {
-				value, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_VALUE))
+			key := ns.Key(k, ns.NamespaceConfirmed)
+			if tx.HasKey(key) && !tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) {
+				value, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceValue))
 				if err != nil || value == 0 {
 					return true, nil
 				}
 
-				txBytes, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
+				txBytes, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
 				if err != nil {
 					return false, err
 				}
@@ -121,26 +122,26 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		var trimKey []byte
 		err := db.Singleton.Update(func(tx db.Transaction) error {
 			// First: update snapshot balances
-			address, err := coding.GetBytes(tx, db.AsKey(kv.key, db.KEY_ADDRESS_HASH))
+			address, err := coding.GetBytes(tx, ns.Key(kv.key, ns.NamespaceAddressHash))
 			if err != nil {
 				return err
 			}
 
-			_, err = coding.IncrementInt64By(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_BALANCE), kv.value, false)
+			_, err = coding.IncrementInt64By(tx, ns.AddressKey(address, ns.NamespaceSnapshotBalance), kv.value, false)
 			if err != nil {
 				return err
 			}
 
 			// Update spents:
 			if kv.value < 0 {
-				err := coding.PutBool(tx, db.GetAddressKey(address, db.KEY_SNAPSHOT_SPENT), true)
+				err := coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
 				if err != nil {
 					return err
 				}
 			}
 
 			// Create trimming event:
-			trimKey = db.AsKey(kv.key, db.KEY_EVENT_TRIM_PENDING)
+			trimKey = ns.Key(kv.key, ns.NamespaceEventTrimPending)
 			return coding.PutBool(tx, trimKey, true)
 		})
 		if err != nil {
@@ -149,7 +150,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		edgeTransactions <- &trimKey
 	}
 
-	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_PENDING_BUNDLE, timestamp)
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, ns.NamespacePendingBundle, timestamp)
 	for _, key := range toKeepBundle {
 		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
@@ -157,7 +158,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		}
 	}
 
-	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_SNAPSHOTTED, timestamp)
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, ns.NamespaceSnapshotted, timestamp)
 	for _, key := range snapshotted {
 		err := coding.PutInt64(db.Singleton, key, timestamp)
 		if err != nil {
@@ -165,7 +166,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		}
 	}
 
-	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, db.KEY_EDGE, timestamp)
+	coding.RemoveKeysInCategoryWithInt64LowerEqual(db.Singleton, ns.NamespaceEdge, timestamp)
 
 	if checkDatabaseSnapshot() {
 		logs.Log.Debug("Scheduling transaction trimming")
@@ -181,7 +182,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 			if err != nil {
 				return err
 			}
-			tx.RemoveKeyCategory(db.KEY_EDGE)
+			tx.RemoveKeyCategory(ns.NamespaceEdge)
 			path := config.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil {
@@ -202,7 +203,7 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 		nonZero     = false
 	)
 
-	prefix := db.GetByteKey(bundleHash, db.KEY_BUNDLE)
+	prefix := ns.HashKey(bundleHash, ns.NamespaceBundle)
 	err := tx.ForPrefix(prefix, false, func(k, _ []byte) (bool, error) {
 		key := make([]byte, 16)
 		copy(key, k[16:])
@@ -212,15 +213,15 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 			return true, nil
 		}
 
-		txTimestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP))
+		txTimestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceTimestamp))
 		if err != nil {
 			return false, err
 		}
 		if txTimestamp > timestamp {
-			snapshotted = append(snapshotted, db.AsKey(prefix, db.KEY_SNAPSHOTTED))
+			snapshotted = append(snapshotted, ns.Key(prefix, ns.NamespaceSnapshotted))
 		}
 
-		valueKey := db.AsKey(key, db.KEY_VALUE)
+		valueKey := ns.Key(key, ns.NamespaceValue)
 		value, err := coding.GetInt64(tx, valueKey)
 		if err != nil {
 			logs.Log.Errorf("Error reading value for %v", valueKey)
@@ -241,7 +242,7 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 
 	// Probably debris from last snapshot. Has most probably to do with timestamps vs attachment timestamps
 	if totalValue != 0 || !nonZero {
-		// return nil, nil, db.AsKey(prefix, db.KEY_PENDING_BUNDLE), nil
+		// return nil, nil, ns.Key(prefix, ns.NamespacePendingBundle), nil
 		/**/
 		logs.Log.Errorf("A bundle is incomplete (non-zero sum). "+
 			"The database is probably inconsistent, not in sync or the timestamp is too early! %v", convert.BytesToTrytes(bundleHash)[:81])

@@ -8,6 +8,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../snapshot"
 	"../transaction"
@@ -40,9 +41,9 @@ func confirmOnLoad() {
 
 func loadPendingConfirmations() {
 	db.Singleton.View(func(tx db.Transaction) error {
-		coding.ForPrefixInt64(tx, []byte{db.KEY_EVENT_CONFIRMATION_PENDING}, true, func(key []byte, timestamp int64) (bool, error) {
+		coding.ForPrefixInt64(tx, []byte{ns.NamespaceEventConfirmationPending}, true, func(key []byte, timestamp int64) (bool, error) {
 			confirmQueue <- &PendingConfirmation{
-				db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING),
+				ns.Key(key, ns.NamespaceEventConfirmationPending),
 				timestamp,
 			}
 			return true, nil
@@ -59,7 +60,7 @@ func startConfirmThread() {
 		err := db.Singleton.Update(func(tx db.Transaction) (err error) {
 			confirmed, retryConfirm, err = confirm(pendingConfirmation.key, tx)
 			if !retryConfirm {
-				tx.Remove(db.AsKey(pendingConfirmation.key, db.KEY_EVENT_CONFIRMATION_PENDING))
+				tx.Remove(ns.Key(pendingConfirmation.key, ns.NamespaceEventConfirmationPending))
 			}
 			return err
 		})
@@ -82,8 +83,8 @@ func startUnknownVerificationThread() {
 	for range removeOrphanedPendingTicker.C {
 		db.Singleton.View(func(tx db.Transaction) error {
 			var toRemove [][]byte
-			tx.ForPrefix([]byte{db.KEY_PENDING_CONFIRMED}, false, func(key, _ []byte) (bool, error) {
-				if tx.HasKey(db.AsKey(key, db.KEY_HASH)) {
+			tx.ForPrefix([]byte{ns.NamespacePendingConfirmed}, false, func(key, _ []byte) (bool, error) {
+				if tx.HasKey(ns.Key(key, ns.NamespaceHash)) {
 					k := make([]byte, len(key))
 					copy(k, key)
 					toRemove = append(toRemove, k)
@@ -97,7 +98,7 @@ func startUnknownVerificationThread() {
 					if err := tx.Remove(key); err != nil {
 						return err
 					}
-					return confirmChild(db.AsKey(key, db.KEY_HASH), tx)
+					return confirmChild(ns.Key(key, ns.NamespaceHash), tx)
 				})
 				if err != nil {
 					return err
@@ -110,12 +111,12 @@ func startUnknownVerificationThread() {
 
 func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm bool, err error) {
 
-	if tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) {
+	if tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
 		// Already confirmed
 		return false, false, nil
 	}
 
-	data, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
+	data, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
 	if err != nil {
 		// Imminent database inconsistency: Warn!
 		// logs.Log.Error("TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!", key)
@@ -125,7 +126,7 @@ func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm b
 	trits := convert.BytesToTrits(data)[:8019]
 	t := transaction.TritsToFastTX(&trits, data)
 
-	if tx.HasKey(db.AsKey(key, db.KEY_EVENT_TRIM_PENDING)) && !isMaybeMilestonePart(t) {
+	if tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) && !isMaybeMilestonePart(t) {
 		return false, false, fmt.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
 			t.Timestamp,
 			snapshot.GetSnapshotTimestamp(tx),
@@ -134,29 +135,29 @@ func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm b
 
 	// TODO: This part should be atomic with all the value and confirmes and childs?
 	//		 => If there is a DB error, revert DB commit
-	err = coding.PutInt64(tx, db.AsKey(key, db.KEY_CONFIRMED), int64(t.Timestamp))
+	err = coding.PutInt64(tx, ns.Key(key, ns.NamespaceConfirmed), int64(t.Timestamp))
 	if err != nil {
 		return false, true, errors.New("Could not save confirmation status!")
 	}
 
 	if t.Value != 0 {
-		_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+		_, err := coding.IncrementInt64By(tx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
 		if err != nil {
 			return false, true, errors.New("Could not update account balance!")
 		}
 		if t.Value < 0 {
-			err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
+			err := coding.PutBool(tx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
 			if err != nil {
 				return false, true, errors.New("Could not update account spent status!")
 			}
 		}
 	}
 
-	err = confirmChild(db.GetByteKey(t.TrunkTransaction, db.KEY_HASH), tx)
+	err = confirmChild(ns.HashKey(t.TrunkTransaction, ns.NamespaceHash), tx)
 	if err != nil {
 		return false, true, err
 	}
-	err = confirmChild(db.GetByteKey(t.BranchTransaction, db.KEY_HASH), tx)
+	err = confirmChild(ns.HashKey(t.BranchTransaction, ns.NamespaceHash), tx)
 	if err != nil {
 		return false, true, err
 	}
@@ -168,25 +169,25 @@ func confirmChild(key []byte, tx db.Transaction) error {
 		// Doesn't need confirmation
 		return nil
 	}
-	if tx.HasKey(db.AsKey(key, db.KEY_CONFIRMED)) {
+	if tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
 		// Already confirmed
 		return nil
 	}
 
-	keyPending := db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING)
+	keyPending := ns.Key(key, ns.NamespaceEventConfirmationPending)
 	if tx.HasKey(keyPending) {
 		// Confirmation is already pending
 		return nil
 	}
 
-	timestamp, err := coding.GetInt64(tx, db.AsKey(key, db.KEY_TIMESTAMP))
+	timestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceTimestamp))
 	if err == nil {
 		err = addPendingConfirmation(keyPending, timestamp, tx)
 		if err != nil {
 			return fmt.Errorf("Could not save child confirm status: %v", err)
 		}
-	} else if !tx.HasKey(db.AsKey(key, db.KEY_EDGE)) && tx.HasKey(db.AsKey(key, db.KEY_PENDING_HASH)) {
-		err = coding.PutInt64(tx, db.AsKey(key, db.KEY_PENDING_CONFIRMED), time.Now().Unix())
+	} else if !tx.HasKey(ns.Key(key, ns.NamespaceEdge)) && tx.HasKey(ns.Key(key, ns.NamespacePendingHash)) {
+		err = coding.PutInt64(tx, ns.Key(key, ns.NamespacePendingConfirmed), time.Now().Unix())
 		if err != nil {
 			return fmt.Errorf("Could not save child pending confirm status: %v", err)
 		}
@@ -195,7 +196,7 @@ func confirmChild(key []byte, tx db.Transaction) error {
 }
 
 func addPendingConfirmation(key []byte, timestamp int64, tx db.Transaction) error {
-	err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), timestamp)
+	err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEventConfirmationPending), timestamp)
 	if err == nil {
 		confirmQueue <- &PendingConfirmation{key, timestamp}
 	}
@@ -238,19 +239,19 @@ func reapplyConfirmed() {
 	logs.Log.Debug("Reapplying confirmed TXs to balances")
 	db.Singleton.View(func(tx db.Transaction) error {
 		x := 0
-		return tx.ForPrefix([]byte{db.KEY_CONFIRMED}, false, func(key, _ []byte) (bool, error) {
-			txBytes, _ := coding.GetBytes(tx, db.AsKey(key, db.KEY_BYTES))
+		return tx.ForPrefix([]byte{ns.NamespaceConfirmed}, false, func(key, _ []byte) (bool, error) {
+			txBytes, _ := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
 			trits := convert.BytesToTrits(txBytes)[:8019]
 			t := transaction.TritsToFastTX(&trits, txBytes)
 			if t.Value != 0 {
 				err := db.Singleton.Update(func(tx db.Transaction) error {
-					_, err := coding.IncrementInt64By(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE), t.Value, false)
+					_, err := coding.IncrementInt64By(tx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
 					}
 					if t.Value < 0 {
-						err := coding.PutBool(tx, db.GetAddressKey(t.Address, db.KEY_SPENT), true)
+						err := coding.PutBool(tx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
 						if err != nil {
 							logs.Log.Errorf("Could not update account spent status: %v", err)
 							return errors.New("Could not update account spent status!")

@@ -10,6 +10,7 @@ import (
 	"../convert"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../tangle"
 	"../transaction"
@@ -48,7 +49,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			// t.Address is the receiving address
 			// only when the transaction value is negative we should check for balance in the receiving address
 			if t.Value < 0 {
-				balance, err := coding.GetInt64(tx, db.GetAddressKey(t.Address, db.KEY_BALANCE))
+				balance, err := coding.GetInt64(tx, ns.AddressKey(t.Address, ns.NamespaceBalance))
 				if err != nil {
 					addressTrytes := convert.BytesToTrytes(t.Address)
 					return errors.Errorf("Could not read address' balance. Address: %s Message: %s", addressTrytes, err)
@@ -61,7 +62,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 				}
 			}
 
-			if !tx.HasKey(db.GetByteKey(t.Hash, db.KEY_HASH)) {
+			if !tx.HasKey(ns.HashKey(t.Hash, ns.NamespaceHash)) {
 				err := tangle.SaveTX(t, &bits, tx)
 				if err != nil {
 					return err
