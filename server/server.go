@@ -104,50 +104,46 @@ func Start(serverConfig *viper.Viper) {
 	}
 	server.listenAndReceive(workers)
 
-	reportTicker = time.NewTicker(reportInterval)
-	go func() {
-		for range reportTicker.C {
-			if ended {
-				break
-			}
-			report()
-			atomic.AddUint64(&totalIncTx, incTxPerSec)
-			atomic.StoreUint64(&incTxPerSec, 0)
-			atomic.StoreUint64(&outTxPerSec, 0)
-		}
-	}()
-
-	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
-	go func() {
-		for range hostnameRefreshTicker.C {
-			if ended {
-				break
-			}
-			UpdateHostnameAddresses()
-		}
-	}()
-
+	go reportIncomingMessages()
+	go refreshHostnames()
 	go listenNeighborTracker()
-	go func() {
-		for msg := range server.Outgoing {
-			if ended {
-				break
-			}
-			if msg.Neighbor != nil {
-				msg.Neighbor.Write(msg)
-			} else {
-				server.Write(msg)
-			}
-		}
-	}()
+	go writeMessages()
 }
 
-func End() {
-	ended = true
-	connection.Close()
-	atomic.AddUint64(&totalIncTx, incTxPerSec)
-	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
-	logs.Log.Info("Neighbor server exited")
+func reportIncomingMessages() {
+	reportTicker = time.NewTicker(reportInterval)
+	for range reportTicker.C {
+		if ended {
+			break
+		}
+		report()
+		atomic.AddUint64(&totalIncTx, incTxPerSec)
+		atomic.StoreUint64(&incTxPerSec, 0)
+		atomic.StoreUint64(&outTxPerSec, 0)
+	}
+}
+
+func refreshHostnames() {
+	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
+	for range hostnameRefreshTicker.C {
+		if ended {
+			break
+		}
+		UpdateHostnameAddresses()
+	}
+}
+
+func writeMessages() {
+	for msg := range server.Outgoing {
+		if ended {
+			break
+		}
+		if msg.Neighbor != nil {
+			go msg.Neighbor.Write(msg)
+		} else {
+			go server.Write(msg)
+		}
+	}
 }
 
 func (neighbor Neighbor) Write(msg *Message) {
@@ -240,4 +236,12 @@ func report() {
 
 func GetServer() *Server {
 	return server
+}
+
+func End() {
+	ended = true
+	connection.Close()
+	atomic.AddUint64(&totalIncTx, incTxPerSec)
+	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
+	logs.Log.Info("Neighbor server exited")
 }

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"../db"
+	"../db/ns"
 	"../logs"
 )
 
@@ -14,20 +15,20 @@ func Report() {
 		len(srv.Outgoing))
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)",
 		totalTransactions,
-		db.Singleton.CountKeyCategory(db.KEY_PENDING_HASH),
+		ns.Count(db.Singleton, ns.NamespacePendingHash),
 		len(PendingRequests))
 	logs.Log.Infof("CONFIRMATIONS: %v, Pending: %v (%v), Unknown: %v",
 		totalConfirmations,
-		db.Singleton.CountKeyCategory(db.KEY_EVENT_CONFIRMATION_PENDING),
+		ns.Count(db.Singleton, ns.NamespaceEventConfirmationPending),
 		len(confirmQueue),
-		db.Singleton.CountKeyCategory(db.KEY_PENDING_CONFIRMED))
-	logs.Log.Debugf("PENDING TRIMS: %v", db.Singleton.CountKeyCategory(db.KEY_EVENT_TRIM_PENDING))
+		ns.Count(db.Singleton, ns.NamespacePendingConfirmed))
+	logs.Log.Debugf("PENDING TRIMS: %v", ns.Count(db.Singleton, ns.NamespaceEventTrimPending))
 	logs.Log.Infof("MILESTONES:    Current: %v, Confirmed: %v, Pending: %v (%v) \n",
 		LatestMilestone.Index,
-		db.Singleton.CountKeyCategory(db.KEY_MILESTONE),
-		db.Singleton.CountKeyCategory(db.KEY_EVENT_MILESTONE_PENDING),
+		ns.Count(db.Singleton, ns.NamespaceMilestone),
+		ns.Count(db.Singleton, ns.NamespaceEventMilestonePending),
 		len(pendingMilestoneQueue))
-	logs.Log.Infof("TIPS:          %v\n", db.Singleton.CountKeyCategory(db.KEY_TIP))
+	logs.Log.Infof("TIPS:          %v\n", ns.Count(db.Singleton, ns.NamespaceTip))
 }
 
 func report() {

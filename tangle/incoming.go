@@ -9,6 +9,7 @@ import (
 	"../crypt"
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../server"
 	"../snapshot"
@@ -43,7 +44,7 @@ func incomingRunner() {
 
 		var hash []byte
 
-		fingerprint := db.GetByteKey(data, db.KEY_FINGERPRINT)
+		fingerprint := ns.HashKey(data, ns.NamespaceFingerprint)
 		if !hasFingerprint(fingerprint) {
 			// Message was not received in the last time
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
@@ -78,7 +79,7 @@ func incomingRunner() {
 		var isLookingForTX = !bytes.Equal(req, tipBytes[:HASH_SIZE]) && (hash == nil || !bytes.Equal(hash, req))
 
 		if isLookingForTX {
-			reply, _ = db.Singleton.GetBytes(db.GetByteKey(req, db.KEY_BYTES))
+			reply, _ = db.Singleton.GetBytes(ns.HashKey(req, ns.NamespaceBytes))
 		} else if utils.Random(0, 100) < P_TIP_REPLY {
 			// If this is a tip request, drop randomly
 			continue
@@ -102,34 +103,34 @@ func processIncomingTX(incoming IncomingTX) error {
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
 		// TODO: catch error defer here
 
-		key := db.GetByteKey(t.Hash, db.KEY_HASH)
+		key := ns.HashKey(t.Hash, ns.NamespaceHash)
 		removePendingRequest(t.Hash)
 
 		snapTime := snapshot.GetSnapshotTimestamp(tx)
 
 		removeTx := func() {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
-			tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
-			tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
-			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
+			tx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
+			tx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
+			err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEdge), snapTime)
 			_checkIncomingError(t, err)
-			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
-				err = tx.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING))
+				err = tx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
 				_checkIncomingError(t, err)
 			}
-			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			tx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 		}
 
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
 		maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
 		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
-		if isOutsideOfTimeframe && !tx.HasKey(db.GetByteKey(t.Bundle, db.KEY_PENDING_BUNDLE)) {
+		if isOutsideOfTimeframe && !tx.HasKey(ns.HashKey(t.Bundle, ns.NamespacePendingBundle)) {
 			removeTx()
 			return nil
 		}
 
-		if tx.HasKey(db.AsKey(key, db.KEY_SNAPSHOTTED)) {
+		if tx.HasKey(ns.Key(key, ns.NamespaceSnapshotted)) {
 			_, err := requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
 			_checkIncomingError(t, err)
 			_, err = requestIfMissing(t.BranchTransaction, incoming.Neighbor)
@@ -144,8 +145,8 @@ func processIncomingTX(incoming IncomingTX) error {
 			err := SaveTX(t, incoming.Bytes, tx)
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
-				trunkBytesKey := db.GetByteKey(t.TrunkTransaction, db.KEY_BYTES)
-				err := tx.PutBytes(db.AsKey(key, db.KEY_EVENT_MILESTONE_PENDING), trunkBytesKey)
+				trunkBytesKey := ns.HashKey(t.TrunkTransaction, ns.NamespaceBytes)
+				err := tx.PutBytes(ns.Key(key, ns.NamespaceEventMilestonePending), trunkBytesKey)
 				_checkIncomingError(t, err)
 
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
@@ -157,18 +158,18 @@ func processIncomingTX(incoming IncomingTX) error {
 
 			// EVENTS:
 
-			pendingConfirmationKey := db.AsKey(key, db.KEY_PENDING_CONFIRMED)
+			pendingConfirmationKey := ns.Key(key, ns.NamespacePendingConfirmed)
 			if tx.HasKey(pendingConfirmationKey) {
 				err = tx.Remove(pendingConfirmationKey)
 				_checkIncomingError(t, err)
 
-				err = addPendingConfirmation(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING), int64(t.Timestamp), tx)
+				err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(t.Timestamp), tx)
 				_checkIncomingError(t, err)
 			}
 
-			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
+			parentKey, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
-				pendingMilestone = &PendingMilestone{parentKey, db.AsKey(key, db.KEY_BYTES)}
+				pendingMilestone = &PendingMilestone{parentKey, ns.Key(key, ns.NamespaceBytes)}
 			}
 
 			// Re-broadcast new TX. Not always.

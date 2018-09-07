@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"../convert"
 	"../db"
 	"../db/coding"
-	"github.com/gin-gonic/gin"
+	"../db/ns"
 )
 
 func init() {
@@ -22,7 +24,7 @@ func getTrytes(request Request, c *gin.Context, t time.Time) {
 				ReplyError("Wrong hash trytes", c)
 				return nil
 			}
-			b, err := coding.GetBytes(tx, db.GetByteKey(convert.TrytesToBytes(hash)[:49], db.KEY_BYTES))
+			b, err := coding.GetBytes(tx, ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceBytes))
 			if err == nil {
 				trytes = append(trytes, convert.BytesToTrytes(b)[:2673])
 			} else {

@@ -5,6 +5,7 @@ import (
 
 	"../db"
 	"../db/coding"
+	"../db/ns"
 	"../logs"
 	"../utils"
 	"github.com/spf13/viper"
@@ -19,9 +20,9 @@ const (
 )
 
 var TOTAL_IOTAS int64 = 2779530283277761
-var keySnapshotDate = []byte{db.KEY_SNAPSHOT_DATE}
-var keySnapshotLock = []byte{db.KEY_SNAPSHOT_LOCK}
-var keySnapshotFile = []byte{db.KEY_SNAPSHOT_FILE}
+var keySnapshotDate = []byte{ns.NamespaceSnapshotDate}
+var keySnapshotLock = []byte{ns.NamespaceSnapshotLock}
+var keySnapshotFile = []byte{ns.NamespaceSnapshotFile}
 
 var edgeTransactions chan *[]byte
 var config *viper.Viper
