@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"os/signal"
 	"sync"
@@ -17,19 +16,7 @@ import (
 	"./utils"
 
 	"github.com/pkg/profile"
-	"github.com/spf13/viper"
 )
-
-var viperConfig *viper.Viper
-
-func init() {
-	logs.Setup()
-	viperConfig := config.LoadConfig()
-	logs.SetConfig(viperConfig)
-
-	cfg, _ := json.MarshalIndent(viperConfig.AllSettings(), "", "  ")
-	logs.Log.Debugf("Following settings loaded: \n %+v", string(cfg))
-}
 
 var herculesDeathWaitGroup = &sync.WaitGroup{}
 
@@ -37,20 +24,27 @@ func main() {
 	herculesDeathWaitGroup.Add(1)
 
 	defer profile.Start().Stop()
-	utils.Hello(viperConfig)
-	time.Sleep(time.Duration(500) * time.Millisecond)
 
+	startBasicFunctionality()
 	logs.Log.Info("Starting Hercules. Please wait...")
 
-	db.Start(viperConfig)
-	snapshot.Start(viperConfig)
+	db.Start()
+	snapshot.Start()
 
-	server.Start(viperConfig)
-	tangle.Start(viperConfig)
-	api.Start(viperConfig)
+	server.Start()
+	tangle.Start()
+	api.Start()
 
 	go gracefullyDies()
 	herculesDeathWaitGroup.Wait()
+}
+
+func startBasicFunctionality() {
+	logs.Start()
+	config.Start()
+
+	utils.Hello()
+	time.Sleep(500 * time.Millisecond)
 }
 
 func gracefullyDies() {

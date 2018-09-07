@@ -1,12 +1,17 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 
 	"../logs"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+)
+
+var (
+	AppConfig = viper.New()
 )
 
 /*
@@ -18,10 +23,7 @@ PRECEDENCE (Higher number overrides the others):
 5. flag
 6. explicit call to Set
 */
-func LoadConfig() *viper.Viper {
-	// Setup Viper
-	var config = viper.New()
-
+func Start() {
 	// 1. Set defaults
 	//config.SetDefault("test", 0)
 
@@ -52,16 +54,16 @@ func LoadConfig() *viper.Viper {
 	flag.IntP("node.port", "u", 14600, "UDP Node port")
 	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
 
-	config.BindPFlags(flag.CommandLine)
+	AppConfig.BindPFlags(flag.CommandLine)
 
 	var configPath = flag.StringP("config", "c", "hercules.config.json", "Config file path")
 	flag.Parse()
 
 	// 3. Bind environment vars
 	replacer := strings.NewReplacer(".", "_")
-	config.SetEnvPrefix("HERCULES")
-	config.SetEnvKeyReplacer(replacer)
-	config.AutomaticEnv()
+	AppConfig.SetEnvPrefix("HERCULES")
+	AppConfig.SetEnvKeyReplacer(replacer)
+	AppConfig.AutomaticEnv()
 
 	// 3. Load config
 	if len(*configPath) > 0 {
@@ -71,8 +73,8 @@ func LoadConfig() *viper.Viper {
 			logs.Log.Info("Standard config file not found. Loading default settings.")
 		} else {
 			logs.Log.Infof("Loading config from: %s", *configPath)
-			config.SetConfigFile(*configPath)
-			err := config.ReadInConfig()
+			AppConfig.SetConfigFile(*configPath)
+			err := AppConfig.ReadInConfig()
 			if err != nil {
 				logs.Log.Fatalf("Config could not be loaded from: %s (%s)", *configPath, err)
 			}
@@ -81,15 +83,18 @@ func LoadConfig() *viper.Viper {
 
 	// 4. Check config for validity
 	/**/
-	snapshotPeriod := config.GetInt("snapshots.period")
-	snapshotInterval := config.GetInt("snapshots.interval")
+	snapshotPeriod := AppConfig.GetInt("snapshots.period")
+	snapshotInterval := AppConfig.GetInt("snapshots.interval")
 	if snapshotInterval > 0 && snapshotPeriod < 12 {
 		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
 			"At least 12 hours currently required to be kept.", snapshotPeriod)
 	}
 	/**/
 
-	return config
+	logs.SetConfig(AppConfig)
+
+	cfg, _ := json.MarshalIndent(AppConfig.AllSettings(), "", "  ")
+	logs.Log.Debugf("Following settings loaded: \n %+v", string(cfg))
 }
 
 func declareApiConfigs() {

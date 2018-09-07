@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -13,7 +14,6 @@ import (
 	"../logs"
 	"../server"
 	"../transaction"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -60,7 +60,6 @@ var (
 
 	// vars
 	srv                  *server.Server
-	config               *viper.Viper
 	LastIncomingTime     map[string]time.Time
 	LastIncomingTimeLock = &sync.RWMutex{}
 	RequestQueues        map[string]*RequestQueue
@@ -75,15 +74,14 @@ var (
 	outgoing                   = 0
 )
 
-func Start(cfg *viper.Viper) {
-	config = cfg
+func Start() {
 	srv = server.GetServer()
 
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
 	LastIncomingTime = make(map[string]time.Time)
 
-	lowEndDevice = config.GetBool("light")
+	lowEndDevice = config.AppConfig.GetBool("light")
 
 	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
 	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))

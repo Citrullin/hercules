@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../logs"
 
 	"github.com/gin-gonic/gin"
 	"github.com/iotaledger/giota"
 	"github.com/muxxer/powsrv"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -41,17 +41,17 @@ func init() {
 	addAPICall("interruptAttachingToTangle", interruptAttachingToTangle)
 }
 
-func startAttach(apiConfig *viper.Viper) {
-	maxMinWeightMagnitude = config.GetInt("api.pow.maxMinWeightMagnitude")
-	maxTransactions = config.GetInt("api.pow.maxTransactions")
-	usePowSrv = config.GetBool("api.pow.usePowSrv")
+func startAttach() {
+	maxMinWeightMagnitude = config.AppConfig.GetInt("api.pow.maxMinWeightMagnitude")
+	maxTransactions = config.AppConfig.GetInt("api.pow.maxTransactions")
+	usePowSrv = config.AppConfig.GetBool("api.pow.usePowSrv")
 
 	logs.Log.Debug("maxMinWeightMagnitude:", maxMinWeightMagnitude)
 	logs.Log.Debug("maxTransactions:", maxTransactions)
 	logs.Log.Debug("usePowSrv:", usePowSrv)
 
 	if usePowSrv {
-		powClient = &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
+		powClient = &powsrv.PowClient{PowSrvPath: config.AppConfig.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
 	}
 }
 

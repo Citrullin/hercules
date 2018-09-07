@@ -2,8 +2,6 @@ package db
 
 import (
 	"fmt"
-
-	"github.com/spf13/viper"
 )
 
 var implementations = map[string]Constructor{}
@@ -15,7 +13,7 @@ func RegisterImplementation(name string, constructor Constructor) {
 	implementations[name] = constructor
 }
 
-type Constructor func(*viper.Viper) (Interface, error)
+type Constructor func() (Interface, error)
 
 type Manipulator interface {
 	GetBytes([]byte) ([]byte, error)

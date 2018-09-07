@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../db/coding"
 	"../logs"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -23,9 +23,9 @@ type Badger struct {
 	waitGroup     sync.WaitGroup
 }
 
-func NewBadger(config *viper.Viper) (Interface, error) {
-	path := config.GetString("database.path")
-	light := config.GetBool("light")
+func NewBadger() (Interface, error) {
+	path := config.AppConfig.GetString("database.path")
+	light := config.AppConfig.GetBool("light")
 
 	logs.Log.Infof("Loading database at %s", path)
 

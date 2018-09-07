@@ -3,12 +3,12 @@ package snapshot
 import (
 	"time"
 
+	"../config"
 	"../db"
 	"../db/coding"
 	"../db/ns"
 	"../logs"
 	"../utils"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -25,17 +25,15 @@ var keySnapshotLock = []byte{ns.NamespaceSnapshotLock}
 var keySnapshotFile = []byte{ns.NamespaceSnapshotFile}
 
 var edgeTransactions chan *[]byte
-var config *viper.Viper
 var CurrentTimestamp int64 = 0
 var InProgress = false
 var lowEndDevice = false
 
-func Start(cfg *viper.Viper) {
-	config = cfg
+func Start() {
 	logs.Log.Debug("Loading snapshots module")
 	edgeTransactions = make(chan *[]byte, 10000000)
 
-	lowEndDevice = config.GetBool("light")
+	lowEndDevice = config.AppConfig.GetBool("light")
 	CurrentTimestamp = GetSnapshotTimestamp(nil)
 	logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
 
@@ -45,8 +43,8 @@ func Start(cfg *viper.Viper) {
 	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
 
-	snapshotPeriod := config.GetInt64("snapshots.period")
-	snapshotInterval := config.GetInt64("snapshots.interval")
+	snapshotPeriod := config.AppConfig.GetInt64("snapshots.period")
+	snapshotInterval := config.AppConfig.GetInt64("snapshots.interval")
 	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
 
 	go startAutosnapshots(snapshotInterval, snapshotPeriod)
@@ -55,10 +53,10 @@ func Start(cfg *viper.Viper) {
 }
 
 func loadSnapshotFiles() {
-	snapshotToLoad := config.GetString("snapshots.loadFile")
-	iri1 := config.GetString("snapshots.loadIRIFile")
-	iri2 := config.GetString("snapshots.loadIRISpentFile")
-	iriTimestamp := config.GetInt64("snapshots.loadIRITimestamp")
+	snapshotToLoad := config.AppConfig.GetString("snapshots.loadFile")
+	iri1 := config.AppConfig.GetString("snapshots.loadIRIFile")
+	iri2 := config.AppConfig.GetString("snapshots.loadIRISpentFile")
+	iriTimestamp := config.AppConfig.GetInt64("snapshots.loadIRITimestamp")
 	if len(snapshotToLoad) > 0 {
 		LoadSnapshot(snapshotToLoad)
 	} else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0 {

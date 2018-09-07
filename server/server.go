@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"../config"
 	"../logs"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -64,7 +64,6 @@ var reportTicker *time.Ticker
 var hostnameRefreshTicker *time.Ticker
 var NeighborTrackingQueue neighborTrackingQueue
 var server *Server
-var config *viper.Viper
 var Neighbors map[string]*Neighbor
 var NeighborsLock = &sync.RWMutex{}
 var connection net.PacketConn
@@ -77,15 +76,15 @@ func create() *Server {
 		Outgoing: make(messageQueue, maxQueueSize)}
 
 	Neighbors = make(map[string]*Neighbor)
-	logs.Log.Debug("Initial neighbors", config.GetStringSlice("node.neighbors"))
-	for _, address := range config.GetStringSlice("node.neighbors") {
+	logs.Log.Debug("Initial neighbors", config.AppConfig.GetStringSlice("node.neighbors"))
+	for _, address := range config.AppConfig.GetStringSlice("node.neighbors") {
 		err := AddNeighbor(address)
 		if err != nil {
 			logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
 		}
 	}
 
-	c, err := net.ListenPacket("udp", ":"+config.GetString("node.port"))
+	c, err := net.ListenPacket("udp", ":"+config.AppConfig.GetString("node.port"))
 	if err != nil {
 		panic(err)
 	}
@@ -93,13 +92,11 @@ func create() *Server {
 	return server
 }
 
-func Start(serverConfig *viper.Viper) {
-	config = serverConfig
-
+func Start() {
 	create()
 
 	workers := 1
-	if !config.GetBool("light") {
+	if !config.AppConfig.GetBool("light") {
 		workers = nbWorkers
 	}
 	server.listenAndReceive(workers)

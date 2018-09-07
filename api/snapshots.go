@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"../config"
 	"../logs"
 	"../snapshot"
 	"../utils"
@@ -54,7 +55,7 @@ func enableSnapshotApi(api *gin.Engine) {
 		}
 	})
 
-	dir := config.GetString("snapshots.path")
+	dir := config.AppConfig.GetString("snapshots.path")
 	api.Static("/snapshots", dir)
 }
 
@@ -109,7 +110,7 @@ func getSnapshotInfosResponseHeaderAndValue(latestOnly bool, snapshotInfos []map
 }
 
 func loadInfos(latestOnly bool) (infos []map[string]interface{}) {
-	dir := config.GetString("snapshots.path")
+	dir := config.AppConfig.GetString("snapshots.path")
 	files, err := ioutil.ReadDir(dir)
 	if err == nil {
 

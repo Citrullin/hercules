@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"../config"
 	"../db"
 	"../db/coding"
 	"../db/ns"
@@ -164,7 +165,7 @@ func checkPendingSnapshot() {
 	timestamp, filename := IsLocked(nil)
 	if timestamp >= 0 {
 		if len(filename) > 0 {
-			newFilename := config.GetString("snapshots.loadFile")
+			newFilename := config.AppConfig.GetString("snapshots.loadFile")
 			if len(newFilename) > 0 {
 				filename = newFilename
 			}

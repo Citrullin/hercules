@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -24,7 +25,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 
 	timestampString := strconv.FormatInt(int64(timestamp), 10)
 	if len(filename) == 0 {
-		filename = config.GetString("snapshots.filename")
+		filename = config.AppConfig.GetString("snapshots.filename")
 	}
 	if len(filename) == 0 {
 		filename = timestampString + ".snap"

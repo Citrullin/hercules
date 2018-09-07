@@ -11,12 +11,14 @@ import (
 var logFormat = "%{color}[%{level:.4s}] %{time:15:04:05.000000} %{id:06x} [%{shortpkg}] %{longfunc} -> %{color:reset}%{message}"
 var Log = logging.MustGetLogger("hercules")
 
-func Setup() {
+var config *viper.Viper
+
+func Start() {
 	logging.SetFormatter(logging.MustStringFormatter(logFormat))
 }
 
-func SetConfig(config *viper.Viper) {
-
+func SetConfig(viperConfig *viper.Viper) {
+	config = viperConfig
 	consoleBackEnd := logging.NewLogBackend(os.Stdout, "", 0)
 
 	logToFilesEnabled := config.GetBool("log.useRollingLogFile")

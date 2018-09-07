@@ -3,6 +3,7 @@ package snapshot
 import (
 	"bytes"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -183,7 +184,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 				return err
 			}
 			ns.Remove(tx, ns.NamespaceEdge)
-			path := config.GetString("snapshots.path")
+			path := config.AppConfig.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil {
 				return err

@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"../config"
 	"../logs"
 )
 
@@ -256,7 +257,7 @@ func getIdentifierAndPort(address string) (identifier string, port string) {
 		port = tokens[portIndex]
 	} else {
 		identifier = address
-		port = config.GetString("node.port") // Tries to use same port as this node
+		port = config.AppConfig.GetString("node.port") // Tries to use same port as this node
 	}
 
 	return identifier, port
