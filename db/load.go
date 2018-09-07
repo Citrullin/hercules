@@ -9,14 +9,14 @@ import (
 var Singleton Interface
 
 func Start() {
-	database, err := Load()
+	database, err := loadDB()
 	if err != nil {
 		logs.Log.Fatal(err)
 	}
 	Singleton = database
 }
 
-func Load() (Interface, error) {
+func loadDB() (Interface, error) {
 	databaseType := "badger" // config.GetString("database.type")
 
 	implementation, found := implementations[databaseType]
@@ -32,10 +32,7 @@ func Load() (Interface, error) {
 	return database, nil
 }
 
-var ended = false
-
 func End() {
-	ended = true
 	Singleton.End()
-	logs.Log.Info("DB exited")
+	logs.Log.Debug("DB exited")
 }

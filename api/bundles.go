@@ -17,8 +17,8 @@ import (
 )
 
 func init() {
-	addAPICall("storeTransactions", storeTransactions)
-	addAPICall("broadcastTransactions", broadcastTransactions)
+	addAPICall("storeTransactions", storeTransactions, mainAPICalls)
+	addAPICall("broadcastTransactions", broadcastTransactions, mainAPICalls)
 }
 
 func storeTransactions(request Request, c *gin.Context, t time.Time) {
@@ -33,11 +33,11 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 	var stored = 0
 	var broadcasted = 0
 	if request.Trytes == nil || len(request.Trytes) < 1 {
-		ReplyError("No trytes provided", c)
+		replyError("No trytes provided", c)
 		return
 	}
 	if !transaction.IsValidBundleTrytes(request.Trytes) {
-		ReplyError("Invalid bundle", c)
+		replyError("Invalid bundle", c)
 		return
 	}
 	for _, trytes := range request.Trytes {
@@ -77,7 +77,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 		})
 		if err != nil {
 			logs.Log.Warning("Error while saving transaction. ", err)
-			ReplyError("Error encountered while saving a transaction", c)
+			replyError("Error encountered while saving a transaction", c)
 			return
 		}
 	}

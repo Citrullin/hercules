@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"../config"
 	"../logs"
@@ -24,6 +26,62 @@ func (i *IPAddress) String() string {
 	} else {
 		return i.ip
 	}
+}
+
+type Neighbor struct {
+	Hostname          string // Formatted like: <domainname> (Empty if its IP address)
+	Addr              string // Formatted like: <ip>:<port> OR <domainname>:<port>
+	IP                string // Formatted like: XXX.XXX.XXX.XXX (IPv4) OR [x:x:x:...] (IPv6)
+	Port              string // Also saved separately from Addr for performance reasons
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
+	UDPAddr           *net.UDPAddr
+	Incoming          int
+	New               int
+	Invalid           int
+	ConnectionType    string // Formatted like: udp
+	PreferIPv6        bool
+	KnownIPs          []*IPAddress
+	LastIncomingTime  time.Time
+}
+
+func (nb *Neighbor) Write(msg *Message) {
+	if ended {
+		return
+	}
+	_, err := connection.WriteTo(msg.Msg[0:], nb.UDPAddr)
+	if err != nil {
+		if !ended { // Check again
+			logs.Log.Errorf("Error sending message to neighbor '%v': %v", nb.Addr, err)
+		}
+	} else {
+		atomic.AddUint64(&outTxPerSec, 1)
+	}
+}
+
+func (nb *Neighbor) GetPreferredIP() string {
+	return GetPreferredIP(nb.KnownIPs, nb.PreferIPv6)
+}
+
+func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
+
+	if nb.IPAddressWithPort != ipAddressWithPort {
+		for _, knownIP := range nb.KnownIPs {
+			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
+			if knownIPWithPort == ipAddressWithPort {
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
+				NeighborsLock.Lock()
+				delete(Neighbors, nb.IPAddressWithPort)
+				nb.IPAddressWithPort = ipAddressWithPort
+				Neighbors[nb.IPAddressWithPort] = nb
+				NeighborsLock.Unlock()
+				nb.PreferIPv6 = knownIP.IsIPv6()
+				nb.IP = knownIP.String()
+				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func AddNeighbor(address string) error {
@@ -109,32 +167,6 @@ func GetPreferredIP(knownIPs []*IPAddress, preferIPv6 bool) string {
 	}
 
 	return ""
-}
-
-func (nb *Neighbor) GetPreferredIP() string {
-	return GetPreferredIP(nb.KnownIPs, nb.PreferIPv6)
-}
-
-func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
-
-	if nb.IPAddressWithPort != ipAddressWithPort {
-		for _, knownIP := range nb.KnownIPs {
-			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
-			if knownIPWithPort == ipAddressWithPort {
-				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
-				NeighborsLock.Lock()
-				delete(Neighbors, nb.IPAddressWithPort)
-				nb.IPAddressWithPort = ipAddressWithPort
-				Neighbors[nb.IPAddressWithPort] = nb
-				NeighborsLock.Unlock()
-				nb.PreferIPv6 = knownIP.IsIPv6()
-				nb.IP = knownIP.String()
-				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func UpdateHostnameAddresses() {

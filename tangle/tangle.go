@@ -104,18 +104,10 @@ func Start() {
 
 	go report()
 	go cleanup()
-	logs.Log.Info("Tangle started!")
 
-	go func() {
-		interval := time.Duration(2) * time.Millisecond
-		if lowEndDevice {
-			interval = interval * 5
-		}
-		for {
-			outgoingRunner()
-			time.Sleep(interval)
-		}
-	}()
+	go outgoingRunner()
+
+	logs.Log.Info("Tangle started!")
 }
 
 func cleanup() {

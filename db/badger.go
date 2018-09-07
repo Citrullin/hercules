@@ -9,11 +9,10 @@ import (
 	"../db/coding"
 	"../logs"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 )
 
 func init() {
-	RegisterImplementation("badger", NewBadger)
+	RegisterImplementation("badger", startBadger)
 }
 
 type Badger struct {
@@ -23,46 +22,18 @@ type Badger struct {
 	waitGroup     sync.WaitGroup
 }
 
-func NewBadger() (Interface, error) {
-	path := config.AppConfig.GetString("database.path")
-	light := config.AppConfig.GetBool("light")
+func startBadger() (Interface, error) {
+	config.ConfigureBadger()
 
-	logs.Log.Infof("Loading database at %s", path)
-
-	cleanUpInterval := 5 * time.Minute
-
-	opts := badger.DefaultOptions
-	opts.Dir = path
-	opts.ValueDir = path
-	opts.ValueLogLoadingMode = options.FileIO
-	opts.TableLoadingMode = options.FileIO
-	if light {
-		// Source: https://github.com/dgraph-io/badger#memory-usage
-		opts.NumMemtables = 1
-		opts.NumLevelZeroTables = 1
-		opts.NumLevelZeroTablesStall = 2
-		opts.NumCompactors = 1
-		opts.MaxLevels = 5
-		opts.LevelOneSize = 256 << 18
-		opts.MaxTableSize = 64 << 18
-		opts.ValueLogFileSize = 1 << 25
-		opts.ValueLogMaxEntries = 250000
-		cleanUpInterval = 2 * time.Minute
-	}
-
-	db, err := badger.Open(opts)
+	logs.Log.Infof("Loading database at %s", config.BadgerOptions.Dir)
+	db, err := badger.Open(config.BadgerOptions)
 	if err != nil {
-		return nil, fmt.Errorf("open db [%s]: %v", path, err)
+		return nil, fmt.Errorf("open db [%s]: %v", config.BadgerOptions.Dir, err)
 	}
 	logs.Log.Info("Database loaded")
 
-	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(cleanUpInterval)}
-	b.cleanUp()
-	go func() {
-		for range b.cleanUpTicker.C {
-			b.cleanUp()
-		}
-	}()
+	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval)}
+	go b.cleanUp()
 	return b, nil
 }
 
@@ -165,6 +136,14 @@ func (b *Badger) Close() error {
 }
 
 func (b *Badger) cleanUp() {
+	executeCleanUp(b)
+
+	for range b.cleanUpTicker.C {
+		executeCleanUp(b)
+	}
+}
+
+func executeCleanUp(b *Badger) {
 	logs.Log.Debug("Cleanup database started")
 	b.dbLock.Lock()
 	b.db.RunValueLogGC(0.5)

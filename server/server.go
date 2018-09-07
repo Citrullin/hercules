@@ -20,22 +20,6 @@ const (
 	TCP                     = "tcp"
 )
 
-type Neighbor struct {
-	Hostname          string // Formatted like: <domainname> (Empty if its IP address)
-	Addr              string // Formatted like: <ip>:<port> OR <domainname>:<port>
-	IP                string // Formatted like: XXX.XXX.XXX.XXX (IPv4) OR [x:x:x:...] (IPv6)
-	Port              string // Also saved separately from Addr for performance reasons
-	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
-	UDPAddr           *net.UDPAddr
-	Incoming          int
-	New               int
-	Invalid           int
-	ConnectionType    string // Formatted like: udp
-	PreferIPv6        bool
-	KnownIPs          []*IPAddress
-	LastIncomingTime  time.Time
-}
-
 type Message struct {
 	Neighbor *Neighbor
 	Msg      []byte
@@ -51,11 +35,6 @@ type NeighborTrackingMessage struct {
 type messageQueue chan *Message
 type neighborTrackingQueue chan *NeighborTrackingMessage
 
-type Server struct {
-	Incoming messageQueue
-	Outgoing messageQueue
-}
-
 var incTxPerSec uint64
 var outTxPerSec uint64
 var totalIncTx uint64
@@ -69,92 +48,9 @@ var NeighborsLock = &sync.RWMutex{}
 var connection net.PacketConn
 var ended = false
 
-func create() *Server {
-	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
-	server = &Server{
-		Incoming: make(messageQueue, maxQueueSize),
-		Outgoing: make(messageQueue, maxQueueSize)}
-
-	Neighbors = make(map[string]*Neighbor)
-	logs.Log.Debug("Initial neighbors", config.AppConfig.GetStringSlice("node.neighbors"))
-	for _, address := range config.AppConfig.GetStringSlice("node.neighbors") {
-		err := AddNeighbor(address)
-		if err != nil {
-			logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
-		}
-	}
-
-	c, err := net.ListenPacket("udp", ":"+config.AppConfig.GetString("node.port"))
-	if err != nil {
-		panic(err)
-	}
-	connection = c
-	return server
-}
-
-func Start() {
-	create()
-
-	workers := 1
-	if !config.AppConfig.GetBool("light") {
-		workers = nbWorkers
-	}
-	server.listenAndReceive(workers)
-
-	go reportIncomingMessages()
-	go refreshHostnames()
-	go listenNeighborTracker()
-	go writeMessages()
-}
-
-func reportIncomingMessages() {
-	reportTicker = time.NewTicker(reportInterval)
-	for range reportTicker.C {
-		if ended {
-			break
-		}
-		report()
-		atomic.AddUint64(&totalIncTx, incTxPerSec)
-		atomic.StoreUint64(&incTxPerSec, 0)
-		atomic.StoreUint64(&outTxPerSec, 0)
-	}
-}
-
-func refreshHostnames() {
-	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
-	for range hostnameRefreshTicker.C {
-		if ended {
-			break
-		}
-		UpdateHostnameAddresses()
-	}
-}
-
-func writeMessages() {
-	for msg := range server.Outgoing {
-		if ended {
-			break
-		}
-		if msg.Neighbor != nil {
-			go msg.Neighbor.Write(msg)
-		} else {
-			go server.Write(msg)
-		}
-	}
-}
-
-func (neighbor Neighbor) Write(msg *Message) {
-	if ended {
-		return
-	}
-	_, err := connection.WriteTo(msg.Msg[0:], neighbor.UDPAddr)
-	if err != nil {
-		if !ended { // Check again
-			logs.Log.Errorf("Error sending message to neighbor '%v': %v", neighbor.Addr, err)
-		}
-	} else {
-		atomic.AddUint64(&outTxPerSec, 1)
-	}
+type Server struct {
+	Incoming messageQueue
+	Outgoing messageQueue
 }
 
 func (server Server) Write(msg *Message) {
@@ -221,10 +117,84 @@ func (server Server) receive() {
 	}
 }
 
+func Start() {
+	create()
+
+	workers := 1
+	if !config.AppConfig.GetBool("light") {
+		workers = nbWorkers
+	}
+	server.listenAndReceive(workers)
+
+	go reportIncomingMessages()
+	go refreshHostnames()
+	go listenNeighborTracker()
+	go writeMessages()
+}
+
+func create() *Server {
+	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
+	server = &Server{
+		Incoming: make(messageQueue, maxQueueSize),
+		Outgoing: make(messageQueue, maxQueueSize)}
+
+	Neighbors = make(map[string]*Neighbor)
+	logs.Log.Debug("Initial neighbors", config.AppConfig.GetStringSlice("node.neighbors"))
+	for _, address := range config.AppConfig.GetStringSlice("node.neighbors") {
+		err := AddNeighbor(address)
+		if err != nil {
+			logs.Log.Warningf("Could not add neighbor '%v' (%v)", address, err)
+		}
+	}
+
+	c, err := net.ListenPacket("udp", ":"+config.AppConfig.GetString("node.port"))
+	if err != nil {
+		panic(err)
+	}
+	connection = c
+	return server
+}
+
+func writeMessages() {
+	for msg := range server.Outgoing {
+		if ended {
+			break
+		}
+		if msg.Neighbor != nil {
+			go msg.Neighbor.Write(msg)
+		} else {
+			go server.Write(msg)
+		}
+	}
+}
+
 func handleMessage(msg *Message) {
 	server.Incoming <- msg
 	NeighborTrackingQueue <- &NeighborTrackingMessage{Neighbor: msg.Neighbor, Incoming: 1}
 	atomic.AddUint64(&incTxPerSec, 1)
+}
+
+func reportIncomingMessages() {
+	reportTicker = time.NewTicker(reportInterval)
+	for range reportTicker.C {
+		if ended {
+			break
+		}
+		report()
+		atomic.AddUint64(&totalIncTx, incTxPerSec)
+		atomic.StoreUint64(&incTxPerSec, 0)
+		atomic.StoreUint64(&outTxPerSec, 0)
+	}
+}
+
+func refreshHostnames() {
+	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
+	for range hostnameRefreshTicker.C {
+		if ended {
+			break
+		}
+		UpdateHostnameAddresses()
+	}
 }
 
 func report() {
@@ -240,5 +210,5 @@ func End() {
 	connection.Close()
 	atomic.AddUint64(&totalIncTx, incTxPerSec)
 	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
-	logs.Log.Info("Neighbor server exited")
+	logs.Log.Debug("Neighbor server exited")
 }

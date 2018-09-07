@@ -10,8 +10,8 @@ import (
 )
 
 func init() {
-	addAPICall("getTips", getTips)
-	addAPICall("getTransactionsToApprove", getTransactionsToApprove)
+	addAPICall("getTips", getTips, mainAPICalls)
+	addAPICall("getTransactionsToApprove", getTransactionsToApprove, mainAPICalls)
 }
 
 func getTips(request Request, c *gin.Context, t time.Time) {
@@ -30,13 +30,13 @@ func getTips(request Request, c *gin.Context, t time.Time) {
 
 func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 	if (request.Depth < tangle.MinTipselDepth) || (request.Depth > tangle.MaxTipselDepth) {
-		ReplyError("Invalid depth input", c)
+		replyError("Invalid depth input", c)
 		return
 	}
 
 	var reference []byte
 	if len(request.Reference) > 0 && !convert.IsTrytes(request.Reference, 81) {
-		ReplyError("Wrong reference trytes", c)
+		replyError("Wrong reference trytes", c)
 		return
 	} else if len(request.Reference) > 0 {
 		reference = convert.TrytesToBytes(request.Reference)[:49]
@@ -48,7 +48,7 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 
 	tips := tangle.GetTXToApprove(reference, request.Depth)
 	if tips == nil {
-		ReplyError("Could not get transactions to approve", c)
+		replyError("Could not get transactions to approve", c)
 		return
 	}
 

@@ -124,6 +124,19 @@ func getSomeRequestByNeighbor(neighbor *server.Neighbor, any bool) []byte {
 }
 
 func outgoingRunner() {
+	executeOutgoingRunner()
+
+	outgoingInterval := 2 * time.Millisecond
+	if lowEndDevice {
+		outgoingInterval *= 5
+	}
+
+	for range time.NewTicker(outgoingInterval).C {
+		executeOutgoingRunner()
+	}
+}
+
+func executeOutgoingRunner() {
 	if len(srv.Incoming) > maxIncoming {
 		return
 	}

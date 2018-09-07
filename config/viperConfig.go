@@ -14,6 +14,11 @@ var (
 	AppConfig = viper.New()
 )
 
+const (
+	MAX_SNAPSHOT_PERIOD = 12
+)
+
+// TODO: Refactor it further
 /*
 PRECEDENCE (Higher number overrides the others):
 1. default
@@ -27,79 +32,33 @@ func Start() {
 	// 1. Set defaults
 	//config.SetDefault("test", 0)
 
-	// 2. Get command line arguments
 	flag.Bool("debug", false, "Run hercules when debugging the source-code")
-
 	flag.Bool("light", false, "Whether working on a low-memory, low CPU device. Try to optimize accordingly.")
 
-	declareApiConfigs()
+	declareAPIConfigs()
 	declareLogConfigs()
-
-	flag.String("database.type", "badger", "Type of the database")
-	flag.String("database.path", "data", "Path to the database directory")
-
-	flag.String("snapshots.path", "data", "Path to the snapshots directory")
-	flag.String("snapshots.filename", "", "If set, the snapshots will be saved using this name, "+
-		"otherwise <timestamp>.snap wil be used")
-	flag.String("snapshots.loadFile", "", "Path to a snapshot file to load")
-	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
-	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
-	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
-	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
-	// Lesser period increases the probability that some addresses will not be consistent with the global state.
-	// If your node can handle more, we suggest keeping several days or a week worth of data!
-	flag.Int("snapshots.period", 168, "How many hours of tangle data to keep after the snapshot. Minimum is 12. Default = 168 (one week)")
-	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
-		"makeSnapshot, getSnapshotsInfo")
-	flag.Bool("snapshots.keep", false, "Whether to keep transactions past the horizon after making a snapshot.")
-
-	flag.IntP("node.port", "u", 14600, "UDP Node port")
-	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
+	declareDBConfigs()
+	declareSnapshotConfigs()
+	declareNodeConfigs()
 
 	AppConfig.BindPFlags(flag.CommandLine)
 
 	var configPath = flag.StringP("config", "c", "hercules.config.json", "Config file path")
 	flag.Parse()
 
-	// 3. Bind environment vars
-	replacer := strings.NewReplacer(".", "_")
-	AppConfig.SetEnvPrefix("HERCULES")
-	AppConfig.SetEnvKeyReplacer(replacer)
-	AppConfig.AutomaticEnv()
+	declareEnvironmentVariablesConfigs()
 
-	// 3. Load config
-	if len(*configPath) > 0 {
-		_, err := os.Stat(*configPath)
-		if !flag.CommandLine.Changed("config") && os.IsNotExist(err) {
-			// Standard config file not found => skip
-			logs.Log.Info("Standard config file not found. Loading default settings.")
-		} else {
-			logs.Log.Infof("Loading config from: %s", *configPath)
-			AppConfig.SetConfigFile(*configPath)
-			err := AppConfig.ReadInConfig()
-			if err != nil {
-				logs.Log.Fatalf("Config could not be loaded from: %s (%s)", *configPath, err)
-			}
-		}
-	}
+	loadAppConfigFile(configPath)
 
-	// 4. Check config for validity
-	/**/
-	snapshotPeriod := AppConfig.GetInt("snapshots.period")
-	snapshotInterval := AppConfig.GetInt("snapshots.interval")
-	if snapshotInterval > 0 && snapshotPeriod < 12 {
-		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
-			"At least 12 hours currently required to be kept.", snapshotPeriod)
-	}
-	/**/
+	validateConfigs()
 
 	logs.SetConfig(AppConfig)
 
 	cfg, _ := json.MarshalIndent(AppConfig.AllSettings(), "", "  ")
-	logs.Log.Debugf("Following settings loaded: \n %+v", string(cfg))
+	logs.Log.Debugf("Settings loaded: \n %+v", string(cfg))
 }
 
-func declareApiConfigs() {
+func declareAPIConfigs() {
 	flag.String("api.auth.username", "", "API Access Username")
 	flag.String("api.auth.password", "", "API Access Password")
 
@@ -133,4 +92,68 @@ func declareLogConfigs() {
 	flag.Int32("log.maxLogFilesToKeep", 1, "Maximum amount of log files to keep when a new file is created. Default is 1 file")
 
 	flag.String("log.criticalErrorsLogFile", "herculesCriticalErrors.log", "Path to file where critical error messages are saved")
+}
+
+func declareDBConfigs() {
+	flag.String("database.type", "badger", "Type of the database")
+	flag.String("database.path", "data", "Path to the database directory")
+}
+
+func declareSnapshotConfigs() {
+	flag.String("snapshots.path", "data", "Path to the snapshots directory")
+	flag.String("snapshots.filename", "", "If set, the snapshots will be saved using this name, "+
+		"otherwise <timestamp>.snap wil be used")
+	flag.String("snapshots.loadFile", "", "Path to a snapshot file to load")
+	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
+	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
+	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
+	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
+	// Lesser period increases the probability that some addresses will not be consistent with the global state.
+	// If your node can handle more, we suggest keeping several days or a week worth of data!
+	flag.Int("snapshots.period", 168, "How many hours of tangle data to keep after the snapshot. Minimum is 12. Default = 168 (one week)")
+	flag.Bool("snapshots.enableapi", true, "Enable snapshot api commands: "+
+		"makeSnapshot, getSnapshotsInfo")
+	flag.Bool("snapshots.keep", false, "Whether to keep transactions past the horizon after making a snapshot.")
+}
+
+func declareNodeConfigs() {
+	flag.IntP("node.port", "u", 14600, "UDP Node port")
+	flag.StringSliceP("node.neighbors", "n", nil, "Initial Node neighbors")
+}
+
+func declareEnvironmentVariablesConfigs() {
+	replacer := strings.NewReplacer(".", "_")
+	AppConfig.SetEnvPrefix("HERCULES")
+	AppConfig.SetEnvKeyReplacer(replacer)
+	AppConfig.AutomaticEnv()
+}
+
+func loadAppConfigFile(configPath *string) {
+	if len(*configPath) > 0 {
+		_, err := os.Stat(*configPath)
+		if !flag.CommandLine.Changed("config") && os.IsNotExist(err) {
+			// Standard config file not found => skip
+			logs.Log.Info("Standard config file not found. Loading default settings.")
+		} else {
+			logs.Log.Infof("Loading config from: %s", *configPath)
+			AppConfig.SetConfigFile(*configPath)
+			err := AppConfig.ReadInConfig()
+			if err != nil {
+				logs.Log.Fatalf("Config could not be loaded from: %s (%s)", *configPath, err)
+			}
+		}
+	}
+}
+
+func validateConfigs() {
+	validateSnapshotConfigs()
+}
+
+func validateSnapshotConfigs() {
+	snapshotPeriod := AppConfig.GetInt("snapshots.period")
+	snapshotInterval := AppConfig.GetInt("snapshots.interval")
+	if snapshotInterval > 0 && snapshotPeriod < MAX_SNAPSHOT_PERIOD {
+		logs.Log.Fatalf("The given snapshot period of %v hours is too short! "+
+			"At least 12 hours currently required to be kept.", snapshotPeriod)
+	}
 }
