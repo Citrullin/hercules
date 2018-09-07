@@ -111,7 +111,6 @@ func processIncomingTX(incoming IncomingTX) error {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			tx.Remove(db.AsKey(key, db.KEY_PENDING_CONFIRMED))
 			tx.Remove(db.AsKey(key, db.KEY_EVENT_CONFIRMATION_PENDING))
-			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING)) // TODO
 			err := coding.PutInt64(tx, db.AsKey(key, db.KEY_EDGE), snapTime)
 			_checkIncomingError(t, err)
 			parentKey, err := coding.GetBytes(tx, db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
@@ -119,6 +118,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				err = tx.Remove(db.AsKey(parentKey, db.KEY_EVENT_MILESTONE_PENDING))
 				_checkIncomingError(t, err)
 			}
+			tx.Remove(db.AsKey(key, db.KEY_EVENT_MILESTONE_PAIR_PENDING))
 		}
 
 		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
