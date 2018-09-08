@@ -134,7 +134,7 @@ func loadLatestMilestoneFromDB() {
 			return err
 		}
 
-		txBytes, err := coding.GetBytes(tx, latestKey)
+		txBytes, err := tx.GetBytes(latestKey)
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func processPendingMilestones() {
 			key := ns.Key(pendingMilestone.Key, ns.NamespaceEventMilestonePending)
 			TX2BytesKey := pendingMilestone.TX2BytesKey
 			if TX2BytesKey == nil {
-				relation, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceRelation))
+				relation, err := tx.GetBytes(ns.Key(key, ns.NamespaceRelation))
 				if err != nil {
 					// The 0-index milestone TX relations doesn't exist.
 					// Clearly an error here!
@@ -258,7 +258,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 	var txBytesKey = ns.Key(key, ns.NamespaceBytes)
 
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := coding.GetBytes(tx, TX2BytesKey)
+	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
 	if err != nil {
 		err := tx.PutBytes(ns.Key(TX2BytesKey, ns.NamespaceEventMilestonePairPending), key)
 		if err != nil {
@@ -268,7 +268,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 	}
 
 	// 3. Check that the 0-index TX also exists.
-	txBytes, err := coding.GetBytes(tx, txBytesKey)
+	txBytes, err := tx.GetBytes(txBytesKey)
 	if err != nil {
 		// The 0-index milestone TX doesn't exist.
 		// Clearly an error here!

@@ -47,7 +47,7 @@ func (b *Badger) Unlock() {
 
 func (b *Badger) PutBytes(key, value []byte) error {
 	return b.Update(func(t Transaction) error {
-		return coding.PutBytes(t, key, value)
+		return t.PutBytes(key, value)
 	})
 }
 
@@ -58,7 +58,7 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
-	return coding.GetBytes(tx, key)
+	return tx.GetBytes(key)
 }
 
 func (b *Badger) HasKey(key []byte) bool {

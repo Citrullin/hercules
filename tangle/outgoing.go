@@ -413,7 +413,7 @@ func cleanupStalledRequests() {
 			k := ns.Key(key, ns.NamespacePendingHash)
 
 			err := error(nil)
-			hash, err = coding.GetBytes(tx, k)
+			hash, err = tx.GetBytes(k)
 			if err != nil {
 				return nil
 			}

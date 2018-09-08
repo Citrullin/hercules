@@ -8,7 +8,6 @@ import (
 
 	"../convert"
 	"../db"
-	"../db/coding"
 	"../db/ns"
 )
 
@@ -24,7 +23,7 @@ func getTrytes(request Request, c *gin.Context, t time.Time) {
 				replyError("Wrong hash trytes", c)
 				return nil
 			}
-			b, err := coding.GetBytes(tx, ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceBytes))
+			b, err := tx.GetBytes(ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceBytes))
 			if err == nil {
 				trytes = append(trytes, convert.BytesToTrytes(b)[:2673])
 			} else {

@@ -114,7 +114,7 @@ func processIncomingTX(incoming IncomingTX) error {
 			tx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
 			err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEdge), snapTime)
 			_checkIncomingError(t, err)
-			parentKey, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceEventMilestonePairPending))
+			parentKey, err := tx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
 				err = tx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
 				_checkIncomingError(t, err)
@@ -167,7 +167,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				_checkIncomingError(t, err)
 			}
 
-			parentKey, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceEventMilestonePairPending))
+			parentKey, err := tx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
 				pendingMilestone = &PendingMilestone{parentKey, ns.Key(key, ns.NamespaceBytes)}
 			}
