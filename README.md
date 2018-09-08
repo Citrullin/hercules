@@ -134,6 +134,24 @@ You can check [hercules.config.json](hercules.config.json) for a complete config
 with default values. You can use the rules above to override those values with environment vars
 or command line options. Or write a new config file.
 
+## Docker
+
+To run hercules on docker, you must first build the image via
+
+```
+make image
+```
+
+and than run it with
+
+```
+go run --net host -v target/data:/data -v target/snapshots:/snapshots -v /tmp:/tmp hercules
+```
+
+You may replace the `target/*` directories with custom paths and pass further command-line arguments.
+
+Further information about the handling of docker container to find [here](https://docs.docker.com).
+
 ### Options
 
 Below is a complete list of all the options in dot notation (as command line params).
@@ -226,7 +244,7 @@ will be logged. Possible values: `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
 
 Enable save log messages to rolling log files
 
-#### --log.logFile="hercules.log" 
+#### --log.logFile="hercules.log"
 
 Path to file where log files are saved
 
@@ -368,8 +386,8 @@ curl http://localhost:14265/snapshots -X POST -H 'Content-Type: application/json
 ```
 
 You can also request only the latest snapshot available from a node with:
-``` 
-curl http://localhost:14265/snapshots -X POST -H 'Content-Type: application/json' -H 'X-IOTA-API-Version: 1' -d '{"command": "getLatestSnapshotInfo"}' | jq 
+```
+curl http://localhost:14265/snapshots -X POST -H 'Content-Type: application/json' -H 'X-IOTA-API-Version: 1' -d '{"command": "getLatestSnapshotInfo"}' | jq
 
 {
   "currentSnapshotTimeHumanReadable": "29 Jul 18 23:03 UTC",
