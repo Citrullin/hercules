@@ -29,6 +29,9 @@ run: $(binary_path) $(config_path)
 image: $(binary_path)
 	$(DOCKER) build -t $(name) .
 
+run-image: image
+	$(DOCKER) run -it --rm -v /tmp:/tmp -v `pwd`/target/latest.snap:/latest.snap $(name) --snapshots.loadFile /latest.snap
+
 clean:
 	rm -f $(binary_path) $(config_path)
 
