@@ -25,12 +25,12 @@ var (
 func main() {
 	herculesDeathWaitGroup.Add(1)
 
+	startBasicFunctionality()
+	logs.Log.Info("Starting Hercules. Please wait...")
+
 	if config.AppConfig.GetBool("debug") {
 		defer profile.Start().Stop()
 	}
-
-	startBasicFunctionality()
-	logs.Log.Info("Starting Hercules. Please wait...")
 
 	db.Start()
 	snapshot.Start()
@@ -64,5 +64,5 @@ func gracefullyDies() {
 	db.End()
 
 	logs.Log.Info("Bye!")
-	herculesDeathWaitGroup.Add(-1)
+	herculesDeathWaitGroup.Done()
 }

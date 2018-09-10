@@ -10,7 +10,7 @@ import (
 )
 
 func TestIncrementInt64By(t *testing.T) {
-	s := &storage{key: testKey, value: []byte{0x04, 0x04, 0x00, 0xff, 0xf6}}
+	s := &storage{key: testKey, value: []byte{0xf6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}
 
 	balance, err := coding.IncrementInt64By(s, testKey, 1, false)
 	require.NoError(t, err)

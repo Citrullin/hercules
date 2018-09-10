@@ -21,13 +21,15 @@ const (
 )
 
 var (
-	incTxPerSec           uint64
+	IncTxPerSec           uint64
+	NewTxPerSec           uint64
+	KnownTxPerSec         uint64
+	ValidTxPerSec         uint64
 	outTxPerSec           uint64
-	totalIncTx            uint64
+	TotalIncTx            uint64
 	nbWorkers             = runtime.NumCPU()
 	reportTicker          *time.Ticker
 	hostnameRefreshTicker *time.Ticker
-	NeighborTrackingQueue neighborTrackingQueue
 	server                *Server
 	Neighbors             map[string]*Neighbor
 	NeighborsLock         = &sync.RWMutex{}
@@ -40,19 +42,16 @@ type Message struct {
 	Msg      []byte
 }
 
-type NeighborTrackingMessage struct {
-	Neighbor *Neighbor
-	Incoming int
-	New      int
-	Invalid  int
+type RawMsg struct {
+	Data *[]byte
+	Addr *net.Addr
 }
 
-type messageQueue chan *Message
-type neighborTrackingQueue chan *NeighborTrackingMessage
-
 type Server struct {
-	Incoming messageQueue
-	Outgoing messageQueue
+	Incoming          chan *RawMsg
+	Outgoing          chan *Message
+	IncomingWaitGroup *sync.WaitGroup
+	receiveWaitGroup  *sync.WaitGroup
 }
 
 func (server Server) Write(msg *Message) {
@@ -70,15 +69,11 @@ func (server Server) Write(msg *Message) {
 	}
 }
 
-func (server Server) listenAndReceive(maxWorkers int) error {
-	for i := 0; i < maxWorkers; i++ {
-		go server.receive()
-	}
-	return nil
-}
-
-// receive accepts incoming datagrams on c and calls handleMessage() for each message
+// receive accepts incoming datagrams and adds them to the Incoming queue
 func (server Server) receive() {
+	server.receiveWaitGroup.Add(1)
+	defer server.receiveWaitGroup.Done()
+
 	for !ended {
 		msg := make([]byte, UDPPacketSize)
 		_, addr, err := connection.ReadFrom(msg[0:])
@@ -89,56 +84,27 @@ func (server Server) receive() {
 			}
 			continue
 		}
-		ipAddressWithPort := addr.String() // Format <ip>:<port>
-
-		NeighborsLock.RLock()
-
-		var neighbor *Neighbor
-		neighborExists, _ := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
-		if !neighborExists {
-			// Check all known addresses => slower
-
-			neighborExists, neighbor = checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
-
-			NeighborsLock.RUnlock()
-
-			if neighborExists {
-				// If the neighbor was found now, the preferred IP is wrong => Update it!
-				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
-			}
-		} else {
-			NeighborsLock.RUnlock()
-		}
-
-		if neighborExists {
-			handleMessage(&Message{Neighbor: neighbor, Msg: msg})
-		} else {
-			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
-		}
-		time.Sleep(1)
+		server.Incoming <- &RawMsg{Data: &msg, Addr: &addr}
 	}
 }
 
 func Start() {
 	create()
 
-	workers := 1
-	if !config.AppConfig.GetBool("light") {
-		workers = nbWorkers
-	}
-	server.listenAndReceive(workers)
+	go server.receive()
 
 	go reportIncomingMessages()
 	go refreshHostnames()
-	go listenNeighborTracker()
 	go writeMessages()
 }
 
 func create() *Server {
-	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
 	server = &Server{
-		Incoming: make(messageQueue, maxQueueSize),
-		Outgoing: make(messageQueue, maxQueueSize)}
+		Incoming:          make(chan *RawMsg, maxQueueSize),
+		Outgoing:          make(chan *Message, maxQueueSize),
+		IncomingWaitGroup: &sync.WaitGroup{},
+		receiveWaitGroup:  &sync.WaitGroup{},
+	}
 
 	Neighbors = make(map[string]*Neighbor)
 	logs.Log.Debug("Initial neighbors", config.AppConfig.GetStringSlice("node.neighbors"))
@@ -170,12 +136,6 @@ func writeMessages() {
 	}
 }
 
-func handleMessage(msg *Message) {
-	server.Incoming <- msg
-	NeighborTrackingQueue <- &NeighborTrackingMessage{Neighbor: msg.Neighbor, Incoming: 1}
-	atomic.AddUint64(&incTxPerSec, 1)
-}
-
 func reportIncomingMessages() {
 	reportTicker = time.NewTicker(reportInterval)
 	for range reportTicker.C {
@@ -183,8 +143,11 @@ func reportIncomingMessages() {
 			break
 		}
 		report()
-		atomic.AddUint64(&totalIncTx, incTxPerSec)
-		atomic.StoreUint64(&incTxPerSec, 0)
+		atomic.AddUint64(&TotalIncTx, IncTxPerSec)
+		atomic.StoreUint64(&IncTxPerSec, 0)
+		atomic.StoreUint64(&NewTxPerSec, 0)
+		atomic.StoreUint64(&KnownTxPerSec, 0)
+		atomic.StoreUint64(&ValidTxPerSec, 0)
 		atomic.StoreUint64(&outTxPerSec, 0)
 	}
 }
@@ -200,7 +163,7 @@ func refreshHostnames() {
 }
 
 func report() {
-	logs.Log.Debugf("Incoming TX/s: %d, Outgoing TX/s: %d\n", incTxPerSec, outTxPerSec)
+	logs.Log.Debugf("Incoming TX/s: (All: %4d, Known: %4d, New: %4d, Valid: %4d) // Outgoing TX/s: %4d\n", IncTxPerSec, KnownTxPerSec, NewTxPerSec, ValidTxPerSec, outTxPerSec)
 }
 
 func GetServer() *Server {
@@ -210,7 +173,12 @@ func GetServer() *Server {
 func End() {
 	ended = true
 	connection.Close()
-	atomic.AddUint64(&totalIncTx, incTxPerSec)
-	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
+	server.receiveWaitGroup.Wait()
+
+	close(server.Incoming)
+	server.IncomingWaitGroup.Wait()
+
+	atomic.AddUint64(&TotalIncTx, IncTxPerSec)
+	logs.Log.Debugf("Total Incoming TXs %d\n", TotalIncTx)
 	logs.Log.Debug("Neighbor server exited")
 }

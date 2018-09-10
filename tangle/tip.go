@@ -29,7 +29,7 @@ func loadTips() {
 
 	db.Singleton.View(func(tx db.Transaction) error {
 		return coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTip), true, func(key []byte, timestamp int64) (bool, error) {
-			hash, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceHash))
+			hash, err := tx.GetBytes(ns.Key(key, ns.NamespaceHash))
 			if err != nil {
 				return true, nil
 			}

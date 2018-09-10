@@ -9,7 +9,6 @@ import (
 	"../config"
 	"../convert"
 	"../db"
-	"../db/coding"
 	"../db/ns"
 	"../logs"
 	"../server"
@@ -48,8 +47,6 @@ var (
 	lowEndDevice               = false
 	totalTransactions    int64 = 0
 	totalConfirmations   int64 = 0
-	incoming                   = 0
-	incomingProcessed          = 0
 	saved                      = 0
 	discarded                  = 0
 	outgoing                   = 0
@@ -133,14 +130,14 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		x := 0
 		return ns.ForNamespace(tx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
 			relKey := ns.Key(key, ns.NamespaceRelation)
-			relation, _ := coding.GetBytes(tx, relKey)
+			relation, _ := tx.GetBytes(relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
 				(!tx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !tx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
-				txBytes, _ := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
+				txBytes, _ := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {
