@@ -77,7 +77,7 @@ Sets the current snapshot date in the database
 func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
-		defer tx.Discard()
+		defer tx.Commit()
 	}
 	err := coding.PutInt64(tx, keySnapshotDate, timestamp)
 	if err == nil {
@@ -104,7 +104,7 @@ Creates a snapshot lock in the database
 func Lock(timestamp int64, filename string, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
-		defer tx.Discard()
+		defer tx.Commit()
 	}
 
 	InProgress = true
@@ -147,19 +147,21 @@ func GetSnapshotLock(tx db.Transaction) int64 {
 Returns the date unix timestamp of the last snapshot
 */
 func GetSnapshotTimestamp(tx db.Transaction) int64 {
+	if CurrentTimestamp > 0 {
+		return CurrentTimestamp
+	}
+
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
 		defer tx.Discard()
-	}
-
-	if CurrentTimestamp > 0 {
-		return CurrentTimestamp
 	}
 
 	timestamp, err := coding.GetInt64(tx, keySnapshotDate)
 	if err != nil {
 		return -1
 	}
+
+	CurrentTimestamp = timestamp
 	return timestamp
 }
 

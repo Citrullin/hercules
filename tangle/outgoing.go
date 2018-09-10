@@ -213,7 +213,7 @@ func sendReply(msg *Message) {
 func getMessage(resp []byte, req []byte, tip bool, neighbor *server.Neighbor, tx db.Transaction) *Message {
 	var hash []byte
 	if resp == nil {
-		hash, resp = getRandomTip()
+		hash, resp = getRandomTip(tx)
 	}
 	// Try getting latest milestone
 	if resp == nil {
@@ -291,8 +291,10 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 
 	if save {
 		key := ns.HashKey(hash, ns.NamespacePendingHash)
-		db.Singleton.PutBytes(key, hash)
-		coding.PutInt64(db.Singleton, ns.Key(key, ns.NamespacePendingTimestamp), timestamp)
+		tx := db.Singleton.NewTransaction(true)
+		tx.PutBytes(key, hash)
+		coding.PutInt64(tx, ns.Key(key, ns.NamespacePendingTimestamp), timestamp)
+		tx.Commit()
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), Neighbor: neighbor}
@@ -306,7 +308,7 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 	return pendingRequest
 }
 
-func removePendingRequest(hash []byte) bool {
+func removePendingRequest(hash []byte, tx db.Transaction) bool {
 
 	key := string(hash)
 	PendingRequestsLock.RLock()
@@ -317,9 +319,15 @@ func removePendingRequest(hash []byte) bool {
 		PendingRequestsLock.Lock()
 		delete(PendingRequests, key)
 		PendingRequestsLock.Unlock()
+
+		if tx == nil {
+			tx = db.Singleton.NewTransaction(true)
+			defer tx.Commit()
+		}
+
 		key := ns.HashKey(hash, ns.NamespacePendingHash)
-		db.Singleton.Remove(key)
-		db.Singleton.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
+		tx.Remove(key)
+		tx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
 	}
 	return ok
 }
@@ -393,7 +401,6 @@ or invalid spam referenced by trunk/branch of a transaction. Just ignore.
 func cleanupStalledRequests() {
 
 	var keysToRemove [][]byte
-	var requestsToRemove []string
 
 	db.Singleton.View(func(tx db.Transaction) error {
 		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespacePendingRequests), true, func(key []byte, times int) (bool, error) {
@@ -404,21 +411,24 @@ func cleanupStalledRequests() {
 		})
 	})
 
-	for _, key := range keysToRemove {
-		var hash []byte
-		err := db.Singleton.Update(func(tx db.Transaction) error {
-			if err := tx.Remove(key); err != nil {
+	var requestsToRemove []string
+
+	db.Singleton.Update(func(tx db.Transaction) (err error) {
+		for _, key := range keysToRemove {
+			var hash []byte
+
+			err = tx.Remove(key)
+			if err != nil {
 				return err
 			}
-			k := ns.Key(key, ns.NamespacePendingHash)
 
-			err := error(nil)
-			hash, err = tx.GetBytes(k)
+			keyPendingHash := ns.Key(key, ns.NamespacePendingHash)
+			hash, err = tx.GetBytes(keyPendingHash)
 			if err != nil {
 				return nil
 			}
 
-			err = tx.Remove(ns.Key(key, ns.NamespacePendingHash))
+			err = tx.Remove(keyPendingHash)
 			if err != nil {
 				return err
 			}
@@ -431,12 +441,12 @@ func cleanupStalledRequests() {
 				return err
 			}
 
-			return nil
-		})
-		if err == nil && hash != nil {
-			requestsToRemove = append(requestsToRemove, string(hash))
+			if hash != nil {
+				requestsToRemove = append(requestsToRemove, string(hash))
+			}
 		}
-	}
+		return nil
+	})
 
 	PendingRequestsLock.Lock()
 	for _, req := range requestsToRemove {
