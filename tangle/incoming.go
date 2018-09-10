@@ -32,41 +32,67 @@ func incomingRunner() {
 			continue
 		}
 
-		data := raw.Msg[:DATA_SIZE]
+		ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
+
+		var neighbor *server.Neighbor
+
+		server.NeighborsLock.RLock()
+		neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+		if !neighborExists {
+			// Check all known addresses => slower
+			neighborExists, neighbor = server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
+
+			server.NeighborsLock.RUnlock()
+
+			if neighborExists {
+				// If the neighbor was found now, the preferred IP is wrong => Update it!
+				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+			}
+		} else {
+			server.NeighborsLock.RUnlock()
+		}
+
+		if !neighborExists {
+			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
+			continue
+		}
+
+		atomic.AddUint64(&server.IncTxPerSec, 1)
+		neighbor.TrackIncoming(1)
+
+		data := (*raw.Data)[:DATA_SIZE]
 		req := make([]byte, HASH_SIZE)
-		copy(req, raw.Msg[DATA_SIZE:PACKET_SIZE])
-
-		incoming++
-
-		db.Singleton.Lock()
-		db.Singleton.Unlock()
+		copy(req, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
 
 		var hash []byte
 
 		fingerprint := ns.HashKey(data, ns.NamespaceFingerprint)
 		if !hasFingerprint(fingerprint) {
+			atomic.AddUint64(&server.NewTxPerSec, 1)
+
 			// Message was not received in the last time
+			addFingerprint(fingerprint) // TODO: Can the tipBytes messages also be dropped?
+
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
-			var tx = transaction.TritsToTX(&trits, data)
+			tx := transaction.TritsToTX(&trits, data)
 			hash = tx.Hash
 
 			if !bytes.Equal(data, tipBytes) {
 				// Tx was not a tip
-				if !crypt.IsValidPoW(tx.Hash, MWM) {
-					// POW invalid => Track invalid messages from neighbor
-		            raw.Neighbor.TrackInvalid(1)
-				} else {
+				if crypt.IsValidPoW(tx.Hash, MWM) {
 					// POW valid => Process the message
-		            raw.Neighbor.TrackIncoming(1)
+					err := processIncomingTX(tx, neighbor)
 					if err == nil {
-						incomingProcessed++
-						addFingerprint(fingerprint)
-						if raw.Neighbor != nil {
-							raw.Neighbor.LastIncomingTime = time.Now()
-						}
+						atomic.AddUint64(&server.ValidTxPerSec, 1)
+						neighbor.LastIncomingTime = time.Now()
 					}
+				} else {
+					// POW invalid => Track invalid messages from neighbor
+					neighbor.TrackInvalid(1)
 				}
 			}
+		} else {
+			atomic.AddUint64(&server.KnownTxPerSec, 1)
 		}
 
 		// Pause for a while without responding to prevent flooding
@@ -84,19 +110,18 @@ func incomingRunner() {
 			continue
 		}
 
-		request := getSomeRequestByNeighbor(raw.Neighbor, false)
+		request := getSomeRequestByNeighbor(neighbor, false)
 		if isLookingForTX && request == nil && reply == nil {
 			// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
 			// then do not reply. If we do not have it, but have something to ask, then ask.
 			continue
 		}
 
-		sendReply(getMessage(reply, request, request == nil, raw.Neighbor, nil))
+		sendReply(getMessage(reply, request, request == nil, neighbor, nil))
 	}
 }
 
-func processIncomingTX(incoming IncomingTX) error {
-	t := incoming.TX
+func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 	var pendingMilestone *PendingMilestone
 
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
@@ -130,9 +155,9 @@ func processIncomingTX(incoming IncomingTX) error {
 		}
 
 		if tx.HasKey(ns.Key(key, ns.NamespaceSnapshotted)) {
-			_, err := requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
+			_, err := requestIfMissing(t.TrunkTransaction, neighbor)
 			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, incoming.Neighbor)
+			_, err = requestIfMissing(t.BranchTransaction, neighbor)
 			_checkIncomingError(t, err)
 			removeTx()
 			return nil
@@ -141,7 +166,7 @@ func processIncomingTX(incoming IncomingTX) error {
 		if !tx.HasKey(key) {
 			// Tx is not in the database yet
 
-			err := SaveTX(t, incoming.Bytes, tx)
+			err := SaveTX(t, &t.Bytes, tx)
 			_checkIncomingError(t, err)
 			if isMaybeMilestone(t) {
 				trunkBytesKey := ns.HashKey(t.TrunkTransaction, ns.NamespaceBytes)
@@ -150,9 +175,9 @@ func processIncomingTX(incoming IncomingTX) error {
 
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(t.TrunkTransaction, incoming.Neighbor)
+			_, err = requestIfMissing(t.TrunkTransaction, neighbor)
 			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, incoming.Neighbor)
+			_, err = requestIfMissing(t.BranchTransaction, neighbor)
 			_checkIncomingError(t, err)
 
 			// EVENTS:
@@ -174,10 +199,10 @@ func processIncomingTX(incoming IncomingTX) error {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if (!lowEndDevice || len(srv.Incoming) < maxIncoming) && utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(t.Bytes, incoming.Neighbor)
+				Broadcast(t.Bytes, neighbor)
 			}
 
-			incoming.Neighbor.TrackNew(1)
+			neighbor.TrackNew(1)
 			saved++
 			atomic.AddInt64(&totalTransactions, 1)
 		} else {
@@ -191,10 +216,10 @@ func processIncomingTX(incoming IncomingTX) error {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		addPendingRequest(t.Hash, 0, incoming.Neighbor, true)
+		addPendingRequest(t.Hash, 0, neighbor, true)
 
 		atomic.AddInt64(&totalTransactions, -1)
-		incoming.Neighbor.TrackNew(-1)
+		neighbor.TrackNew(-1)
 	}
 	return err
 }

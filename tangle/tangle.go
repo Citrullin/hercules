@@ -47,8 +47,6 @@ var (
 	lowEndDevice               = false
 	totalTransactions    int64 = 0
 	totalConfirmations   int64 = 0
-	incoming                   = 0
-	incomingProcessed          = 0
 	saved                      = 0
 	discarded                  = 0
 	outgoing                   = 0

@@ -155,7 +155,7 @@ func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
 	NeighborsLock.RLock()
 	defer NeighborsLock.RUnlock()
 
-	_, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+	_, neighbor := CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 	return neighbor
 }
 
@@ -330,7 +330,7 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	return false, nil
 }
 
-func checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort string, checkAllKnownAddresses bool) (neighborExists bool, neighbor *Neighbor) {
+func CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort string, checkAllKnownAddresses bool) (neighborExists bool, neighbor *Neighbor) {
 	neighbor, neighborExists = Neighbors[ipAddressWithPort]
 
 	if !neighborExists && checkAllKnownAddresses {

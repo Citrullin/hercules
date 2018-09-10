@@ -6,10 +6,11 @@ import (
 	"../db"
 	"../db/ns"
 	"../logs"
+	"../server"
 )
 
 func Report() {
-	logs.Log.Debugf("TX IN/OUT:     %v, %v", incoming, outgoing)
+	logs.Log.Debugf("TX IN/OUT:     %v, %v", server.TotalIncTx, outgoing)
 	logs.Log.Debugf("SERVER I/O Q:  %v, %v", len(srv.Incoming), len(srv.Outgoing))
 	logs.Log.Infof("TRANSACTIONS:  %v, Requests: %v (%v)", totalTransactions,
 		ns.Count(db.Singleton, ns.NamespacePendingHash), len(PendingRequests))
