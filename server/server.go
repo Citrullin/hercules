@@ -45,6 +45,8 @@ type messageQueue chan *Message
 type Server struct {
 	Incoming messageQueue
 	Outgoing messageQueue
+	IncomingWaitGroup *sync.WaitGroup
+	receiveWaitGroup  *sync.WaitGroup
 }
 
 func (server Server) Write(msg *Message) {
@@ -71,6 +73,9 @@ func (server Server) listenAndReceive(maxWorkers int) error {
 
 // receive accepts incoming datagrams on c and calls handleMessage() for each message
 func (server Server) receive() {
+	server.receiveWaitGroup.Add(1)
+	defer server.receiveWaitGroup.Done()
+
 	for !ended {
 		msg := make([]byte, UDPPacketSize)
 		_, addr, err := connection.ReadFrom(msg[0:])
@@ -128,7 +133,9 @@ func Start() {
 func create() *Server {
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
-		Outgoing: make(messageQueue, maxQueueSize)}
+		Outgoing: make(messageQueue, maxQueueSize),
+		IncomingWaitGroup: &sync.WaitGroup{},
+		receiveWaitGroup:  &sync.WaitGroup{},
 
 	Neighbors = make(map[string]*Neighbor)
 	logs.Log.Debug("Initial neighbors", config.AppConfig.GetStringSlice("node.neighbors"))
@@ -200,6 +207,11 @@ func GetServer() *Server {
 func End() {
 	ended = true
 	connection.Close()
+	server.receiveWaitGroup.Wait()
+
+	close(server.Incoming)
+	server.IncomingWaitGroup.Wait()
+
 	atomic.AddUint64(&totalIncTx, incTxPerSec)
 	logs.Log.Debugf("Total Incoming TXs %d\n", totalIncTx)
 	logs.Log.Debug("Neighbor server exited")

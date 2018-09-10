@@ -19,7 +19,7 @@ type Badger struct {
 	db            *badger.DB
 	dbLock        *sync.Mutex
 	cleanUpTicker *time.Ticker
-	waitGroup     sync.WaitGroup
+	waitGroup     *sync.WaitGroup
 }
 
 func startBadger() (Interface, error) {
@@ -32,7 +32,7 @@ func startBadger() (Interface, error) {
 	}
 	logs.Log.Info("Database loaded")
 
-	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval)}
+	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval), waitGroup: &sync.WaitGroup{}}
 	go b.cleanUp()
 	return b, nil
 }
@@ -53,7 +53,7 @@ func (b *Badger) PutBytes(key, value []byte) error {
 
 func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -63,7 +63,7 @@ func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 
 func (b *Badger) HasKey(key []byte) bool {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -85,7 +85,7 @@ func (b *Badger) RemovePrefix(prefix []byte) error {
 
 func (b *Badger) CountPrefix(prefix []byte) int {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -95,7 +95,7 @@ func (b *Badger) CountPrefix(prefix []byte) int {
 
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -109,7 +109,7 @@ func (b *Badger) NewTransaction(update bool) Transaction {
 
 func (b *Badger) Update(fn func(Transaction) error) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	return b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -118,7 +118,7 @@ func (b *Badger) Update(fn func(Transaction) error) error {
 
 func (b *Badger) View(fn func(Transaction) error) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	return b.db.View(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -131,7 +131,6 @@ func (b *Badger) View(fn func(Transaction) error) error {
 func (b *Badger) Close() error {
 	b.cleanUpTicker.Stop()
 	b.dbLock.Lock()
-	time.Sleep(5 * time.Second)
 	return b.db.Close()
 }
 
@@ -152,5 +151,6 @@ func executeCleanUp(b *Badger) {
 }
 
 func (b *Badger) End() {
+	time.Sleep(1 * time.Second) // TODO: Not all threads are finished when DB is closed, that causes a panic
 	b.waitGroup.Wait()
 }

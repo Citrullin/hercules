@@ -23,9 +23,8 @@ const (
 )
 
 func incomingRunner() {
-	if srv == nil {
-		logs.Log.Info("empty")
-	}
+	srv.IncomingWaitGroup.Add(1)
+	defer srv.IncomingWaitGroup.Done()
 
 	for raw := range srv.Incoming {
 		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
