@@ -40,10 +40,9 @@ var (
 	COO_ADDRESS_BYTES     = convert.TrytesToBytes(COO_ADDRESS)[:49]
 	COO_ADDRESS2_BYTES    = convert.TrytesToBytes(COO_ADDRESS2)[:49]
 	pendingMilestoneQueue = make(chan *PendingMilestone, maxQueueSize)
-	// TODO: Access latest milestone only via GetLatestMilestone()
-	LatestMilestone     Milestone
-	LatestMilestoneLock = &sync.RWMutex{}
-	lastMilestoneCheck  = time.Now()
+	LatestMilestone       Milestone // TODO: Access latest milestone only via GetLatestMilestone()
+	LatestMilestoneLock   = &sync.RWMutex{}
+	lastMilestoneCheck    = time.Now()
 )
 
 // TODO: remove this? Or add an API interface?
@@ -132,6 +131,11 @@ func loadLatestMilestoneFromDB() {
 		})
 		if err != nil {
 			return err
+		}
+
+		if len(latestKey) == 0 {
+			// No milestone found in database => started from snapshot
+			return nil
 		}
 
 		txBytes, err := tx.GetBytes(latestKey)
