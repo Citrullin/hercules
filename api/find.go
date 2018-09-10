@@ -70,7 +70,7 @@ func find(trits []byte, prefix byte) []string {
 		prefix := ns.HashKey(trits, prefix)
 		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
 			key = ns.Key(key[16:], ns.NamespaceHash)
-			hash, err := coding.GetBytes(tx, key)
+			hash, err := tx.GetBytes(key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}

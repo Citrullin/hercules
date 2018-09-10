@@ -40,10 +40,9 @@ var (
 	COO_ADDRESS_BYTES     = convert.TrytesToBytes(COO_ADDRESS)[:49]
 	COO_ADDRESS2_BYTES    = convert.TrytesToBytes(COO_ADDRESS2)[:49]
 	pendingMilestoneQueue = make(chan *PendingMilestone, maxQueueSize)
-	// TODO: Access latest milestone only via GetLatestMilestone()
-	LatestMilestone     Milestone
-	LatestMilestoneLock = &sync.RWMutex{}
-	lastMilestoneCheck  = time.Now()
+	LatestMilestone       Milestone // TODO: Access latest milestone only via GetLatestMilestone()
+	LatestMilestoneLock   = &sync.RWMutex{}
+	lastMilestoneCheck    = time.Now()
 )
 
 // TODO: remove this? Or add an API interface?
@@ -134,7 +133,12 @@ func loadLatestMilestoneFromDB() {
 			return err
 		}
 
-		txBytes, err := coding.GetBytes(tx, latestKey)
+		if len(latestKey) == 0 {
+			// No milestone found in database => started from snapshot
+			return nil
+		}
+
+		txBytes, err := tx.GetBytes(latestKey)
 		if err != nil {
 			return err
 		}
@@ -229,7 +233,7 @@ func processPendingMilestones() {
 			key := ns.Key(pendingMilestone.Key, ns.NamespaceEventMilestonePending)
 			TX2BytesKey := pendingMilestone.TX2BytesKey
 			if TX2BytesKey == nil {
-				relation, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceRelation))
+				relation, err := tx.GetBytes(ns.Key(key, ns.NamespaceRelation))
 				if err != nil {
 					// The 0-index milestone TX relations doesn't exist.
 					// Clearly an error here!
@@ -258,7 +262,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 	var txBytesKey = ns.Key(key, ns.NamespaceBytes)
 
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := coding.GetBytes(tx, TX2BytesKey)
+	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
 	if err != nil {
 		err := tx.PutBytes(ns.Key(TX2BytesKey, ns.NamespaceEventMilestonePairPending), key)
 		if err != nil {
@@ -268,7 +272,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 	}
 
 	// 3. Check that the 0-index TX also exists.
-	txBytes, err := coding.GetBytes(tx, txBytesKey)
+	txBytes, err := tx.GetBytes(txBytesKey)
 	if err != nil {
 		// The 0-index milestone TX doesn't exist.
 		// Clearly an error here!

@@ -132,7 +132,7 @@ func TestCheckNeighbourExistsByIPAddressWithPort(t *testing.T) {
 		ip := ips[0].String()
 		ipWithPort := GetFormattedAddress(ip, port)
 
-		neighborsExists, neighbor := checkNeighbourExistsByIPAddressWithPort(ipWithPort, false)
+		neighborsExists, neighbor := CheckNeighbourExistsByIPAddressWithPort(ipWithPort, false)
 		if !neighborsExists {
 			t.Error("Neighbor does NOT exist!")
 		} else {
