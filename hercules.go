@@ -1,8 +1,10 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"time"
 
@@ -14,6 +16,8 @@ import (
 	"./snapshot"
 	"./tangle"
 	"./utils"
+
+	_ "net/http/pprof"
 
 	"github.com/pkg/profile"
 )
@@ -30,6 +34,9 @@ func main() {
 
 	if config.AppConfig.GetBool("debug") {
 		defer profile.Start().Stop()
+
+		runtime.SetMutexProfileFraction(5)
+		go http.ListenAndServe(":6060", nil) // pprof Server for Debbuging Mutexes
 	}
 
 	db.Start()
