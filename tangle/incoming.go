@@ -55,10 +55,10 @@ func incomingRunner() {
 				// Tx was not a tip
 				if !crypt.IsValidPoW(tx.Hash, MWM) {
 					// POW invalid => Track invalid messages from neighbor
-					server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: raw.Neighbor, Invalid: 1}
+		            raw.Neighbor.TrackInvalid(1)
 				} else {
 					// POW valid => Process the message
-					err := processIncomingTX(IncomingTX{TX: tx, Neighbor: raw.Neighbor, Bytes: &data})
+		            raw.Neighbor.TrackIncoming(1)
 					if err == nil {
 						incomingProcessed++
 						addFingerprint(fingerprint)
@@ -178,7 +178,7 @@ func processIncomingTX(incoming IncomingTX) error {
 				Broadcast(t.Bytes, incoming.Neighbor)
 			}
 
-			server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: incoming.Neighbor, New: 1}
+			incoming.Neighbor.TrackNew(1)
 			saved++
 			atomic.AddInt64(&totalTransactions, 1)
 		} else {
@@ -195,7 +195,7 @@ func processIncomingTX(incoming IncomingTX) error {
 		addPendingRequest(t.Hash, 0, incoming.Neighbor, true)
 
 		atomic.AddInt64(&totalTransactions, -1)
-		server.NeighborTrackingQueue <- &server.NeighborTrackingMessage{Neighbor: incoming.Neighbor, New: -1}
+		incoming.Neighbor.TrackNew(-1)
 	}
 	return err
 }

@@ -27,7 +27,6 @@ var (
 	nbWorkers             = runtime.NumCPU()
 	reportTicker          *time.Ticker
 	hostnameRefreshTicker *time.Ticker
-	NeighborTrackingQueue neighborTrackingQueue
 	server                *Server
 	Neighbors             map[string]*Neighbor
 	NeighborsLock         = &sync.RWMutex{}
@@ -40,15 +39,8 @@ type Message struct {
 	Msg      []byte
 }
 
-type NeighborTrackingMessage struct {
-	Neighbor *Neighbor
-	Incoming int
-	New      int
-	Invalid  int
-}
 
 type messageQueue chan *Message
-type neighborTrackingQueue chan *NeighborTrackingMessage
 
 type Server struct {
 	Incoming messageQueue
@@ -130,12 +122,10 @@ func Start() {
 
 	go reportIncomingMessages()
 	go refreshHostnames()
-	go listenNeighborTracker()
 	go writeMessages()
 }
 
 func create() *Server {
-	NeighborTrackingQueue = make(neighborTrackingQueue, maxQueueSize)
 	server = &Server{
 		Incoming: make(messageQueue, maxQueueSize),
 		Outgoing: make(messageQueue, maxQueueSize)}
@@ -172,7 +162,7 @@ func writeMessages() {
 
 func handleMessage(msg *Message) {
 	server.Incoming <- msg
-	NeighborTrackingQueue <- &NeighborTrackingMessage{Neighbor: msg.Neighbor, Incoming: 1}
+	msg.Neighbor.TrackIncoming(1)
 	atomic.AddUint64(&incTxPerSec, 1)
 }
 

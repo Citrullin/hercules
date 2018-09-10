@@ -35,9 +35,9 @@ type Neighbor struct {
 	Port              string // Also saved separately from Addr for performance reasons
 	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
 	UDPAddr           *net.UDPAddr
-	Incoming          int
-	New               int
-	Invalid           int
+	Incoming          int32
+	New               int32
+	Invalid           int32
 	ConnectionType    string // Formatted like: udp
 	PreferIPv6        bool
 	KnownIPs          []*IPAddress
@@ -82,6 +82,18 @@ func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed b
 		}
 	}
 	return false
+}
+
+func (nb *Neighbor) TrackIncoming(cnt int32) {
+	atomic.AddInt32(&nb.Incoming, cnt)
+}
+
+func (nb *Neighbor) TrackNew(cnt int32) {
+	atomic.AddInt32(&nb.New, cnt)
+}
+
+func (nb *Neighbor) TrackInvalid(cnt int32) {
+	atomic.AddInt32(&nb.Invalid, cnt)
 }
 
 func AddNeighbor(address string) error {
@@ -129,14 +141,6 @@ func RemoveNeighbor(address string) error {
 	}
 
 	return errors.New("Neighbor not found")
-}
-
-func TrackNeighbor(msg *NeighborTrackingMessage) {
-	if msg.Neighbor != nil {
-		msg.Neighbor.Incoming += msg.Incoming
-		msg.Neighbor.New += msg.New
-		msg.Neighbor.Invalid += msg.Invalid
-	}
 }
 
 func GetNeighborByAddress(address string) *Neighbor {
@@ -249,12 +253,6 @@ func createNeighbor(address string) (*Neighbor, error) {
 	}
 
 	return &neighbor, nil
-}
-
-func listenNeighborTracker() {
-	for msg := range NeighborTrackingQueue {
-		TrackNeighbor(msg)
-	}
 }
 
 func getConnectionTypeAndIdentifierAndPort(address string) (connectionType string, identifier string, port string, e error) {
