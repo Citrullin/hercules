@@ -16,13 +16,13 @@ func RegisterImplementation(name string, constructor Constructor) {
 type Constructor func() (Interface, error)
 
 type Manipulator interface {
-	GetBytes([]byte) ([]byte, error)
-	PutBytes([]byte, []byte) error
-	HasKey([]byte) bool
-	Remove([]byte) error
-	RemovePrefix([]byte) error
-	CountPrefix([]byte) int
-	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
+	GetBytes(key []byte) ([]byte, error)
+	PutBytes(key []byte, bytes []byte) error
+	HasKey(key []byte) bool
+	Remove(key []byte) error
+	RemovePrefix(prefix []byte) error
+	CountPrefix(prefix []byte) int
+	ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error
 }
 
 type Interface interface {
