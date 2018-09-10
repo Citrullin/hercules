@@ -61,28 +61,34 @@ func incomingRunner() {
 		neighbor.TrackIncoming(1)
 
 		data := (*raw.Data)[:DATA_SIZE]
-		req := make([]byte, HASH_SIZE)
-		copy(req, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
+		reqHash := make([]byte, HASH_SIZE)
+		copy(reqHash, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
 
-		var hash []byte
+		var recHash []byte
 
-		fingerprint := ns.HashKey(data, ns.NamespaceFingerprint)
-		if !hasFingerprint(fingerprint) {
-			atomic.AddUint64(&server.NewTxPerSec, 1)
-
+		//
+		// Process incoming data
+		//
+		fingerprintHash := ns.HashKey(data, ns.NamespaceFingerprint)
+		fingerprint := getFingerprint(fingerprintHash)
+		if fingerprint == nil {
 			// Message was not received in the last time
-			addFingerprint(fingerprint) // TODO: Can the tipBytes messages also be dropped?
+			atomic.AddUint64(&server.NewTxPerSec, 1)
 
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
 			tx := transaction.TritsToTX(&trits, data)
-			hash = tx.Hash
+			recHash = tx.Hash
+
+			addFingerprint(fingerprintHash, recHash)
 
 			if !bytes.Equal(data, tipBytes) {
 				// Tx was not a tip
 				if crypt.IsValidPoW(tx.Hash, MWM) {
 					// POW valid => Process the message
 					err := processIncomingTX(tx, neighbor)
-					if err == nil {
+					if err != nil {
+						logs.Log.Errorf("Processing incoming message falied! Err: %v", err)
+					} else {
 						atomic.AddUint64(&server.ValidTxPerSec, 1)
 						neighbor.LastIncomingTime = time.Now()
 					}
@@ -93,18 +99,23 @@ func incomingRunner() {
 			}
 		} else {
 			atomic.AddUint64(&server.KnownTxPerSec, 1)
+			recHash = fingerprint.ReceiveHash
 		}
+
+		//
+		// Reply to incoming request
+		//
 
 		// Pause for a while without responding to prevent flooding
 		if len(srv.Incoming) > maxIncoming {
 			continue
 		}
 
-		var reply []byte = nil
-		var isLookingForTX = !bytes.Equal(req, tipBytes[:HASH_SIZE]) && (hash == nil || !bytes.Equal(hash, req))
+		var reply []byte
+		var isLookingForTX = !bytes.Equal(reqHash, tipBytes[:HASH_SIZE]) && (!bytes.Equal(recHash, reqHash))
 
 		if isLookingForTX {
-			reply, _ = db.Singleton.GetBytes(ns.HashKey(req, ns.NamespaceBytes))
+			reply, _ = db.Singleton.GetBytes(ns.HashKey(reqHash, ns.NamespaceBytes))
 		} else if utils.Random(0, 100) < P_TIP_REPLY {
 			// If this is a tip request, drop randomly
 			continue

@@ -9,13 +9,18 @@ const (
 	fingerprintTTL = time.Duration(10) * time.Second
 )
 
+type Fingerprint struct {
+	ReceiveTime time.Time
+	ReceiveHash []byte
+}
+
 var (
-	fingerprints     map[string]time.Time
+	fingerprints     map[string]*Fingerprint
 	fingerprintsLock = &sync.RWMutex{}
 )
 
 func fingerprintsOnLoad() {
-	fingerprints = make(map[string]time.Time)
+	fingerprints = make(map[string]*Fingerprint)
 }
 
 func cleanupFingerprints() {
@@ -30,29 +35,29 @@ func cleanupFingerprints() {
 	var toRemove []string
 
 	fingerprintsLock.RLock()
-	for key, t := range fingerprints {
-		if now.Sub(t) >= ttl {
-			toRemove = append(toRemove, key)
+	for fingerprintHash, fp := range fingerprints {
+		if now.Sub(fp.ReceiveTime) >= ttl {
+			toRemove = append(toRemove, fingerprintHash)
 		}
 	}
 	fingerprintsLock.RUnlock()
 
 	fingerprintsLock.Lock()
-	for _, key := range toRemove {
-		delete(fingerprints, key)
+	for _, fingerprintHash := range toRemove {
+		delete(fingerprints, fingerprintHash)
 	}
 	fingerprintsLock.Unlock()
 }
 
-func hasFingerprint(key []byte) bool {
+func getFingerprint(fingerprintHash []byte) *Fingerprint {
 	fingerprintsLock.RLock()
 	defer fingerprintsLock.RUnlock()
-	_, ok := fingerprints[string(key)]
-	return ok
+	fp, _ := fingerprints[string(fingerprintHash)]
+	return fp
 }
 
-func addFingerprint(key []byte) {
+func addFingerprint(fingerprintHash []byte, receiveHash []byte) {
 	fingerprintsLock.Lock()
 	defer fingerprintsLock.Unlock()
-	fingerprints[string(key)] = time.Now()
+	fingerprints[string(fingerprintHash)] = &Fingerprint{ReceiveTime: time.Now(), ReceiveHash: receiveHash}
 }
