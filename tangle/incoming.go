@@ -135,13 +135,16 @@ func incomingRunner() {
 func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 	var pendingMilestone *PendingMilestone
 
+	snapTime := snapshot.GetSnapshotTimestamp(nil)
+	key := ns.HashKey(t.Hash, ns.NamespaceHash)
+	futureTime := int(time.Now().Add(2 * time.Hour).Unix())
+	maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
+	isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
+
 	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
 		// TODO: catch error defer here
 
-		key := ns.HashKey(t.Hash, ns.NamespaceHash)
-		removePendingRequest(t.Hash)
-
-		snapTime := snapshot.GetSnapshotTimestamp(tx)
+		removePendingRequest(t.Hash, tx)
 
 		removeTx := func() {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
@@ -157,9 +160,6 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 			tx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 		}
 
-		futureTime := int(time.Now().Add(2 * time.Hour).Unix())
-		maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
-		isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
 		if isOutsideOfTimeframe && !tx.HasKey(ns.HashKey(t.Bundle, ns.NamespacePendingBundle)) {
 			removeTx()
 			return nil
