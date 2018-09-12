@@ -145,7 +145,7 @@ func getRandomTip(tx db.Transaction) (hash []byte, txBytes []byte) {
 	TipsLock.RUnlock()
 
 	if tx == nil {
-		tx = db.Singleton.NewTransaction(true)
+		tx = db.Singleton.NewTransaction(false)
 		defer tx.Commit()
 	}
 

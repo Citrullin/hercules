@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	gTTALock     = &sync.Mutex{}
+	gTTALock     = &sync.RWMutex{}
 	txCache      = make(map[string]time.Time)
 	transactions = make(map[string]*transaction.FastTX)
 )
@@ -61,6 +61,7 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
+// TODO Fix this function! It causes nodes to get out of memory and crash in the first gTTA request!
 func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, transactions map[string]*transaction.FastTX) *GraphNode {
 	approveeKeys := findApprovees(reference)
 	graph := &GraphNode{reference, nil, 1, valid, nil}
@@ -373,6 +374,14 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 
 	logs.Log.Debug("Could not get TXs to approve")
 	return nil
+}
+
+// This function temporary. It will be removed when the tipSel logic is corrected
+func GetRandomTXToApprove() [][]byte {
+	tip1, _ := getRandomTip(nil)
+	tip2, _ := getRandomTip(nil)
+
+	return [][]byte{tip1, tip2}
 }
 
 func cleanCache() {
