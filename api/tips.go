@@ -49,7 +49,7 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 	// Use it when fixed
 	//tips := tangle.GetTXToApprove(reference, request.Depth)
 	tips := tangle.GetRandomTXToApprove()
-	if tips == nil {
+	if tips == nil || len(tips) < 2 || len(tips[0]) < 81 || len(tips[1]) < 81 {
 		replyError("Could not get transactions to approve", c)
 		return
 	}
