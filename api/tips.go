@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"../convert"
-	"../logs"
 	"../tangle"
 	"github.com/gin-gonic/gin"
 )
@@ -56,8 +55,6 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 		return
 	}
 
-	logs.Log.Warningf("Tips[0]: %v", tips[0])
-	logs.Log.Warningf("Tips[1]: %v", tips[1])
 	trunk := convert.BytesToTrytes(tips[0])
 	branch := convert.BytesToTrytes(tips[1])
 
