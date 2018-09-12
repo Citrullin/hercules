@@ -379,7 +379,14 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 // This function temporary. It will be removed when the tipSel logic is corrected
 func GetRandomTXToApprove() [][]byte {
 	tip1, _ := getRandomTip(nil)
+	if tip1 == nil {
+		return nil
+	}
+
 	tip2, _ := getRandomTip(nil)
+	if tip2 == nil {
+		return nil
+	}
 
 	return [][]byte{tip1, tip2}
 }

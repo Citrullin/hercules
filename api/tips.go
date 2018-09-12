@@ -49,14 +49,23 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 	// Use it when fixed
 	//tips := tangle.GetTXToApprove(reference, request.Depth)
 	tips := tangle.GetRandomTXToApprove()
-	if tips == nil {
+
+	if tips == nil || len(tips) < 2 {
+		replyError("Could not get transactions to approve", c)
+		return
+	}
+
+	trunk := convert.BytesToTrytes(tips[0])
+	branch := convert.BytesToTrytes(tips[1])
+
+	if len(trunk) < 81 || len(branch) < 81 {
 		replyError("Could not get transactions to approve", c)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"trunkTransaction":  convert.BytesToTrytes(tips[0])[:81],
-		"branchTransaction": convert.BytesToTrytes(tips[1])[:81],
+		"trunkTransaction":  trunk[:81],
+		"branchTransaction": branch[:81],
 		"duration":          getDuration(t),
 	})
 }
