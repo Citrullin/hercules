@@ -381,6 +381,10 @@ func GetRandomTXToApprove() [][]byte {
 	tip1, _ := getRandomTip(nil)
 	tip2, _ := getRandomTip(nil)
 
+	if tip1 == nil || tip2 == nil {
+		return nil
+	}
+
 	return [][]byte{tip1, tip2}
 }
 
