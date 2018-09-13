@@ -70,6 +70,8 @@ func Start() {
 	if useHTTPS {
 		go serveHttps(api)
 	}
+
+	startAttach()
 }
 
 func configureAPIUserAuthentication() {

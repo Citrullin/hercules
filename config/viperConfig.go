@@ -78,8 +78,8 @@ func declareAPIConfigs() {
 
 	flag.Int("api.pow.maxMinWeightMagnitude", 14, "Maximum Min-Weight-Magnitude (Difficulty for PoW)")
 	flag.Int("api.pow.maxTransactions", 10000, "Maximum number of Transactions in Bundle (for PoW)")
-	flag.Bool("api.pow.usePowSrv", false, "Use PowSrv (e.g. FPGA PiDiver) for PoW")
-	flag.String("api.pow.powSrvPath", "/tmp/powSrv.sock", "Unix socket path of PowSrv")
+	flag.Bool("api.pow.useDiverDriver", false, "Use DiverDriver (e.g. FPGA PiDiver) for PoW")
+	flag.String("api.pow.diverDriverPath", "/tmp/diverDriver.sock", "Unix socket path of DiverDriver")
 }
 
 func declareLogConfigs() {

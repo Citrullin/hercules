@@ -33,8 +33,8 @@
     "pow": {
       "maxMinWeightMagnitude": 14,
       "maxTransactions": 10000,
-      "usePowSrv": false,
-      "powSrvPath": "/tmp/powSrv.sock"
+      "useDiverDriver": false,
+      "diverDriverPath": "/tmp/diverDriver.sock"
     }
   },
   "log": {
