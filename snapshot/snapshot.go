@@ -3,12 +3,12 @@ package snapshot
 import (
 	"time"
 
+	"../config"
 	"../db"
 	"../db/coding"
 	"../db/ns"
 	"../logs"
 	"../utils"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -19,23 +19,24 @@ const (
 	MAX_LATEST_TRANSACTION_AGE = 300
 )
 
-var TOTAL_IOTAS int64 = 2779530283277761
-var keySnapshotDate = []byte{ns.NamespaceSnapshotDate}
-var keySnapshotLock = []byte{ns.NamespaceSnapshotLock}
-var keySnapshotFile = []byte{ns.NamespaceSnapshotFile}
+var (
+	TOTAL_IOTAS     int64 = 2779530283277761
+	keySnapshotDate       = []byte{ns.NamespaceSnapshotDate}
+	keySnapshotLock       = []byte{ns.NamespaceSnapshotLock}
+	keySnapshotFile       = []byte{ns.NamespaceSnapshotFile}
 
-var edgeTransactions chan *[]byte
-var config *viper.Viper
-var CurrentTimestamp int64 = 0
-var InProgress = false
-var lowEndDevice = false
+	edgeTransactions          chan *[]byte
+	CurrentTimestamp          int64
+	InProgress                = false
+	lowEndDevice              = false
+	timeLeftToSnapshotSeconds int64
+)
 
-func Start(cfg *viper.Viper) {
-	config = cfg
+func Start() {
 	logs.Log.Debug("Loading snapshots module")
 	edgeTransactions = make(chan *[]byte, 10000000)
 
-	lowEndDevice = config.GetBool("light")
+	lowEndDevice = config.AppConfig.GetBool("light")
 	CurrentTimestamp = GetSnapshotTimestamp(nil)
 	logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
 
@@ -45,8 +46,8 @@ func Start(cfg *viper.Viper) {
 	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
 
-	snapshotPeriod := config.GetInt64("snapshots.period")
-	snapshotInterval := config.GetInt64("snapshots.interval")
+	snapshotPeriod := config.AppConfig.GetInt64("snapshots.period")
+	snapshotInterval := config.AppConfig.GetInt64("snapshots.interval")
 	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
 
 	go startAutosnapshots(snapshotInterval, snapshotPeriod)
@@ -55,10 +56,10 @@ func Start(cfg *viper.Viper) {
 }
 
 func loadSnapshotFiles() {
-	snapshotToLoad := config.GetString("snapshots.loadFile")
-	iri1 := config.GetString("snapshots.loadIRIFile")
-	iri2 := config.GetString("snapshots.loadIRISpentFile")
-	iriTimestamp := config.GetInt64("snapshots.loadIRITimestamp")
+	snapshotToLoad := config.AppConfig.GetString("snapshots.loadFile")
+	iri1 := config.AppConfig.GetString("snapshots.loadIRIFile")
+	iri2 := config.AppConfig.GetString("snapshots.loadIRISpentFile")
+	iriTimestamp := config.AppConfig.GetInt64("snapshots.loadIRITimestamp")
 	if len(snapshotToLoad) > 0 {
 		LoadSnapshot(snapshotToLoad)
 	} else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0 {
@@ -76,7 +77,7 @@ Sets the current snapshot date in the database
 func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
-		defer tx.Discard()
+		defer tx.Commit()
 	}
 	err := coding.PutInt64(tx, keySnapshotDate, timestamp)
 	if err == nil {
@@ -103,7 +104,7 @@ Creates a snapshot lock in the database
 func Lock(timestamp int64, filename string, tx db.Transaction) error {
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(true)
-		defer tx.Discard()
+		defer tx.Commit()
 	}
 
 	InProgress = true
@@ -146,19 +147,21 @@ func GetSnapshotLock(tx db.Transaction) int64 {
 Returns the date unix timestamp of the last snapshot
 */
 func GetSnapshotTimestamp(tx db.Transaction) int64 {
+	if CurrentTimestamp > 0 {
+		return CurrentTimestamp
+	}
+
 	if tx == nil {
 		tx = db.Singleton.NewTransaction(false)
 		defer tx.Discard()
-	}
-
-	if CurrentTimestamp > 0 {
-		return CurrentTimestamp
 	}
 
 	timestamp, err := coding.GetInt64(tx, keySnapshotDate)
 	if err != nil {
 		return -1
 	}
+
+	CurrentTimestamp = timestamp
 	return timestamp
 }
 
@@ -212,8 +215,6 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 
 	}
 }
-
-var timeLeftToSnapshotSeconds int64 = 0
 
 /*
 When a snapshot is missing:

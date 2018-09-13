@@ -13,48 +13,23 @@ import (
 	"strings"
 	"time"
 
+	"../config"
 	"../logs"
 	"../snapshot"
 	"../utils"
 	"github.com/gin-gonic/gin"
 )
 
-var snapshotAPICalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
+var snapshotAPICalls = make(map[string]APIImplementation)
 
 func init() {
-	addSnapshotAPICall("getSnapshotsInfo", getSnapshotsInfo)
-	addSnapshotAPICall("getLatestSnapshotInfo", getLatestSnapshotInfo)
-	addSnapshotAPICall("makeSnapshot", makeSnapshot)
+	addAPICall("getSnapshotsInfo", getSnapshotsInfo, snapshotAPICalls)
+	addAPICall("getLatestSnapshotInfo", getLatestSnapshotInfo, snapshotAPICalls)
+	addAPICall("makeSnapshot", makeSnapshot, snapshotAPICalls)
 }
 
-func enableSnapshotApi(api *gin.Engine) {
-	api.POST("/snapshots", func(c *gin.Context) {
-		t := time.Now()
-		var request Request
-		if err := c.ShouldBindJSON(&request); err == nil {
-
-			caseInsensitiveCommand := strings.ToLower(request.Command)
-			if triesToAccessLimited(caseInsensitiveCommand, c) {
-				logs.Log.Warningf("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
-				ReplyError("Limited remote command access", c)
-				return
-			}
-
-			snapshotAPICall, apiCallExists := snapshotAPICalls[caseInsensitiveCommand]
-			if apiCallExists {
-				snapshotAPICall(request, c, t)
-			} else {
-				logs.Log.Error("Unknown command", request.Command)
-				ReplyError("No known command provided", c)
-			}
-
-		} else {
-			logs.Log.Error("ERROR request", err)
-			ReplyError("Wrongly formed JSON", c)
-		}
-	})
-
-	dir := config.GetString("snapshots.path")
+func enableSnapshotAPI(api *gin.Engine) {
+	dir := config.AppConfig.GetString("snapshots.path")
 	api.Static("/snapshots", dir)
 }
 
@@ -109,7 +84,7 @@ func getSnapshotInfosResponseHeaderAndValue(latestOnly bool, snapshotInfos []map
 }
 
 func loadInfos(latestOnly bool) (infos []map[string]interface{}) {
-	dir := config.GetString("snapshots.path")
+	dir := config.AppConfig.GetString("snapshots.path")
 	files, err := ioutil.ReadDir(dir)
 	if err == nil {
 
@@ -191,30 +166,30 @@ func getInfoIfValidSnapshot(dir string, file os.FileInfo) gin.H {
 
 func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 	if request.Timestamp < 1525017600 || request.Timestamp > time.Now().Unix() {
-		ReplyError("Wrong UNIX timestamp provided", c)
+		replyError("Wrong UNIX timestamp provided", c)
 		return
 	}
 
 	if snapshot.InProgress {
-		ReplyError("A snapshot is currently in progress", c)
+		replyError("A snapshot is currently in progress", c)
 		return
 	}
 
 	current := snapshot.GetSnapshotLock(nil)
 	if current > 0 && current != request.Timestamp {
-		ReplyError(
+		replyError(
 			fmt.Sprintf("A snapshot is currently pending. Finish it first: %v", current),
 			c)
 		return
 	}
 
 	if !snapshot.IsSynchronized() {
-		ReplyError("The tangle not fully synchronized. Cannot snapshot in this state.", c)
+		replyError("The tangle not fully synchronized. Cannot snapshot in this state.", c)
 		return
 	}
 
 	if !snapshot.CanSnapshot(request.Timestamp) {
-		ReplyError("Pending confirmations behind the snapshot horizon. Cannot snapshot in this state.", c)
+		replyError("Pending confirmations behind the snapshot horizon. Cannot snapshot in this state.", c)
 		return
 	}
 
@@ -254,9 +229,4 @@ func fileHash(filePath string) (string, error) {
 
 	return returnMD5String, nil
 
-}
-
-func addSnapshotAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
-	caseInsensitiveAPICall := strings.ToLower(apiCall)
-	snapshotAPICalls[caseInsensitiveAPICall] = implementation
 }

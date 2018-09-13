@@ -5,64 +5,35 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../db/coding"
 	"../logs"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
-	"github.com/spf13/viper"
 )
 
 func init() {
-	RegisterImplementation("badger", NewBadger)
+	RegisterImplementation("badger", startBadger)
 }
 
 type Badger struct {
 	db            *badger.DB
 	dbLock        *sync.Mutex
 	cleanUpTicker *time.Ticker
-	waitGroup     sync.WaitGroup
+	waitGroup     *sync.WaitGroup
 }
 
-func NewBadger(config *viper.Viper) (Interface, error) {
-	path := config.GetString("database.path")
-	light := config.GetBool("light")
+func startBadger() (Interface, error) {
+	config.ConfigureBadger()
 
-	logs.Log.Infof("Loading database at %s", path)
-
-	cleanUpInterval := 5 * time.Minute
-
-	opts := badger.DefaultOptions
-	opts.Dir = path
-	opts.ValueDir = path
-	opts.ValueLogLoadingMode = options.FileIO
-	opts.TableLoadingMode = options.FileIO
-	if light {
-		// Source: https://github.com/dgraph-io/badger#memory-usage
-		opts.NumMemtables = 1
-		opts.NumLevelZeroTables = 1
-		opts.NumLevelZeroTablesStall = 2
-		opts.NumCompactors = 1
-		opts.MaxLevels = 5
-		opts.LevelOneSize = 256 << 18
-		opts.MaxTableSize = 64 << 18
-		opts.ValueLogFileSize = 1 << 25
-		opts.ValueLogMaxEntries = 250000
-		cleanUpInterval = 2 * time.Minute
-	}
-
-	db, err := badger.Open(opts)
+	logs.Log.Infof("Loading database at %s", config.BadgerOptions.Dir)
+	db, err := badger.Open(config.BadgerOptions)
 	if err != nil {
-		return nil, fmt.Errorf("open db [%s]: %v", path, err)
+		return nil, fmt.Errorf("open db [%s]: %v", config.BadgerOptions.Dir, err)
 	}
 	logs.Log.Info("Database loaded")
 
-	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(cleanUpInterval)}
-	b.cleanUp()
-	go func() {
-		for range b.cleanUpTicker.C {
-			b.cleanUp()
-		}
-	}()
+	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval), waitGroup: &sync.WaitGroup{}}
+	go b.cleanUp()
 	return b, nil
 }
 
@@ -76,23 +47,23 @@ func (b *Badger) Unlock() {
 
 func (b *Badger) PutBytes(key, value []byte) error {
 	return b.Update(func(t Transaction) error {
-		return coding.PutBytes(t, key, value)
+		return t.PutBytes(key, value)
 	})
 }
 
 func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
 
-	return coding.GetBytes(tx, key)
+	return tx.GetBytes(key)
 }
 
 func (b *Badger) HasKey(key []byte) bool {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -114,7 +85,7 @@ func (b *Badger) RemovePrefix(prefix []byte) error {
 
 func (b *Badger) CountPrefix(prefix []byte) int {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -124,7 +95,7 @@ func (b *Badger) CountPrefix(prefix []byte) int {
 
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	tx := b.NewTransaction(false)
 	defer tx.Discard()
@@ -138,7 +109,7 @@ func (b *Badger) NewTransaction(update bool) Transaction {
 
 func (b *Badger) Update(fn func(Transaction) error) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	return b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -147,7 +118,7 @@ func (b *Badger) Update(fn func(Transaction) error) error {
 
 func (b *Badger) View(fn func(Transaction) error) error {
 	b.waitGroup.Add(1)
-	defer b.waitGroup.Add(-1)
+	defer b.waitGroup.Done()
 
 	return b.db.View(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
@@ -160,11 +131,18 @@ func (b *Badger) View(fn func(Transaction) error) error {
 func (b *Badger) Close() error {
 	b.cleanUpTicker.Stop()
 	b.dbLock.Lock()
-	time.Sleep(5 * time.Second)
 	return b.db.Close()
 }
 
 func (b *Badger) cleanUp() {
+	executeCleanUp(b)
+
+	for range b.cleanUpTicker.C {
+		executeCleanUp(b)
+	}
+}
+
+func executeCleanUp(b *Badger) {
 	logs.Log.Debug("Cleanup database started")
 	b.dbLock.Lock()
 	b.db.RunValueLogGC(0.5)
@@ -173,5 +151,6 @@ func (b *Badger) cleanUp() {
 }
 
 func (b *Badger) End() {
+	time.Sleep(1 * time.Second) // TODO: Not all threads are finished when DB is closed, that causes a panic
 	b.waitGroup.Wait()
 }

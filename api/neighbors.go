@@ -12,9 +12,9 @@ import (
 )
 
 func init() {
-	addAPICall("addNeighbors", addNeighbors)
-	addAPICall("removeNeighbors", removeNeighbors)
-	addAPICall("getNeighbors", getNeighbors)
+	addAPICall("addNeighbors", addNeighbors, mainAPICalls)
+	addAPICall("removeNeighbors", removeNeighbors, mainAPICalls)
+	addAPICall("getNeighbors", getNeighbors, mainAPICalls)
 }
 
 func addNeighbors(request Request, c *gin.Context, t time.Time) {

@@ -4,7 +4,10 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync/atomic"
+	"time"
 
+	"../config"
 	"../logs"
 )
 
@@ -23,6 +26,74 @@ func (i *IPAddress) String() string {
 	} else {
 		return i.ip
 	}
+}
+
+type Neighbor struct {
+	Hostname          string // Formatted like: <domainname> (Empty if its IP address)
+	Addr              string // Formatted like: <ip>:<port> OR <domainname>:<port>
+	IP                string // Formatted like: XXX.XXX.XXX.XXX (IPv4) OR [x:x:x:...] (IPv6)
+	Port              string // Also saved separately from Addr for performance reasons
+	IPAddressWithPort string // Formatted like: XXX.XXX.XXX.XXX:x (IPv4) OR [x:x:x:...]:x (IPv6)
+	UDPAddr           *net.UDPAddr
+	Incoming          int32
+	New               int32
+	Invalid           int32
+	ConnectionType    string // Formatted like: udp
+	PreferIPv6        bool
+	KnownIPs          []*IPAddress
+	LastIncomingTime  time.Time
+}
+
+func (nb *Neighbor) Write(msg *Message) {
+	if ended {
+		return
+	}
+	_, err := connection.WriteTo(msg.Msg[0:], nb.UDPAddr)
+	if err != nil {
+		if !ended { // Check again
+			logs.Log.Errorf("Error sending message to neighbor '%v': %v", nb.Addr, err)
+		}
+	} else {
+		atomic.AddUint64(&outTxPerSec, 1)
+	}
+}
+
+func (nb *Neighbor) GetPreferredIP() string {
+	return GetPreferredIP(nb.KnownIPs, nb.PreferIPv6)
+}
+
+func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
+
+	if nb.IPAddressWithPort != ipAddressWithPort {
+		for _, knownIP := range nb.KnownIPs {
+			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
+			if knownIPWithPort == ipAddressWithPort {
+				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
+				NeighborsLock.Lock()
+				delete(Neighbors, nb.IPAddressWithPort)
+				nb.IPAddressWithPort = ipAddressWithPort
+				Neighbors[nb.IPAddressWithPort] = nb
+				NeighborsLock.Unlock()
+				nb.PreferIPv6 = knownIP.IsIPv6()
+				nb.IP = knownIP.String()
+				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (nb *Neighbor) TrackIncoming(cnt int32) {
+	atomic.AddInt32(&nb.Incoming, cnt)
+}
+
+func (nb *Neighbor) TrackNew(cnt int32) {
+	atomic.AddInt32(&nb.New, cnt)
+}
+
+func (nb *Neighbor) TrackInvalid(cnt int32) {
+	atomic.AddInt32(&nb.Invalid, cnt)
 }
 
 func AddNeighbor(address string) error {
@@ -72,14 +143,6 @@ func RemoveNeighbor(address string) error {
 	return errors.New("Neighbor not found")
 }
 
-func TrackNeighbor(msg *NeighborTrackingMessage) {
-	if msg.Neighbor != nil {
-		msg.Neighbor.Incoming += msg.Incoming
-		msg.Neighbor.New += msg.New
-		msg.Neighbor.Invalid += msg.Invalid
-	}
-}
-
 func GetNeighborByAddress(address string) *Neighbor {
 	NeighborsLock.RLock()
 	defer NeighborsLock.RUnlock()
@@ -92,7 +155,7 @@ func GetNeighborByIPAddressWithPort(ipAddressWithPort string) *Neighbor {
 	NeighborsLock.RLock()
 	defer NeighborsLock.RUnlock()
 
-	_, neighbor := checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+	_, neighbor := CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
 	return neighbor
 }
 
@@ -108,32 +171,6 @@ func GetPreferredIP(knownIPs []*IPAddress, preferIPv6 bool) string {
 	}
 
 	return ""
-}
-
-func (nb *Neighbor) GetPreferredIP() string {
-	return GetPreferredIP(nb.KnownIPs, nb.PreferIPv6)
-}
-
-func (nb *Neighbor) UpdateIPAddressWithPort(ipAddressWithPort string) (changed bool) {
-
-	if nb.IPAddressWithPort != ipAddressWithPort {
-		for _, knownIP := range nb.KnownIPs {
-			knownIPWithPort := GetFormattedAddress(knownIP.String(), nb.Port)
-			if knownIPWithPort == ipAddressWithPort {
-				logs.Log.Debugf("Updated IP address for '%v' from '%v' to '%v'", nb.Hostname, nb.IPAddressWithPort, ipAddressWithPort)
-				NeighborsLock.Lock()
-				delete(Neighbors, nb.IPAddressWithPort)
-				nb.IPAddressWithPort = ipAddressWithPort
-				Neighbors[nb.IPAddressWithPort] = nb
-				NeighborsLock.Unlock()
-				nb.PreferIPv6 = knownIP.IsIPv6()
-				nb.IP = knownIP.String()
-				nb.UDPAddr, _ = net.ResolveUDPAddr("udp", ipAddressWithPort)
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func UpdateHostnameAddresses() {
@@ -218,12 +255,6 @@ func createNeighbor(address string) (*Neighbor, error) {
 	return &neighbor, nil
 }
 
-func listenNeighborTracker() {
-	for msg := range NeighborTrackingQueue {
-		TrackNeighbor(msg)
-	}
-}
-
 func getConnectionTypeAndIdentifierAndPort(address string) (connectionType string, identifier string, port string, e error) {
 	addressWithoutConnectionType, connectionType := getConnectionType(address)
 	identifier, port = getIdentifierAndPort(addressWithoutConnectionType)
@@ -256,7 +287,7 @@ func getIdentifierAndPort(address string) (identifier string, port string) {
 		port = tokens[portIndex]
 	} else {
 		identifier = address
-		port = config.GetString("node.port") // Tries to use same port as this node
+		port = config.AppConfig.GetString("node.port") // Tries to use same port as this node
 	}
 
 	return identifier, port
@@ -299,7 +330,7 @@ func checkNeighbourExistsByAddress(address string) (neighborExists bool, neighbo
 	return false, nil
 }
 
-func checkNeighbourExistsByIPAddressWithPort(ipAddressWithPort string, checkAllKnownAddresses bool) (neighborExists bool, neighbor *Neighbor) {
+func CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort string, checkAllKnownAddresses bool) (neighborExists bool, neighbor *Neighbor) {
 	neighbor, neighborExists = Neighbors[ipAddressWithPort]
 
 	if !neighborExists && checkAllKnownAddresses {

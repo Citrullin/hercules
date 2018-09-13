@@ -13,35 +13,35 @@ import (
 )
 
 func init() {
-	addAPICall("findTransactions", findTransactions)
+	addAPICall("findTransactions", findTransactions, mainAPICalls)
 }
 
 func findTransactions(request Request, c *gin.Context, t time.Time) {
 	var hashes = []string{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
-			ReplyError("Wrong address trytes", c)
+			replyError("Wrong address trytes", c)
 			return
 		}
 		hashes = append(hashes, findAddresses(convert.TrytesToBytes(address)[:49], len(request.Addresses) == 1)...)
 	}
 	for _, bundle := range request.Bundles {
 		if !convert.IsTrytes(bundle, 81) {
-			ReplyError("Wrong bundle trytes", c)
+			replyError("Wrong bundle trytes", c)
 			return
 		}
 		hashes = append(hashes, find(convert.TrytesToBytes(bundle)[:49], ns.NamespaceBundle)...)
 	}
 	for _, approvee := range request.Approvees {
 		if !convert.IsTrytes(approvee, 81) {
-			ReplyError("Wrong approvee trytes", c)
+			replyError("Wrong approvee trytes", c)
 			return
 		}
 		hashes = append(hashes, find(convert.TrytesToBytes(approvee)[:49], ns.NamespaceApprovee)...)
 	}
 	for _, tag := range request.Tags {
 		if !convert.IsTrytes(tag, 81) {
-			ReplyError("Wrong tag trytes", c)
+			replyError("Wrong tag trytes", c)
 			return
 		}
 		hashes = append(hashes, find(convert.TrytesToBytes(tag)[:16], ns.NamespaceTag)...)
@@ -68,9 +68,9 @@ func find(trits []byte, prefix byte) []string {
 	var response = []string{}
 	db.Singleton.View(func(tx db.Transaction) error {
 		prefix := ns.HashKey(trits, prefix)
-		return tx.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
+		return tx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
 			key = ns.Key(key[16:], ns.NamespaceHash)
-			hash, err := coding.GetBytes(tx, key)
+			hash, err := tx.GetBytes(key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}

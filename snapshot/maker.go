@@ -3,6 +3,7 @@ package snapshot
 import (
 	"bytes"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -78,7 +79,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 					return true, nil
 				}
 
-				txBytes, err := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
+				txBytes, err := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				if err != nil {
 					return false, err
 				}
@@ -122,7 +123,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		var trimKey []byte
 		err := db.Singleton.Update(func(tx db.Transaction) error {
 			// First: update snapshot balances
-			address, err := coding.GetBytes(tx, ns.Key(kv.key, ns.NamespaceAddressHash))
+			address, err := tx.GetBytes(ns.Key(kv.key, ns.NamespaceAddressHash))
 			if err != nil {
 				return err
 			}
@@ -183,7 +184,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 				return err
 			}
 			ns.Remove(tx, ns.NamespaceEdge)
-			path := config.GetString("snapshots.path")
+			path := config.AppConfig.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil {
 				return err

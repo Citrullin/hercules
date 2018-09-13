@@ -10,17 +10,17 @@ import (
 )
 
 func TestGetBool(t *testing.T) {
-	value, err := coding.GetBool(&storage{key: testKey, value: []byte{0x03, 0x02, 0x00, 0x00}}, testKey)
+	value, err := coding.GetBool(&storage{key: testKey, value: []byte{0x00}}, testKey)
 	require.NoError(t, err)
 	assert.False(t, value)
 
-	value, err = coding.GetBool(&storage{key: testKey, value: []byte{0x03, 0x02, 0x00, 0x01}}, testKey)
+	value, err = coding.GetBool(&storage{key: testKey, value: []byte{0x01}}, testKey)
 	require.NoError(t, err)
 	assert.True(t, value)
 }
 
 func TestGetInt(t *testing.T) {
-	s := &storage{key: testKey, value: []byte{0x04, 0x04, 0x00, 0xff, 0xf6}}
+	s := &storage{key: testKey, value: []byte{0xf6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}
 
 	value, err := coding.GetInt(s, testKey)
 	require.NoError(t, err)
@@ -28,7 +28,7 @@ func TestGetInt(t *testing.T) {
 }
 
 func TestGetInt64(t *testing.T) {
-	s := &storage{key: testKey, value: []byte{0x04, 0x04, 0x00, 0xff, 0xf6}}
+	s := &storage{key: testKey, value: []byte{0xf6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}
 
 	value, err := coding.GetInt64(s, testKey)
 	require.NoError(t, err)
@@ -36,7 +36,7 @@ func TestGetInt64(t *testing.T) {
 }
 
 func TestGetString(t *testing.T) {
-	s := &storage{key: testKey, value: []byte{0x07, 0x0c, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74}}
+	s := &storage{key: testKey, value: []byte{0x74, 0x65, 0x73, 0x74}}
 
 	value, err := coding.GetString(s, testKey)
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestGetString(t *testing.T) {
 }
 
 func BenchmarkGetBool(b *testing.B) {
-	s := &storage{key: testKey, value: []byte{0x03, 0x02, 0x00, 0x01}}
+	s := &storage{key: testKey, value: []byte{0x01}}
 	value := false
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
@@ -55,7 +55,7 @@ func BenchmarkGetBool(b *testing.B) {
 }
 
 func BenchmarkGetInt(b *testing.B) {
-	s := &storage{key: testKey, value: []byte{0x04, 0x04, 0x00, 0xff, 0xf6}}
+	s := &storage{key: testKey, value: []byte{0xf6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}
 	value := 0
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
@@ -66,7 +66,7 @@ func BenchmarkGetInt(b *testing.B) {
 }
 
 func BenchmarkGetInt64(b *testing.B) {
-	s := &storage{key: testKey, value: []byte{0x04, 0x04, 0x00, 0xff, 0xf6}}
+	s := &storage{key: testKey, value: []byte{0xf6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}
 	value := int64(0)
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
@@ -77,7 +77,7 @@ func BenchmarkGetInt64(b *testing.B) {
 }
 
 func BenchmarkGetString(b *testing.B) {
-	s := &storage{key: testKey, value: []byte{0x07, 0x0c, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74}}
+	s := &storage{key: testKey, value: []byte{0x74, 0x65, 0x73, 0x74}}
 	value := ""
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {

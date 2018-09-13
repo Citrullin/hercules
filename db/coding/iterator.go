@@ -1,14 +1,14 @@
 package coding
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/binary"
+	"errors"
 
 	"../../logs"
 )
 
 type Iterator interface {
-	ForPrefix([]byte, bool, func([]byte, []byte) (bool, error)) error
+	ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error
 }
 
 type RemoveIterator interface {
@@ -55,28 +55,30 @@ func SumInt64InCategory(i Iterator, keyCategory byte) int64 {
 
 func ForPrefixInt64(i Iterator, prefix []byte, skipOnError bool, fn func([]byte, int64) (bool, error)) error {
 	return i.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
-		var int64Value = int64(0)
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&int64Value); err != nil {
+		int64Value, n := binary.Varint(value)
+		if n <= 0 {
 			if skipOnError {
-				logs.Log.Error("couldn't load key value", key, err)
+				logs.Log.Error("value larger than 64 bits (overflow)")
 				return true, nil
 			}
-			return false, err
+			return false, errors.New("value larger than 64 bits (overflow)")
 		}
+
 		return fn(key, int64Value)
 	})
 }
 
 func ForPrefixInt(i Iterator, prefix []byte, skipOnError bool, fn func([]byte, int) (bool, error)) error {
 	return i.ForPrefix(prefix, true, func(key, value []byte) (bool, error) {
-		var intValue = 0
-		if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&intValue); err != nil {
+		int64Value, n := binary.Varint(value)
+		if n <= 0 {
 			if skipOnError {
-				logs.Log.Error("couldn't load key value", key, err)
+				logs.Log.Error("value larger than 64 bits (overflow)")
 				return true, nil
 			}
-			return false, err
+			return false, errors.New("value larger than 64 bits (overflow)")
 		}
-		return fn(key, intValue)
+
+		return fn(key, int(int64Value))
 	})
 }

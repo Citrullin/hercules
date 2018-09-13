@@ -7,18 +7,22 @@ import (
 	"../crypt"
 )
 
-const HASH_LENGTH = crypt.HASH_LENGTH
-const NUMBER_OF_KEYS_IN_MILESTONE = 20
-const NUMBER_OF_FRAGMENT_CHUNKS = 27
-const FRAGMENT_LENGTH = HASH_LENGTH * NUMBER_OF_FRAGMENT_CHUNKS
-const NUMBER_OF_SECURITY_LEVELS = 3
+const (
+	HASH_LENGTH                 = crypt.HASH_LENGTH
+	NUMBER_OF_KEYS_IN_MILESTONE = 20
+	NUMBER_OF_FRAGMENT_CHUNKS   = 27
+	FRAGMENT_LENGTH             = HASH_LENGTH * NUMBER_OF_FRAGMENT_CHUNKS
+	NUMBER_OF_SECURITY_LEVELS   = 3
 
-const TRYTE_WIDTH = 3
-const MIN_TRYTE_VALUE = -13
-const MAX_TRYTE_VALUE = 13
-const NORMALIZED_FRAGMENT_LENGTH = HASH_LENGTH / TRYTE_WIDTH / NUMBER_OF_SECURITY_LEVELS
+	TRYTE_WIDTH                = 3
+	MIN_TRYTE_VALUE            = -13
+	MAX_TRYTE_VALUE            = 13
+	NORMALIZED_FRAGMENT_LENGTH = HASH_LENGTH / TRYTE_WIDTH / NUMBER_OF_SECURITY_LEVELS
+)
 
-var NULL_HASH_TRITS = convert.TrytesToTrits(strings.Repeat("9", 81))
+var (
+	NULL_HASH_TRITS = convert.TrytesToTrits(strings.Repeat("9", 81))
+)
 
 func Address(digests []int) []int {
 	if len(digests) == 0 || len(digests)%HASH_LENGTH != 0 {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"../config"
 	"../logs"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 )
 
 type Request struct {
@@ -31,90 +31,59 @@ type Request struct {
 	MinWeightMagnitude int
 }
 
-var api *gin.Engine
-var srv *http.Server
-var config *viper.Viper
-var limitAccess []string
-var authEnabled = false
-var dummyHash = strings.Repeat("9", 81)
-var apiCalls = make(map[string]func(request Request, c *gin.Context, t time.Time))
-var startModules []func(apiConfig *viper.Viper)
+var (
+	api          = gin.Default()
+	dummyHash    = strings.Repeat("9", 81)
+	mainAPICalls = make(map[string]APIImplementation)
+	srv          *http.Server
+	limitAccess  []string
+)
 
-// TODO: Add attach/interrupt attaching api
-// TODO: limit requests, lists, etc.
+func Start() {
 
-func Start(apiConfig *viper.Viper) {
-	config = apiConfig
-	if !config.GetBool("api.debug") {
+	if !config.AppConfig.GetBool("debug") {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	configureLimitAccess()
+	configureAPIUserAuthentication()
+	configureCORSMiddleware()
 
-	// pass config to modules if they need it
-	for _, f := range startModules {
-		f(apiConfig)
+	createAPIEndpoint("", mainAPICalls)
+
+	if config.AppConfig.GetBool("snapshots.enableapi") {
+		createAPIEndpoint("/snapshots", snapshotAPICalls)
+		enableSnapshotAPI(api)
 	}
 
-	api = gin.Default()
-
-	username := config.GetString("api.auth.username")
-	password := config.GetString("api.auth.password")
-	if len(username) > 0 && len(password) > 0 {
-		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
-	}
-
-	api.Use(CORSMiddleware(config.GetBool("api.cors.setAllowOriginToAll")))
-
-	api.POST("/", func(c *gin.Context) {
-		t := time.Now()
-
-		var request Request
-		err := c.ShouldBindJSON(&request)
-		if err == nil {
-			caseInsensitiveCommand := strings.ToLower(request.Command)
-			if triesToAccessLimited(caseInsensitiveCommand, c) {
-				logs.Log.Warningf("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
-				ReplyError("Limited remote command access", c)
-				return
-			}
-
-			apiCall, apiCallExists := apiCalls[caseInsensitiveCommand]
-			if apiCallExists {
-				apiCall(request, c, t)
-			} else {
-				logs.Log.Error("Unknown command", request.Command)
-				ReplyError("No known command provided", c)
-			}
-
-		} else {
-			logs.Log.Error("ERROR request", err)
-			ReplyError("Wrongly formed JSON", c)
-		}
-	})
-
-	if config.GetBool("snapshots.enableapi") {
-		enableSnapshotApi(api)
-	}
-
-	useHTTP := config.GetBool("api.http.useHttp")
-	useHTTPS := config.GetBool("api.https.useHttps")
+	useHTTP := config.AppConfig.GetBool("api.http.useHttp")
+	useHTTPS := config.AppConfig.GetBool("api.https.useHttps")
 
 	if !useHTTP && !useHTTPS {
 		logs.Log.Fatal("Either useHttp, useHttps, or both must set to true")
 	}
 
 	if useHTTP {
-		go serveHttp(api, config)
+		go serveHttp(api)
 	}
 
 	if useHTTPS {
-		go serveHttps(api, config)
+		go serveHttps(api)
 	}
 }
 
-func CORSMiddleware(setAllowOriginToAll bool) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func configureAPIUserAuthentication() {
+	username := config.AppConfig.GetString("api.auth.username")
+	password := config.AppConfig.GetString("api.auth.password")
+	if len(username) > 0 && len(password) > 0 {
+		api.Use(gin.BasicAuth(gin.Accounts{username: password}))
+	}
+}
+
+func configureCORSMiddleware() {
+	setAllowOriginToAll := config.AppConfig.GetBool("api.cors.setAllowOriginToAll")
+
+	corsMiddleware := func(c *gin.Context) {
 		if setAllowOriginToAll {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
@@ -129,22 +98,23 @@ func CORSMiddleware(setAllowOriginToAll bool) gin.HandlerFunc {
 
 		c.Next()
 	}
+	api.Use(corsMiddleware)
 }
 
-func serveHttps(api *gin.Engine, config *viper.Viper) {
-	serveOnAddress := config.GetString("api.https.host") + ":" + config.GetString("api.https.port")
+func serveHttps(api *gin.Engine) {
+	serveOnAddress := config.AppConfig.GetString("api.https.host") + ":" + config.AppConfig.GetString("api.https.port")
 	logs.Log.Info("API listening on HTTPS (" + serveOnAddress + ")")
 
-	certificatePath := config.GetString("api.https.certificatePath")
-	privateKeyPath := config.GetString("api.https.privateKeyPath")
+	certificatePath := config.AppConfig.GetString("api.https.certificatePath")
+	privateKeyPath := config.AppConfig.GetString("api.https.privateKeyPath")
 
 	if err := http.ListenAndServeTLS(serveOnAddress, certificatePath, privateKeyPath, api); err != nil && err != http.ErrServerClosed {
 		logs.Log.Fatal("API Server Error", err)
 	}
 }
 
-func serveHttp(api *gin.Engine, config *viper.Viper) {
-	serveOnAddress := config.GetString("api.http.host") + ":" + config.GetString("api.http.port")
+func serveHttp(api *gin.Engine) {
+	serveOnAddress := config.AppConfig.GetString("api.http.host") + ":" + config.AppConfig.GetString("api.http.port")
 	logs.Log.Info("API listening on HTTP (" + serveOnAddress + ")")
 
 	srv = &http.Server{
@@ -163,12 +133,12 @@ func End() {
 		if err := srv.Shutdown(ctx); err != nil {
 			logs.Log.Fatal("API Server Shutdown Error:", err)
 		}
-		logs.Log.Info("API Server exited")
+		logs.Log.Debug("API Server exited")
 		cancel()
 	}
 }
 
-func ReplyError(message string, c *gin.Context) {
+func replyError(message string, c *gin.Context) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error": message,
 	})
@@ -178,8 +148,45 @@ func getDuration(t time.Time) int32 {
 	return int32(time.Now().Sub(t).Nanoseconds() / int64(time.Millisecond))
 }
 
+type APIImplementation func(request Request, c *gin.Context, t time.Time)
+
+func createAPIEndpoint(endpointPath string, endpointImplementation map[string]APIImplementation) {
+	api.POST(endpointPath, func(c *gin.Context) {
+		t := time.Now()
+
+		var request Request
+		err := c.ShouldBindJSON(&request)
+		if err == nil {
+			caseInsensitiveCommand := strings.ToLower(request.Command)
+			if triesToAccessLimited(caseInsensitiveCommand, c) {
+				logs.Log.Infof("Denying limited command request %v from remote %v", request.Command, c.Request.RemoteAddr)
+				replyError("Limited remote command access", c)
+				return
+			}
+
+			implementation, apiCallExists := endpointImplementation[caseInsensitiveCommand]
+			if apiCallExists {
+				implementation(request, c, t)
+			} else {
+				logs.Log.Error("Unknown command", request.Command)
+				replyError("No known command provided", c)
+			}
+
+		} else {
+			logs.Log.Error("ERROR request", err)
+			replyError("Wrongly formed JSON", c)
+		}
+	})
+
+}
+
+func addAPICall(apiCall string, implementation APIImplementation, implementations map[string]APIImplementation) {
+	caseInsensitiveAPICall := strings.ToLower(apiCall)
+	implementations[caseInsensitiveAPICall] = implementation
+}
+
 func configureLimitAccess() {
-	localLimitAccess := config.GetStringSlice("api.limitRemoteAccess")
+	localLimitAccess := config.AppConfig.GetStringSlice("api.limitRemoteAccess")
 
 	if len(localLimitAccess) > 0 {
 		for _, limitAccessEntry := range localLimitAccess {
@@ -200,13 +207,4 @@ func triesToAccessLimited(caseInsensitiveCommand string, c *gin.Context) bool {
 		}
 	}
 	return false
-}
-
-func addAPICall(apiCall string, implementation func(request Request, c *gin.Context, t time.Time)) {
-	caseInsensitiveAPICall := strings.ToLower(apiCall)
-	apiCalls[caseInsensitiveAPICall] = implementation
-}
-
-func addStartModule(implementation func(apiConfig *viper.Viper)) {
-	startModules = append(startModules, implementation)
 }

@@ -1,12 +1,12 @@
 package utils
 
 import (
+	"../config"
 	"../logs"
-	"github.com/spf13/viper"
 )
 
-func Hello(viperConfig *viper.Viper) {
-	if !viperConfig.GetBool("log.hello") {
+func Hello() {
+	if !config.AppConfig.GetBool("log.hello") {
 		return
 	}
 

@@ -3,6 +3,7 @@ package snapshot
 import (
 	"time"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -12,7 +13,7 @@ import (
 )
 
 func trimTXRunner() {
-	if config.GetBool("snapshots.keep") {
+	if config.AppConfig.GetBool("snapshots.keep") {
 		logs.Log.Notice("The trimmed transactions after the snapshots will be kept in the database.")
 		return
 	}

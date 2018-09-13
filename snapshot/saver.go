@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 
+	"../config"
 	"../convert"
 	"../db"
 	"../db/coding"
@@ -16,7 +17,9 @@ import (
 	"../utils"
 )
 
-const currentHeaderVersion = "1"
+const (
+	currentHeaderVersion = "1"
+)
 
 func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 	logs.Log.Noticef("Saving snapshot (%v) into %v...", timestamp, snapshotDir)
@@ -24,7 +27,7 @@ func SaveSnapshot(snapshotDir string, timestamp int64, filename string) error {
 
 	timestampString := strconv.FormatInt(int64(timestamp), 10)
 	if len(filename) == 0 {
-		filename = config.GetString("snapshots.filename")
+		filename = config.AppConfig.GetString("snapshots.filename")
 	}
 	if len(filename) == 0 {
 		filename = timestampString + ".snap"

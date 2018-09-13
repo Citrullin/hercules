@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	addAPICall("getNodeInfo", getNodeInfo)
+	addAPICall("getNodeInfo", getNodeInfo, mainAPICalls)
 }
 
 func getNodeInfo(request Request, c *gin.Context, t time.Time) {

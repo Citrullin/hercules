@@ -25,6 +25,12 @@ const (
 	maxTipSearchRetries = 15
 )
 
+var (
+	gTTALock     = &sync.RWMutex{}
+	txCache      = make(map[string]time.Time)
+	transactions = make(map[string]*transaction.FastTX)
+)
+
 // 1. Get reference: either one provided or latest milestone - 15 milestones back
 
 type GraphNode struct {
@@ -39,10 +45,6 @@ type GraphRating struct {
 	Rating int
 	Graph  *GraphNode
 }
-
-var gTTALock = &sync.Mutex{}
-var txCache = make(map[string]time.Time)
-var transactions = make(map[string]*transaction.FastTX)
 
 func getReference(reference []byte, depth int) []byte {
 	if reference != nil && len(reference) > 0 {
@@ -59,6 +61,7 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
+// TODO Fix this function! It causes nodes to get out of memory and crash in the first gTTA request!
 func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, transactions map[string]*transaction.FastTX) *GraphNode {
 	approveeKeys := findApprovees(reference)
 	graph := &GraphNode{reference, nil, 1, valid, nil}
@@ -371,6 +374,21 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 
 	logs.Log.Debug("Could not get TXs to approve")
 	return nil
+}
+
+// This function temporary. It will be removed when the tipSel logic is corrected
+func GetRandomTXToApprove() [][]byte {
+	tip1, _ := getRandomTip(nil)
+	if tip1 == nil {
+		return nil
+	}
+
+	tip2, _ := getRandomTip(nil)
+	if tip2 == nil {
+		return nil
+	}
+
+	return [][]byte{tip1, tip2}
 }
 
 func cleanCache() {

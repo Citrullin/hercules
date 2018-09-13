@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../convert"
 	"../db"
-	"../db/coding"
 	"../db/ns"
 	"../logs"
 	"../server"
 	"../transaction"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -29,6 +28,28 @@ const (
 	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
 	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
 	TX_TRITS_LENGTH    = 8019
+)
+
+var (
+	// "constants"
+	nbWorkers  = runtime.NumCPU()
+	tipBytes   = convert.TrytesToBytes(strings.Repeat("9", TRYTES_SIZE))[:DATA_SIZE]
+	tipTrits   = convert.BytesToTrits(tipBytes)[:TX_TRITS_LENGTH]
+	tipFastTX  = transaction.TritsToTX(&tipTrits, tipBytes)
+	tipHashKey = ns.HashKey(tipFastTX.Hash, ns.NamespaceHash)
+
+	// vars
+	srv                  *server.Server
+	LastIncomingTime     map[string]time.Time
+	LastIncomingTimeLock = &sync.RWMutex{}
+	RequestQueues        map[string]*RequestQueue
+	RequestQueuesLock          = &sync.RWMutex{}
+	lowEndDevice               = false
+	totalTransactions    int64 = 0
+	totalConfirmations   int64 = 0
+	saved                      = 0
+	discarded                  = 0
+	outgoing                   = 0
 )
 
 type Message struct {
@@ -50,40 +71,14 @@ type IncomingTX struct {
 
 type RequestQueue chan *Request
 
-var (
-	// "constants"
-	nbWorkers  = runtime.NumCPU()
-	tipBytes   = convert.TrytesToBytes(strings.Repeat("9", TRYTES_SIZE))[:DATA_SIZE]
-	tipTrits   = convert.BytesToTrits(tipBytes)[:TX_TRITS_LENGTH]
-	tipFastTX  = transaction.TritsToTX(&tipTrits, tipBytes)
-	tipHashKey = ns.HashKey(tipFastTX.Hash, ns.NamespaceHash)
-
-	// vars
-	srv                  *server.Server
-	config               *viper.Viper
-	LastIncomingTime     map[string]time.Time
-	LastIncomingTimeLock = &sync.RWMutex{}
-	RequestQueues        map[string]*RequestQueue
-	RequestQueuesLock          = &sync.RWMutex{}
-	lowEndDevice               = false
-	totalTransactions    int64 = 0
-	totalConfirmations   int64 = 0
-	incoming                   = 0
-	incomingProcessed          = 0
-	saved                      = 0
-	discarded                  = 0
-	outgoing                   = 0
-)
-
-func Start(cfg *viper.Viper) {
-	config = cfg
+func Start() {
 	srv = server.GetServer()
 
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
 	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
 	LastIncomingTime = make(map[string]time.Time)
 
-	lowEndDevice = config.GetBool("light")
+	lowEndDevice = config.AppConfig.GetBool("light")
 
 	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
 	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))
@@ -106,18 +101,10 @@ func Start(cfg *viper.Viper) {
 
 	go report()
 	go cleanup()
-	logs.Log.Info("Tangle started!")
 
-	go func() {
-		interval := time.Duration(2) * time.Millisecond
-		if lowEndDevice {
-			interval = interval * 5
-		}
-		for {
-			outgoingRunner()
-			time.Sleep(interval)
-		}
-	}()
+	go outgoingRunner()
+
+	logs.Log.Info("Tangle started!")
 }
 
 func cleanup() {
@@ -143,14 +130,14 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		x := 0
 		return ns.ForNamespace(tx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
 			relKey := ns.Key(key, ns.NamespaceRelation)
-			relation, _ := coding.GetBytes(tx, relKey)
+			relation, _ := tx.GetBytes(relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
 				(!tx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !tx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
-				txBytes, _ := coding.GetBytes(tx, ns.Key(key, ns.NamespaceBytes))
+				txBytes, _ := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(tx db.Transaction) error {

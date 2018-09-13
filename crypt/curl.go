@@ -4,10 +4,16 @@ import (
 	"math"
 )
 
-const NUMBER_OF_ROUNDSP27 = 27
-const NUMBER_OF_ROUNDSP81 = 81
-const HASH_LENGTH = 243
-const STATE_LENGTH = 3 * HASH_LENGTH
+const (
+	NUMBER_OF_ROUNDSP27 = 27
+	NUMBER_OF_ROUNDSP81 = 81
+	HASH_LENGTH         = 243
+	STATE_LENGTH        = 3 * HASH_LENGTH
+)
+
+var (
+	TRUTH_TABLE = []int{1, 0, -1, 2, 1, -1, 0, 2, -1, 1, 0}
+)
 
 type Hash interface {
 	Initialize()
@@ -19,15 +25,12 @@ type Hash interface {
 
 type Curl struct {
 	Hash
-	state []int
+	state  []int
 	rounds int
 }
 
-var TRUTH_TABLE = []int{1, 0, -1, 2, 1, -1, 0, 2, -1, 1, 0}
-
-
 func (curl *Curl) Initialize() {
-	curl.InitializeCurl(nil,0, curl.rounds)
+	curl.InitializeCurl(nil, 0, curl.rounds)
 }
 
 func (curl *Curl) InitializeCurl(trits []int, length int, rounds int) {
@@ -40,28 +43,32 @@ func (curl *Curl) InitializeCurl(trits []int, length int, rounds int) {
 }
 
 func (curl *Curl) Reset() {
-	curl.InitializeCurl(nil,0, curl.rounds)
+	curl.InitializeCurl(nil, 0, curl.rounds)
 }
 
 func (curl *Curl) Absorb(trits []int, offset int, length int) {
 	for {
 		limit := int(math.Min(HASH_LENGTH, float64(length)))
-		copy(curl.state, trits[offset: offset + limit])
+		copy(curl.state, trits[offset:offset+limit])
 		curl.Transform()
 		offset += HASH_LENGTH
 		length -= HASH_LENGTH
-		if length <= 0 { break }
+		if length <= 0 {
+			break
+		}
 	}
 }
 
 func (curl *Curl) Squeeze(resp []int, offset int, length int) []int {
 	for {
 		limit := int(math.Min(HASH_LENGTH, float64(length)))
-		copy(resp[offset: offset + limit], curl.state)
+		copy(resp[offset:offset+limit], curl.state)
 		curl.Transform()
 		offset += HASH_LENGTH
 		length -= HASH_LENGTH
-		if length <= 0 { break }
+		if length <= 0 {
+			break
+		}
 	}
 	return resp
 }
@@ -77,7 +84,7 @@ func (curl *Curl) Transform() {
 				incr = -365
 			}
 			index2 := index + incr
-			curl.state[i] = TRUTH_TABLE[stateCopy[index] + (stateCopy[index2] << 2) + 5]
+			curl.state[i] = TRUTH_TABLE[stateCopy[index]+(stateCopy[index2]<<2)+5]
 			index = index2
 		}
 	}

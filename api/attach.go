@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"../config"
 	"../logs"
 
 	"github.com/gin-gonic/gin"
 	"github.com/iotaledger/giota"
 	"github.com/muxxer/powsrv"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -22,36 +22,38 @@ const (
 	MaxTimestampValue = 3812798742493 //int64(3^27 - 1) / 2
 )
 
-var powLock = &sync.Mutex{}
-var maxMinWeightMagnitude = 0
-var maxTransactions = 0
-var usePowSrv = false
-var powClient *powsrv.PowClient
-var interruptAttachToTangle = false
-var powInitialized = false
-var powFunc giota.PowFunc
-var powType string
-var powVersion string
-var serverVersion string
+var (
+	powLock                 = &sync.Mutex{}
+	maxMinWeightMagnitude   = 0
+	maxTransactions         = 0
+	usePowSrv               = false
+	powClient               *powsrv.PowClient
+	interruptAttachToTangle = false
+	powInitialized          = false
+	powFunc                 giota.PowFunc
+	powType                 string
+	powVersion              string
+	serverVersion           string
+)
 
 func init() {
-	addStartModule(startAttach)
+	startAttach()
 
-	addAPICall("attachToTangle", attachToTangle)
-	addAPICall("interruptAttachingToTangle", interruptAttachingToTangle)
+	addAPICall("attachToTangle", attachToTangle, mainAPICalls)
+	addAPICall("interruptAttachingToTangle", interruptAttachingToTangle, mainAPICalls)
 }
 
-func startAttach(apiConfig *viper.Viper) {
-	maxMinWeightMagnitude = config.GetInt("api.pow.maxMinWeightMagnitude")
-	maxTransactions = config.GetInt("api.pow.maxTransactions")
-	usePowSrv = config.GetBool("api.pow.usePowSrv")
+func startAttach() {
+	maxMinWeightMagnitude = config.AppConfig.GetInt("api.pow.maxMinWeightMagnitude")
+	maxTransactions = config.AppConfig.GetInt("api.pow.maxTransactions")
+	usePowSrv = config.AppConfig.GetBool("api.pow.usePowSrv")
 
 	logs.Log.Debug("maxMinWeightMagnitude:", maxMinWeightMagnitude)
 	logs.Log.Debug("maxTransactions:", maxTransactions)
 	logs.Log.Debug("usePowSrv:", usePowSrv)
 
 	if usePowSrv {
-		powClient = &powsrv.PowClient{PowSrvPath: config.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
+		powClient = &powsrv.PowClient{PowSrvPath: config.AppConfig.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
 	}
 }
 
@@ -105,13 +107,13 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	trunkTransaction, err := toRunesCheckTrytes(request.TrunkTransaction, giota.TrunkTransactionTrinarySize/3)
 	if err != nil {
-		ReplyError("Invalid trunkTransaction-Trytes", c)
+		replyError("Invalid trunkTransaction-Trytes", c)
 		return
 	}
 
 	branchTransaction, err := toRunesCheckTrytes(request.BranchTransaction, giota.BranchTransactionTrinarySize/3)
 	if err != nil {
-		ReplyError("Invalid branchTransaction-Trytes", c)
+		replyError("Invalid branchTransaction-Trytes", c)
 		return
 	}
 
@@ -119,7 +121,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	// restrict minWeightMagnitude
 	if minWeightMagnitude > maxMinWeightMagnitude {
-		ReplyError("MinWeightMagnitude too high", c)
+		replyError("MinWeightMagnitude too high", c)
 		return
 	}
 
@@ -127,7 +129,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	// limit number of transactions in a bundle
 	if len(trytes) > maxTransactions {
-		ReplyError("Too many transactions", c)
+		replyError("Too many transactions", c)
 		return
 	}
 	returnTrytes = make([]string, len(trytes))
@@ -136,7 +138,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 	// validate input trytes before doing PoW
 	for idx, tryte := range trytes {
 		if runes, err := toRunesCheckTrytes(tryte, giota.TransactionTrinarySize/3); err != nil {
-			ReplyError("Error in Tryte input", c)
+			replyError("Error in Tryte input", c)
 			return
 		} else {
 			inputRunes[idx] = runes
@@ -149,7 +151,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 		if usePowSrv {
 			serverVersion, powType, powVersion, err = powClient.GetPowInfo()
 			if err != nil {
-				ReplyError(err.Error(), c)
+				replyError(err.Error(), c)
 				return
 			}
 
@@ -175,7 +177,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 		var invalid = true
 		for invalid {
 			if interruptAttachToTangle {
-				ReplyError("attatchToTangle interrupted", c)
+				replyError("attatchToTangle interrupted", c)
 				return
 			}
 			timestamp := getTimestampMilliseconds()
@@ -209,7 +211,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 			startTime := time.Now()
 			nonceTrytes, err := powFunc(giota.Trytes(runes), minWeightMagnitude)
 			if err != nil || len(nonceTrytes) != giota.NonceTrinarySize/3 {
-				ReplyError(fmt.Sprintf("PoW failed! %v", err.Error()), c)
+				replyError(fmt.Sprintf("PoW failed! %v", err.Error()), c)
 				return
 			}
 			elapsedTime := time.Now().Sub(startTime)
@@ -220,7 +222,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 			verifyTrytes, err := giota.ToTrytes(string(runes))
 			if err != nil {
-				ReplyError("Trytes got corrupted", c)
+				replyError("Trytes got corrupted", c)
 				return
 			}
 
