@@ -1,7 +1,5 @@
 package api
 
-// complaints or suggestions pls to pmaxuw on discord
-
 import (
 	"errors"
 	"fmt"
@@ -14,20 +12,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/iotaledger/giota"
-	"github.com/muxxer/powsrv"
+	"github.com/muxxer/diverdriver"
 )
 
 const (
 	// not defined in giota library
-	MaxTimestampValue = 3812798742493 //int64(3^27 - 1) / 2
+	MaxTimestampValue = 3812798742493 // int64(3^27 - 1) / 2
 )
 
 var (
 	powLock                 = &sync.Mutex{}
 	maxMinWeightMagnitude   = 0
 	maxTransactions         = 0
-	usePowSrv               = false
-	powClient               *powsrv.PowClient
+	useDiverDriver          = false
+	diverClient             *diverdriver.DiverClient
 	interruptAttachToTangle = false
 	powInitialized          = false
 	powFunc                 giota.PowFunc
@@ -37,8 +35,6 @@ var (
 )
 
 func init() {
-	startAttach()
-
 	addAPICall("attachToTangle", attachToTangle, mainAPICalls)
 	addAPICall("interruptAttachingToTangle", interruptAttachingToTangle, mainAPICalls)
 }
@@ -46,19 +42,19 @@ func init() {
 func startAttach() {
 	maxMinWeightMagnitude = config.AppConfig.GetInt("api.pow.maxMinWeightMagnitude")
 	maxTransactions = config.AppConfig.GetInt("api.pow.maxTransactions")
-	usePowSrv = config.AppConfig.GetBool("api.pow.usePowSrv")
+	useDiverDriver = config.AppConfig.GetBool("api.pow.useDiverDriver")
 
 	logs.Log.Debug("maxMinWeightMagnitude:", maxMinWeightMagnitude)
 	logs.Log.Debug("maxTransactions:", maxTransactions)
-	logs.Log.Debug("usePowSrv:", usePowSrv)
+	logs.Log.Debug("useDiverDriver:", useDiverDriver)
 
-	if usePowSrv {
-		powClient = &powsrv.PowClient{PowSrvPath: config.AppConfig.GetString("api.pow.powSrvPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
+	if useDiverDriver {
+		diverClient = &diverdriver.DiverClient{DiverDriverPath: config.AppConfig.GetString("api.pow.diverDriverPath"), WriteTimeOutMs: 500, ReadTimeOutMs: 120000}
 	}
 }
 
-// TODO: maybe the trytes/trits/runes conversions should be ported to the version in giota library
-// The project still used home-brew conversions and types
+// TODO: maybe the trytes/trits/runes conversions should be ported to the version in gIOTA library
+// Hercules still uses home-brew conversions and types
 func IsValidPoW(hash giota.Trits, mwm int) bool {
 	for i := len(hash) - mwm; i < len(hash); i++ {
 		if hash[i] != 0 {
@@ -82,15 +78,15 @@ func toRunes(t giota.Trytes) []rune {
 	return []rune(string(t))
 }
 
-// interrupts not PoW itselfe (no PoW of giota support interrupts) but stops
-// attatchToTangle after the last transaction PoWed
+// interrupts not PoW itself (no PoW of gIOTA supports interrupts) but stops
+// attachToTangle after the last transaction PoWed
 func interruptAttachingToTangle(request Request, c *gin.Context, t time.Time) {
 	interruptAttachToTangle = true
 	c.JSON(http.StatusOK, gin.H{})
 }
 
 func getTimestampMilliseconds() int64 {
-	return time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond)) // time.Nanosecond should always be 1 ... but if not ...^^
+	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
 // attachToTangle
@@ -121,7 +117,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	// restrict minWeightMagnitude
 	if minWeightMagnitude > maxMinWeightMagnitude {
-		replyError("MinWeightMagnitude too high", c)
+		replyError(fmt.Sprintf("MinWeightMagnitude too high. MWM: %v Allowed: %v", minWeightMagnitude, maxMinWeightMagnitude), c)
 		return
 	}
 
@@ -148,22 +144,22 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 	var prevTransaction []rune
 
 	if !powInitialized {
-		if usePowSrv {
-			serverVersion, powType, powVersion, err = powClient.GetPowInfo()
+		if useDiverDriver {
+			serverVersion, powType, powVersion, err = diverClient.GetPowInfo()
 			if err != nil {
 				replyError(err.Error(), c)
 				return
 			}
 
-			powFunc = powClient.PowFunc
+			powFunc = diverClient.PowFunc
 		} else {
 			powType, powFunc = giota.GetBestPoW()
 		}
 		powInitialized = true
 	}
 
-	if usePowSrv {
-		logs.Log.Debugf("[PoW] Using powSrv version \"%v\"", serverVersion)
+	if useDiverDriver {
+		logs.Log.Debugf("[PoW] Using diverDriver version \"%v\"", serverVersion)
 		logs.Log.Debugf("[PoW] Best method \"%v\"", powType)
 		if powVersion != "" {
 			logs.Log.Debugf("[PoW] Version \"%v\"", powVersion)
@@ -181,7 +177,8 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 				return
 			}
 			timestamp := getTimestampMilliseconds()
-			//branch and trunk
+
+			// branch and trunk
 			tmp := prevTransaction
 			if len(prevTransaction) == 0 {
 				tmp = trunkTransaction
@@ -194,8 +191,8 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 			}
 			copy(runes[giota.BranchTransactionTrinaryOffset/3:], tmp[:giota.BranchTransactionTrinarySize/3])
 
-			//attachment fields: tag and timestamps
-			//tag - copy the obsolete tag to the attachment tag field only if tag isn't set.
+			// attachment fields: tag and timestamps
+			// tag - copy the obsolete tag to the attachment tag field only if tag isn't set.
 			if string(runes[giota.TagTrinaryOffset/3:(giota.TagTrinaryOffset+giota.TagTrinarySize)/3]) == "999999999999999999999999999" {
 				copy(runes[giota.TagTrinaryOffset/3:], runes[giota.ObsoleteTagTrinaryOffset/3:(giota.ObsoleteTagTrinaryOffset+giota.ObsoleteTagTrinarySize)/3])
 			}
@@ -226,7 +223,7 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 				return
 			}
 
-			//validate PoW - throws exception if invalid
+			// validate PoW - throws exception if invalid
 			hash := verifyTrytes.Hash()
 			if !IsValidPoW(hash.Trits(), minWeightMagnitude) {
 				logs.Log.Debug("Nonce verification failed. Retrying...", hash)
