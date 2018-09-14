@@ -53,7 +53,7 @@ var (
 	saved                      = 0
 	discarded                  = 0
 	outgoing                   = 0
-	fingerPrintTTL             = 10 // seconds
+	fingerPrintTTL             = 20 // seconds
 	fingerPrintCache           = freecache.NewCache(fingerPrintCacheSize)
 )
 
@@ -89,7 +89,7 @@ func Start() {
 	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))
 
 	if lowEndDevice {
-		fingerPrintTTL = fingerPrintTTL * 6
+		fingerPrintTTL = fingerPrintTTL * 3
 	}
 
 	// reapplyConfirmed()
