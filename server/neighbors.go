@@ -45,7 +45,8 @@ func BlockIP(ipAddressWithPort string) {
 	NeighborsLock.RLock()
 	for _, neighbor := range Neighbors {
 		for _, ip := range neighbor.KnownIPs {
-			if ip.String() == ipAddressWithPort {
+			knownIPWithPort := GetFormattedAddress(ip.String(), neighbor.Port)
+			if knownIPWithPort == ipAddressWithPort {
 				// Neighbor exists => don't block!
 				return
 			}
@@ -63,9 +64,10 @@ func RemoveBlockedIPsOfNeighbor(neighbor *Neighbor) {
 
 	BlockedIPsMapLock.RLock()
 	for _, ip := range neighbor.KnownIPs {
-		_, ipIsBlocked := BlockedIPsMap[ip.String()]
+		knownIPWithPort := GetFormattedAddress(ip.String(), neighbor.Port)
+		_, ipIsBlocked := BlockedIPsMap[knownIPWithPort]
 		if ipIsBlocked {
-			blockedIPsToRemove = append(blockedIPsToRemove, ip.String())
+			blockedIPsToRemove = append(blockedIPsToRemove, knownIPWithPort)
 		}
 	}
 	BlockedIPsMapLock.RUnlock()
