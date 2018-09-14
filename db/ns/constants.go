@@ -1,7 +1,7 @@
 package ns
 
 const (
-	// "Thumbnails" are the md5sum of the data, which is used to identify it. In that way the DB size is reduced
+	// "Thumbnails" are the HighwayHash of the data, which is used to identify it. In that way the DB size is reduced
 
 	NamespaceFingerprint = byte(0) // Thumbnail of complete received data => to skip the same data package in a short time range (not stored in DB)
 
