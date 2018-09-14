@@ -13,6 +13,8 @@ import (
 	"../logs"
 	"../server"
 	"../transaction"
+
+	"github.com/coocood/freecache"
 )
 
 const (
@@ -28,6 +30,7 @@ const (
 	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
 	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
 	TX_TRITS_LENGTH    = 8019
+	fingerPrintCacheSize = 10 * 1024 * 1024 // 10MB
 )
 
 var (
@@ -50,6 +53,8 @@ var (
 	saved                      = 0
 	discarded                  = 0
 	outgoing                   = 0
+	fingerPrintTTL             = 10 // seconds
+	fingerPrintCache           = freecache.NewCache(fingerPrintCacheSize)
 )
 
 type Message struct {
@@ -83,8 +88,11 @@ func Start() {
 	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
 	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))
 
+	if lowEndDevice {
+		fingerPrintTTL = fingerPrintTTL * 6
+	}
+
 	// reapplyConfirmed()
-	fingerprintsOnLoad()
 	tipOnLoad()
 	pendingOnLoad()
 	milestoneOnLoad()
@@ -114,7 +122,6 @@ func cleanup() {
 	}
 	cleanupTicker := time.NewTicker(interval)
 	for range cleanupTicker.C {
-		cleanupFingerprints()
 		cleanupRequestQueues()
 		cleanupStalledRequests()
 	}

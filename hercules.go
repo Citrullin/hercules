@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -54,6 +55,7 @@ func main() {
 func startBasicFunctionality() {
 	logs.Start()
 	config.Start()
+	debug.SetGCPercent(20) // for the use of freecache, could also be improved if not optimal
 
 	utils.Hello()
 	time.Sleep(500 * time.Millisecond)

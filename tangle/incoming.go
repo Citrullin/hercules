@@ -72,9 +72,8 @@ func incomingRunner() {
 		//
 		// Process incoming data
 		//
-		fingerprintHash := ns.HashKey(data, ns.NamespaceFingerprint)
-		fingerprint := getFingerprint(fingerprintHash)
-		if fingerprint == nil {
+		fingerprintHash, err := fingerPrintCache.Get(data)
+		if err != nil {
 			// Message was not received in the last time
 
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
@@ -83,9 +82,10 @@ func incomingRunner() {
 
 			// Check again because another thread could have received
 			// the same message from another neighbor in the meantime
-			fpExists := addFingerprint(fingerprintHash, recHash)
+			fingerprintHash, err = fingerPrintCache.Get(data)
+			if err != nil {
+				fingerPrintCache.Set(data, recHash, fingerPrintTTL)
 
-			if !fpExists {
 				// Message was not received in the mean time
 				atomic.AddUint64(&server.NewTxPerSec, 1)
 
@@ -96,7 +96,7 @@ func incomingRunner() {
 						err := processIncomingTX(tx, neighbor)
 						if err != nil {
 							if err == db.ErrTransactionConflict {
-								removeFingerprint(fingerprintHash)
+								fingerPrintCache.Del(data)
 								srv.Incoming <- raw
 								continue
 							}
@@ -117,7 +117,7 @@ func incomingRunner() {
 			}
 		} else {
 			atomic.AddUint64(&server.KnownTxPerSec, 1)
-			recHash = fingerprint.ReceiveHash
+			recHash = fingerprintHash
 		}
 
 		//
