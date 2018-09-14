@@ -101,6 +101,8 @@ func incomingRunner() {
 					// POW invalid => Track invalid messages from neighbor
 					neighbor.TrackInvalid(1)
 				}
+			} else {
+				atomic.AddUint64(&server.TipReqPerSec, 1)
 			}
 		} else {
 			atomic.AddUint64(&server.KnownTxPerSec, 1)
