@@ -23,9 +23,11 @@ Creates a snapshot on the current tangle database.
 */
 func MakeSnapshot(timestamp int64, filename string) error {
 	logs.Log.Infof("Making snapshot for Unix time %v...", timestamp)
-	InProgress = true
+	SnapshotInProgress = true
+	SnapshotWaitGroup.Add(1)
 	defer func() {
-		InProgress = false
+		SnapshotInProgress = false
+		SnapshotWaitGroup.Done()
 	}()
 
 	var bundles [][]byte

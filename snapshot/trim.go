@@ -30,7 +30,7 @@ func trimTXRunner() {
 	for hashKey := range edgeTransactions {
 		db.Singleton.Lock()
 		db.Singleton.Unlock() // should this be unlocked?
-		if InProgress {
+		if SnapshotInProgress {
 			time.Sleep(1 * time.Second)
 			continue
 		}

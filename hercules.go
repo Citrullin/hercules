@@ -70,6 +70,7 @@ func gracefullyDies() {
 	logs.Log.Infof("Caught signal '%s': Hercules is shutting down. Please wait...", sig)
 	api.End()
 	server.End()
+	snapshot.End()
 	db.End()
 
 	logs.Log.Info("Bye!")

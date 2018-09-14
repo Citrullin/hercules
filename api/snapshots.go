@@ -59,7 +59,7 @@ func getSnapshotsInfoResponse(latestOnly bool, t time.Time) gin.H {
 		"isSynchronized":                      snapshot.IsSynchronized(),
 		"unfinishedSnapshotTimestamp":         unfinishedSnapshotTimestamp,
 		"unfinishedSnapshotTimeHumanReadable": utils.GetHumanReadableTime(unfinishedSnapshotTimestamp),
-		"inProgress":                          snapshot.InProgress,
+		"inProgress":                          snapshot.SnapshotInProgress,
 		snapshotInfosResponseHeader:           snapshotInfosResponseValue,
 		"time":     time.Now().Unix(),
 		"duration": getDuration(t),
@@ -170,7 +170,7 @@ func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 		return
 	}
 
-	if snapshot.InProgress {
+	if snapshot.SnapshotInProgress {
 		replyError("A snapshot is currently in progress", c)
 		return
 	}

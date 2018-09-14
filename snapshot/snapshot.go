@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"sync"
 	"time"
 
 	"../config"
@@ -25,9 +26,11 @@ var (
 	keySnapshotLock       = []byte{ns.NamespaceSnapshotLock}
 	keySnapshotFile       = []byte{ns.NamespaceSnapshotFile}
 
+	snapshotTicker            *time.Ticker
 	edgeTransactions          chan *[]byte
 	CurrentTimestamp          int64
-	InProgress                = false
+	SnapshotInProgress        = false
+	SnapshotWaitGroup         = &sync.WaitGroup{}
 	lowEndDevice              = false
 	timeLeftToSnapshotSeconds int64
 )
@@ -53,6 +56,12 @@ func Start() {
 	go startAutosnapshots(snapshotInterval, snapshotPeriod)
 
 	loadSnapshotFiles()
+}
+
+func End() {
+	snapshotTicker.Stop()
+	SnapshotWaitGroup.Wait()
+	close(edgeTransactions)
 }
 
 func loadSnapshotFiles() {
@@ -107,7 +116,8 @@ func Lock(timestamp int64, filename string, tx db.Transaction) error {
 		defer tx.Commit()
 	}
 
-	InProgress = true
+	SnapshotInProgress = true
+	SnapshotWaitGroup.Add(1)
 	err := coding.PutInt64(tx, keySnapshotLock, timestamp)
 	if err != nil {
 		return err
@@ -119,7 +129,8 @@ func Lock(timestamp int64, filename string, tx db.Transaction) error {
 Removes a snapshot lock in the database
 */
 func Unlock(tx db.Transaction) error {
-	InProgress = false
+	SnapshotInProgress = false
+	SnapshotWaitGroup.Done()
 	err := tx.Remove(keySnapshotLock)
 	if err != nil {
 		return err
@@ -203,10 +214,10 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 
 	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.", snapshotInterval, snapshotPeriod)
 
-	snapshotTicker := time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
+	snapshotTicker = time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
 	for range snapshotTicker.C {
 		logs.Log.Info("Starting automatic snapshot...")
-		if !InProgress {
+		if !SnapshotInProgress {
 			snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
 			MakeSnapshot(snapshotTimestamp, "")
 		} else {
