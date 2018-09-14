@@ -320,11 +320,6 @@ func removePendingRequest(hash []byte, tx db.Transaction) bool {
 		delete(PendingRequests, key)
 		PendingRequestsLock.Unlock()
 
-		if tx == nil {
-			tx = db.Singleton.NewTransaction(true)
-			defer tx.Commit()
-		}
-
 		key := ns.HashKey(hash, ns.NamespacePendingHash)
 		tx.Remove(key)
 		tx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))

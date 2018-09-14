@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"sync"
+	"syscall"
 	"time"
 
 	"./api"
@@ -33,7 +35,7 @@ func main() {
 	logs.Log.Info("Starting Hercules. Please wait...")
 
 	if config.AppConfig.GetBool("debug") {
-		defer profile.Start().Stop()
+		defer profile.Start(profile.NoShutdownHook).Stop()
 
 		runtime.SetMutexProfileFraction(5)
 		go http.ListenAndServe(":6060", nil) // pprof Server for Debbuging Mutexes
@@ -53,19 +55,19 @@ func main() {
 func startBasicFunctionality() {
 	logs.Start()
 	config.Start()
+	debug.SetGCPercent(20) // for the use of freecache, could also be improved if not optimal
 
 	utils.Hello()
 	time.Sleep(500 * time.Millisecond)
 }
 
 func gracefullyDies() {
-	ch := make(chan os.Signal, 10)
-	signal.Notify(ch, os.Interrupt)
-	signal.Notify(ch, os.Kill)
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
-	<-ch // waits for death signal
+	sig := <-ch // waits for death signal
 
-	logs.Log.Info("Hercules is shutting down. Please wait...")
+	logs.Log.Infof("Caught signal '%s': Hercules is shutting down. Please wait...", sig)
 	api.End()
 	server.End()
 	db.End()

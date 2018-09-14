@@ -34,7 +34,11 @@ func incomingRunner() {
 
 		ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
 
-		var neighbor *server.Neighbor
+		ipIsBlocked := server.IsIPBlocked(ipAddressWithPort)
+		if ipIsBlocked {
+			// Skip message
+			continue
+		}
 
 		server.NeighborsLock.RLock()
 		neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
@@ -47,14 +51,13 @@ func incomingRunner() {
 			if neighborExists {
 				// If the neighbor was found now, the preferred IP is wrong => Update it!
 				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+			} else {
+				logs.Log.Infof("Blocked unknown neighbor (%v)", ipAddressWithPort)
+				server.BlockIP(ipAddressWithPort)
+				continue
 			}
 		} else {
 			server.NeighborsLock.RUnlock()
-		}
-
-		if !neighborExists {
-			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
-			continue
 		}
 
 		atomic.AddUint64(&server.IncTxPerSec, 1)
@@ -69,42 +72,52 @@ func incomingRunner() {
 		//
 		// Process incoming data
 		//
-		fingerprintHash := ns.HashKey(data, ns.NamespaceFingerprint)
-		fingerprint := getFingerprint(fingerprintHash)
-		if fingerprint == nil {
+		fingerprintHash, err := fingerPrintCache.Get(data)
+		if err != nil {
 			// Message was not received in the last time
-			atomic.AddUint64(&server.NewTxPerSec, 1)
 
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
 			tx := transaction.TritsToTX(&trits, data)
 			recHash = tx.Hash
 
-			addFingerprint(fingerprintHash, recHash)
+			// Check again because another thread could have received
+			// the same message from another neighbor in the meantime
+			fingerprintHash, err = fingerPrintCache.Get(data)
+			if err != nil {
+				fingerPrintCache.Set(data, recHash, fingerPrintTTL)
 
-			if !bytes.Equal(data, tipBytes) {
-				// Tx was not a tip
-				if crypt.IsValidPoW(tx.Hash, MWM) {
-					// POW valid => Process the message
-					err := processIncomingTX(tx, neighbor)
-					if err != nil {
-						if err == db.ErrTransactionConflict {
-							removeFingerprint(fingerprintHash)
-							srv.Incoming <- raw
-							continue
+				// Message was not received in the mean time
+				atomic.AddUint64(&server.NewTxPerSec, 1)
+
+				if !bytes.Equal(data, tipBytes) {
+					// Tx was not a tip
+					if crypt.IsValidPoW(tx.Hash, MWM) {
+						// POW valid => Process the message
+						err := processIncomingTX(tx, neighbor)
+						if err != nil {
+							if err == db.ErrTransactionConflict {
+								fingerPrintCache.Del(data)
+								srv.Incoming <- raw // Process the message again
+								continue
+							}
+							logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
+						} else {
+							atomic.AddUint64(&server.ValidTxPerSec, 1)
+							neighbor.LastIncomingTime = time.Now()
 						}
-						logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
 					} else {
-						atomic.AddUint64(&server.ValidTxPerSec, 1)
-						neighbor.LastIncomingTime = time.Now()
+						// POW invalid => Track invalid messages from neighbor
+						neighbor.TrackInvalid(1)
 					}
 				} else {
-					// POW invalid => Track invalid messages from neighbor
-					neighbor.TrackInvalid(1)
+					atomic.AddUint64(&server.TipReqPerSec, 1)
 				}
+			} else {
+				atomic.AddUint64(&server.KnownTxPerSec, 1)
 			}
 		} else {
 			atomic.AddUint64(&server.KnownTxPerSec, 1)
-			recHash = fingerprint.ReceiveHash
+			recHash = fingerprintHash
 		}
 
 		//

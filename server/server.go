@@ -25,6 +25,7 @@ var (
 	NewTxPerSec           uint64
 	KnownTxPerSec         uint64
 	ValidTxPerSec         uint64
+	TipReqPerSec          uint64
 	outTxPerSec           uint64
 	TotalIncTx            uint64
 	nbWorkers             = runtime.NumCPU()
@@ -148,6 +149,7 @@ func reportIncomingMessages() {
 		atomic.StoreUint64(&NewTxPerSec, 0)
 		atomic.StoreUint64(&KnownTxPerSec, 0)
 		atomic.StoreUint64(&ValidTxPerSec, 0)
+		atomic.StoreUint64(&TipReqPerSec, 0)
 		atomic.StoreUint64(&outTxPerSec, 0)
 	}
 }
@@ -163,7 +165,7 @@ func refreshHostnames() {
 }
 
 func report() {
-	logs.Log.Debugf("Incoming TX/s: (All: %4d, Known: %4d, New: %4d, Valid: %4d) // Outgoing TX/s: %4d\n", IncTxPerSec, KnownTxPerSec, NewTxPerSec, ValidTxPerSec, outTxPerSec)
+	logs.Log.Debugf("Incoming TX/s: (All: %3d, Known: %3d, New: %3d, Valid: %3d, TipReq: %3d) // Outgoing TX/s: %4d\n", IncTxPerSec, KnownTxPerSec, NewTxPerSec, ValidTxPerSec, TipReqPerSec, outTxPerSec)
 }
 
 func GetServer() *Server {
