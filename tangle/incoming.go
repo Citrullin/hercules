@@ -73,36 +73,44 @@ func incomingRunner() {
 		fingerprint := getFingerprint(fingerprintHash)
 		if fingerprint == nil {
 			// Message was not received in the last time
-			atomic.AddUint64(&server.NewTxPerSec, 1)
 
 			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
 			tx := transaction.TritsToTX(&trits, data)
 			recHash = tx.Hash
 
-			addFingerprint(fingerprintHash, recHash)
+			// Check again because another thread could have received
+			// the same message from another neighbor in the meantime
+			fpExists := addFingerprint(fingerprintHash, recHash)
 
-			if !bytes.Equal(data, tipBytes) {
-				// Tx was not a tip
-				if crypt.IsValidPoW(tx.Hash, MWM) {
-					// POW valid => Process the message
-					err := processIncomingTX(tx, neighbor)
-					if err != nil {
-						if err == db.ErrTransactionConflict {
-							removeFingerprint(fingerprintHash)
-							srv.Incoming <- raw
-							continue
+			if !fpExists {
+				// Message was not received in the mean time
+				atomic.AddUint64(&server.NewTxPerSec, 1)
+
+				if !bytes.Equal(data, tipBytes) {
+					// Tx was not a tip
+					if crypt.IsValidPoW(tx.Hash, MWM) {
+						// POW valid => Process the message
+						err := processIncomingTX(tx, neighbor)
+						if err != nil {
+							if err == db.ErrTransactionConflict {
+								removeFingerprint(fingerprintHash)
+								srv.Incoming <- raw
+								continue
+							}
+							logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
+						} else {
+							atomic.AddUint64(&server.ValidTxPerSec, 1)
+							neighbor.LastIncomingTime = time.Now()
 						}
-						logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
 					} else {
-						atomic.AddUint64(&server.ValidTxPerSec, 1)
-						neighbor.LastIncomingTime = time.Now()
+						// POW invalid => Track invalid messages from neighbor
+						neighbor.TrackInvalid(1)
 					}
 				} else {
-					// POW invalid => Track invalid messages from neighbor
-					neighbor.TrackInvalid(1)
+					atomic.AddUint64(&server.TipReqPerSec, 1)
 				}
 			} else {
-				atomic.AddUint64(&server.TipReqPerSec, 1)
+				atomic.AddUint64(&server.KnownTxPerSec, 1)
 			}
 		} else {
 			atomic.AddUint64(&server.KnownTxPerSec, 1)

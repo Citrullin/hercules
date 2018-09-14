@@ -56,10 +56,15 @@ func getFingerprint(fingerprintHash []byte) *Fingerprint {
 	return fp
 }
 
-func addFingerprint(fingerprintHash []byte, receiveHash []byte) {
+func addFingerprint(fingerprintHash []byte, receiveHash []byte) (exists bool) {
 	fingerprintsLock.Lock()
 	defer fingerprintsLock.Unlock()
-	fingerprints[string(fingerprintHash)] = &Fingerprint{ReceiveTime: time.Now(), ReceiveHash: receiveHash}
+
+	_, exists = fingerprints[string(fingerprintHash)]
+	if !exists {
+		fingerprints[string(fingerprintHash)] = &Fingerprint{ReceiveTime: time.Now(), ReceiveHash: receiveHash}
+	}
+	return exists
 }
 
 func removeFingerprint(fingerprintHash []byte) {
