@@ -1,10 +1,11 @@
-package tests
+package coding_test
 
 import (
 	"crypto/md5"
 	"crypto/sha256"
 	"testing"
 
+	"github.com/cespare/xxhash"
 	"github.com/minio/highwayhash"
 )
 
@@ -43,6 +44,19 @@ func BenchmarkHighwayHash(b *testing.B) {
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
 		res = highwayhash.Sum128(bytes, key)
+	}
+	b.StopTimer()
+	_ = res
+}
+
+func BenchmarkXXHash(b *testing.B) {
+
+	bytes := []byte{0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01}
+	var res uint64
+
+	b.ResetTimer()
+	for index := 0; index < b.N; index++ {
+		res = xxhash.Sum64(bytes)
 	}
 	b.StopTimer()
 	_ = res
