@@ -34,7 +34,11 @@ func incomingRunner() {
 
 		ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
 
-		var neighbor *server.Neighbor
+		ipIsBlocked := server.IsIPBlocked(ipAddressWithPort)
+		if ipIsBlocked {
+			// Skip message
+			continue
+		}
 
 		server.NeighborsLock.RLock()
 		neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
@@ -47,14 +51,13 @@ func incomingRunner() {
 			if neighborExists {
 				// If the neighbor was found now, the preferred IP is wrong => Update it!
 				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+			} else {
+				logs.Log.Infof("Blocked unknown neighbor (%v)", ipAddressWithPort)
+				server.BlockIP(ipAddressWithPort)
+				continue
 			}
 		} else {
 			server.NeighborsLock.RUnlock()
-		}
-
-		if !neighborExists {
-			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
-			continue
 		}
 
 		atomic.AddUint64(&server.IncTxPerSec, 1)

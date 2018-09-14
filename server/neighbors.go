@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +26,56 @@ func (i *IPAddress) String() string {
 		return "[" + i.ip + "]"
 	} else {
 		return i.ip
+	}
+}
+
+var (
+	BlockedIPsMap     = make(map[string]time.Time)
+	BlockedIPsMapLock = &sync.RWMutex{}
+)
+
+func IsIPBlocked(ipAddressWithPort string) (blocked bool) {
+	BlockedIPsMapLock.RLock()
+	_, isBlocked := BlockedIPsMap[ipAddressWithPort]
+	BlockedIPsMapLock.RUnlock()
+	return isBlocked
+}
+
+func BlockIP(ipAddressWithPort string) {
+	NeighborsLock.RLock()
+	for _, neighbor := range Neighbors {
+		for _, ip := range neighbor.KnownIPs {
+			if ip.String() == ipAddressWithPort {
+				// Neighbor exists => don't block!
+				return
+			}
+		}
+	}
+	NeighborsLock.RUnlock()
+
+	BlockedIPsMapLock.Lock()
+	BlockedIPsMap[ipAddressWithPort] = time.Now()
+	BlockedIPsMapLock.Unlock()
+}
+
+func RemoveBlockedIPsOfNeighbor(neighbor *Neighbor) {
+	var blockedIPsToRemove []string
+
+	BlockedIPsMapLock.RLock()
+	for _, ip := range neighbor.KnownIPs {
+		_, ipIsBlocked := BlockedIPsMap[ip.String()]
+		if ipIsBlocked {
+			blockedIPsToRemove = append(blockedIPsToRemove, ip.String())
+		}
+	}
+	BlockedIPsMapLock.RUnlock()
+
+	if len(blockedIPsToRemove) > 0 {
+		BlockedIPsMapLock.Lock()
+		for _, ip := range blockedIPsToRemove {
+			delete(BlockedIPsMap, ip)
+		}
+		BlockedIPsMapLock.Unlock()
 	}
 }
 
@@ -114,6 +165,8 @@ func AddNeighbor(address string) error {
 	Neighbors[neighbor.IPAddressWithPort] = neighbor
 	NeighborsLock.Unlock()
 
+	RemoveBlockedIPsOfNeighbor(neighbor)
+
 	logAddNeighbor(neighbor)
 
 	return nil
@@ -183,6 +236,7 @@ func UpdateHostnameAddresses() {
 		if isRegisteredWithHostname {
 			identifier, _ := getIdentifierAndPort(neighbor.Addr)
 			neighbor.KnownIPs, _, _ = getIPsAndHostname(identifier)
+			RemoveBlockedIPsOfNeighbor(neighbor)
 			ip := neighbor.GetPreferredIP()
 			ipAddressWithPort := GetFormattedAddress(ip, neighbor.Port)
 
