@@ -97,7 +97,7 @@ func incomingRunner() {
 						if err != nil {
 							if err == db.ErrTransactionConflict {
 								fingerPrintCache.Del(data)
-								srv.Incoming <- raw
+								srv.Incoming <- raw // Process the message again
 								continue
 							}
 							logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
