@@ -61,3 +61,9 @@ func addFingerprint(fingerprintHash []byte, receiveHash []byte) {
 	defer fingerprintsLock.Unlock()
 	fingerprints[string(fingerprintHash)] = &Fingerprint{ReceiveTime: time.Now(), ReceiveHash: receiveHash}
 }
+
+func removeFingerprint(fingerprintHash []byte) {
+	fingerprintsLock.Lock()
+	defer fingerprintsLock.Unlock()
+	delete(fingerprints, string(fingerprintHash))
+}

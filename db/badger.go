@@ -111,9 +111,13 @@ func (b *Badger) Update(fn func(Transaction) error) error {
 	b.waitGroup.Add(1)
 	defer b.waitGroup.Done()
 
-	return b.db.Update(func(txn *badger.Txn) error {
+	err := b.db.Update(func(txn *badger.Txn) error {
 		return fn(&BadgerTransaction{txn: txn})
 	})
+	if err == badger.ErrConflict {
+		return ErrTransactionConflict
+	}
+	return err
 }
 
 func (b *Badger) View(fn func(Transaction) error) error {

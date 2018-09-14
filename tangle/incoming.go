@@ -87,7 +87,12 @@ func incomingRunner() {
 					// POW valid => Process the message
 					err := processIncomingTX(tx, neighbor)
 					if err != nil {
-						logs.Log.Errorf("Processing incoming message falied! Err: %v", err)
+						if err == db.ErrTransactionConflict {
+							removeFingerprint(fingerprintHash)
+							srv.Incoming <- raw
+							continue
+						}
+						logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
 					} else {
 						atomic.AddUint64(&server.ValidTxPerSec, 1)
 						neighbor.LastIncomingTime = time.Now()

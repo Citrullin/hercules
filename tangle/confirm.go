@@ -118,9 +118,8 @@ func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm b
 
 	data, err := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 	if err != nil {
-		// Imminent database inconsistency: Warn!
-		// logs.Log.Error("TX missing for confirmation. Probably snapshotted. DB inconsistency imminent!", key)
-		return false, false, errors.New("TX missing for confirmation!")
+		// Probably the tx is not yet committed to the database. Simply retry.
+		return false, true, nil
 	}
 
 	trits := convert.BytesToTrits(data)[:8019]
@@ -198,6 +197,7 @@ func confirmChild(key []byte, tx db.Transaction) error {
 func addPendingConfirmation(key []byte, timestamp int64, tx db.Transaction) error {
 	err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEventConfirmationPending), timestamp)
 	if err == nil {
+		// TODO: find a way to add to the queue AFTER the tx has been committed.
 		confirmQueue <- &PendingConfirmation{key, timestamp}
 	}
 	return err
