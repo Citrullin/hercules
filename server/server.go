@@ -21,21 +21,23 @@ const (
 )
 
 var (
-	IncTxPerSec           uint64
-	NewTxPerSec           uint64
-	KnownTxPerSec         uint64
-	ValidTxPerSec         uint64
-	TipReqPerSec          uint64
-	outTxPerSec           uint64
-	TotalIncTx            uint64
-	nbWorkers             = runtime.NumCPU()
-	reportTicker          *time.Ticker
-	hostnameRefreshTicker *time.Ticker
-	server                *Server
-	Neighbors             map[string]*Neighbor
-	NeighborsLock         = &sync.RWMutex{}
-	connection            net.PacketConn
-	ended                 = false
+	IncTxPerSec               uint64
+	NewTxPerSec               uint64
+	KnownTxPerSec             uint64
+	ValidTxPerSec             uint64
+	TipReqPerSec              uint64
+	outTxPerSec               uint64
+	TotalIncTx                uint64
+	nbWorkers                 = runtime.NumCPU()
+	reportTicker              *time.Ticker
+	reportTickerQuit          = make(chan struct{})
+	hostnameRefreshTicker     *time.Ticker
+	hostnameRefreshTickerQuit = make(chan struct{})
+	server                    *Server
+	Neighbors                 map[string]*Neighbor
+	NeighborsLock             = &sync.RWMutex{}
+	connection                net.PacketConn
+	ended                     = false
 )
 
 type Message struct {
@@ -52,7 +54,9 @@ type Server struct {
 	Incoming          chan *RawMsg
 	Outgoing          chan *Message
 	IncomingWaitGroup *sync.WaitGroup
+	OutgoingWaitGroup *sync.WaitGroup
 	receiveWaitGroup  *sync.WaitGroup
+	IncomingQueueQuit chan struct{}
 }
 
 func (server Server) Write(msg *Message) {
@@ -99,12 +103,38 @@ func Start() {
 	go writeMessages()
 }
 
+func End() {
+	ended = true
+
+	if reportTicker != nil {
+		reportTicker.Stop()
+		close(reportTickerQuit)
+	}
+	if hostnameRefreshTicker != nil {
+		hostnameRefreshTicker.Stop()
+		close(hostnameRefreshTickerQuit)
+	}
+
+	connection.Close()
+	server.receiveWaitGroup.Wait()
+
+	close(server.IncomingQueueQuit)
+	server.IncomingWaitGroup.Wait()
+	close(server.Incoming)
+
+	atomic.AddUint64(&TotalIncTx, IncTxPerSec)
+	logs.Log.Debugf("Total Incoming TXs %d\n", TotalIncTx)
+	logs.Log.Debug("Neighbor server exited")
+}
+
 func create() *Server {
 	server = &Server{
 		Incoming:          make(chan *RawMsg, maxQueueSize),
 		Outgoing:          make(chan *Message, maxQueueSize),
 		IncomingWaitGroup: &sync.WaitGroup{},
+		OutgoingWaitGroup: &sync.WaitGroup{},
 		receiveWaitGroup:  &sync.WaitGroup{},
+		IncomingQueueQuit: make(chan struct{}),
 	}
 
 	Neighbors = make(map[string]*Neighbor)
@@ -125,10 +155,10 @@ func create() *Server {
 }
 
 func writeMessages() {
+	server.OutgoingWaitGroup.Add(1)
+	defer server.OutgoingWaitGroup.Done()
+
 	for msg := range server.Outgoing {
-		if ended {
-			break
-		}
 		if msg.Neighbor != nil {
 			go msg.Neighbor.Write(msg)
 		} else {
@@ -139,28 +169,40 @@ func writeMessages() {
 
 func reportIncomingMessages() {
 	reportTicker = time.NewTicker(reportInterval)
-	for range reportTicker.C {
-		if ended {
-			break
+	for {
+		select {
+		case <-reportTickerQuit:
+			return
+
+		case <-reportTicker.C:
+			if ended {
+				break
+			}
+			report()
+			atomic.AddUint64(&TotalIncTx, IncTxPerSec)
+			atomic.StoreUint64(&IncTxPerSec, 0)
+			atomic.StoreUint64(&NewTxPerSec, 0)
+			atomic.StoreUint64(&KnownTxPerSec, 0)
+			atomic.StoreUint64(&ValidTxPerSec, 0)
+			atomic.StoreUint64(&TipReqPerSec, 0)
+			atomic.StoreUint64(&outTxPerSec, 0)
 		}
-		report()
-		atomic.AddUint64(&TotalIncTx, IncTxPerSec)
-		atomic.StoreUint64(&IncTxPerSec, 0)
-		atomic.StoreUint64(&NewTxPerSec, 0)
-		atomic.StoreUint64(&KnownTxPerSec, 0)
-		atomic.StoreUint64(&ValidTxPerSec, 0)
-		atomic.StoreUint64(&TipReqPerSec, 0)
-		atomic.StoreUint64(&outTxPerSec, 0)
 	}
 }
 
 func refreshHostnames() {
 	hostnameRefreshTicker = time.NewTicker(hostnameRefreshInterval)
-	for range hostnameRefreshTicker.C {
-		if ended {
-			break
+	for {
+		select {
+		case <-hostnameRefreshTickerQuit:
+			return
+
+		case <-hostnameRefreshTicker.C:
+			if ended {
+				break
+			}
+			UpdateHostnameAddresses()
 		}
-		UpdateHostnameAddresses()
 	}
 }
 
@@ -170,17 +212,4 @@ func report() {
 
 func GetServer() *Server {
 	return server
-}
-
-func End() {
-	ended = true
-	connection.Close()
-	server.receiveWaitGroup.Wait()
-
-	close(server.Incoming)
-	server.IncomingWaitGroup.Wait()
-
-	atomic.AddUint64(&TotalIncTx, IncTxPerSec)
-	logs.Log.Debugf("Total Incoming TXs %d\n", TotalIncTx)
-	logs.Log.Debug("Neighbor server exited")
 }

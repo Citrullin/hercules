@@ -23,9 +23,12 @@ const (
 )
 
 var (
-	lastTip             = time.Now()
-	PendingRequests     map[string]*PendingRequest
-	PendingRequestsLock = &sync.RWMutex{}
+	lastTip                  = time.Now()
+	PendingRequests          map[string]*PendingRequest
+	PendingRequestsLock      = &sync.RWMutex{}
+	outgoingRunnerTicker     *time.Ticker
+	outgoingRunnerWaitGroup  = &sync.WaitGroup{}
+	outgoingRunnerTickerQuit = make(chan struct{})
 )
 
 type PendingRequest struct {
@@ -62,8 +65,6 @@ func loadPendingRequests() {
 	// TODO: if pending is pending for too long, remove it from the loop?
 	logs.Log.Info("Loading pending requests")
 
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
 	RequestQueuesLock.Lock()
 	defer RequestQueuesLock.Unlock()
 
@@ -126,6 +127,9 @@ func getSomeRequestByNeighbor(neighbor *server.Neighbor, any bool) []byte {
 }
 
 func outgoingRunner() {
+	outgoingRunnerWaitGroup.Add(1)
+	defer outgoingRunnerWaitGroup.Done()
+
 	executeOutgoingRunner()
 
 	outgoingInterval := 2 * time.Millisecond
@@ -133,8 +137,18 @@ func outgoingRunner() {
 		outgoingInterval *= 5
 	}
 
-	for range time.NewTicker(outgoingInterval).C {
-		executeOutgoingRunner()
+	outgoingRunnerTicker = time.NewTicker(outgoingInterval)
+	for {
+		select {
+		case <-outgoingRunnerTickerQuit:
+			return
+
+		case <-outgoingRunnerTicker.C:
+			if ended {
+				break
+			}
+			executeOutgoingRunner()
+		}
 	}
 }
 

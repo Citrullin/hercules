@@ -1,8 +1,6 @@
 package snapshot
 
 import (
-	"time"
-
 	"../config"
 	"../convert"
 	"../db"
@@ -13,11 +11,16 @@ import (
 )
 
 func trimTXRunner() {
+	edgeTransactionsWaitGroup.Add(1)
+	defer edgeTransactionsWaitGroup.Done()
+
 	if config.AppConfig.GetBool("snapshots.keep") {
 		logs.Log.Notice("The trimmed transactions after the snapshots will be kept in the database.")
 		return
 	}
+
 	logs.Log.Debug("Loading trimmable TXs", len(edgeTransactions))
+
 	db.Singleton.View(func(tx db.Transaction) error {
 		ns.ForNamespace(tx, ns.NamespaceEventTrimPending, false, func(key, _ []byte) (bool, error) {
 			hashKey := ns.Key(key, ns.NamespaceHash)
@@ -26,15 +29,18 @@ func trimTXRunner() {
 		})
 		return nil
 	})
+
 	logs.Log.Debug("Loaded trimmable TXs", len(edgeTransactions))
-	for hashKey := range edgeTransactions {
-		db.Singleton.Lock()
-		db.Singleton.Unlock() // should this be unlocked?
-		if SnapshotInProgress {
-			time.Sleep(1 * time.Second)
-			continue
+
+	for {
+		select {
+		case <-edgeTransactionsQueueQuit:
+			return
+
+		case hashKey := <-edgeTransactions:
+			SnapshotWaitGroup.Wait()
+			trimTX(*hashKey)
 		}
-		trimTX(*hashKey)
 	}
 }
 

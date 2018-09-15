@@ -3,6 +3,7 @@ package tangle
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"../convert"
@@ -20,7 +21,12 @@ const (
 )
 
 var (
-	confirmQueue chan *PendingConfirmation
+	confirmQueue                    = make(chan *PendingConfirmation, maxQueueSize)
+	confirmQueueWaitGroup           = &sync.WaitGroup{}
+	confirmQueueQuit                = make(chan struct{})
+	removeOrphanedPendingTicker     *time.Ticker
+	removeOrphanedPendingWaitGroup  = &sync.WaitGroup{}
+	removeOrphanedPendingTickerQuit = make(chan struct{})
 )
 
 type PendingConfirmation struct {
@@ -29,7 +35,6 @@ type PendingConfirmation struct {
 }
 
 func confirmOnLoad() {
-	confirmQueue = make(chan *PendingConfirmation, maxQueueSize)
 
 	loadPendingConfirmations()
 	logs.Log.Infof("Loaded %v pending confirmations", len(confirmQueue))
@@ -53,59 +58,83 @@ func loadPendingConfirmations() {
 }
 
 func startConfirmThread() {
-	for pendingConfirmation := range confirmQueue {
-		confirmed := false
-		retryConfirm := true
+	confirmQueueWaitGroup.Add(1)
+	defer confirmQueueWaitGroup.Done()
 
-		err := db.Singleton.Update(func(tx db.Transaction) (err error) {
-			confirmed, retryConfirm, err = confirm(pendingConfirmation.key, tx)
-			if !retryConfirm {
-				tx.Remove(ns.Key(pendingConfirmation.key, ns.NamespaceEventConfirmationPending))
+	for {
+		select {
+		case <-confirmQueueQuit:
+			return
+
+		case pendingConfirmation := <-confirmQueue:
+			if ended {
+				break
 			}
-			return err
-		})
-		if err != nil {
-			logs.Log.Errorf("Error during confirmation: %v", err)
-		}
+			confirmed := false
+			retryConfirm := true
 
-		if retryConfirm {
-			confirmQueue <- pendingConfirmation
-		}
+			err := db.Singleton.Update(func(tx db.Transaction) (err error) {
+				confirmed, retryConfirm, err = confirm(pendingConfirmation.key, tx)
+				if !retryConfirm {
+					tx.Remove(ns.Key(pendingConfirmation.key, ns.NamespaceEventConfirmationPending))
+				}
+				return err
+			})
+			if err != nil {
+				logs.Log.Errorf("Error during confirmation: %v", err)
+			}
 
-		if confirmed {
-			totalConfirmations++
+			if retryConfirm {
+				confirmQueue <- pendingConfirmation
+			}
+
+			if confirmed {
+				totalConfirmations++
+			}
 		}
 	}
 }
 
 func startUnknownVerificationThread() {
-	removeOrphanedPendingTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
-	for range removeOrphanedPendingTicker.C {
-		db.Singleton.View(func(tx db.Transaction) error {
-			var toRemove [][]byte
-			ns.ForNamespace(tx, ns.NamespacePendingConfirmed, false, func(key, _ []byte) (bool, error) {
-				if tx.HasKey(ns.Key(key, ns.NamespaceHash)) {
-					k := make([]byte, len(key))
-					copy(k, key)
-					toRemove = append(toRemove, k)
-				}
-				return true, nil
-			})
+	removeOrphanedPendingWaitGroup.Add(1)
+	defer removeOrphanedPendingWaitGroup.Done()
 
-			for _, key := range toRemove {
-				logs.Log.Debug("Removing orphaned pending confirmed key", key)
-				err := db.Singleton.Update(func(tx db.Transaction) error {
-					if err := tx.Remove(key); err != nil {
+	removeOrphanedPendingTicker = time.NewTicker(UNKNOWN_CHECK_INTERVAL)
+	for {
+		select {
+		case <-removeOrphanedPendingTickerQuit:
+			return
+
+		case <-removeOrphanedPendingTicker.C:
+			if ended {
+				break
+			}
+			db.Singleton.View(func(tx db.Transaction) error {
+				var toRemove [][]byte
+				ns.ForNamespace(tx, ns.NamespacePendingConfirmed, false, func(key, _ []byte) (bool, error) {
+					if tx.HasKey(ns.Key(key, ns.NamespaceHash)) {
+						k := make([]byte, len(key))
+						copy(k, key)
+						toRemove = append(toRemove, k)
+					}
+					return true, nil
+				})
+
+				for _, key := range toRemove {
+					logs.Log.Debug("Removing orphaned pending confirmed key", key)
+					err := db.Singleton.Update(func(tx db.Transaction) error {
+						if err := tx.Remove(key); err != nil {
+							return err
+						}
+						return confirmChild(ns.Key(key, ns.NamespaceHash), tx)
+					})
+					if err != nil {
 						return err
 					}
-					return confirmChild(ns.Key(key, ns.NamespaceHash), tx)
-				})
-				if err != nil {
-					return err
 				}
-			}
-			return nil
-		})
+				return nil
+			})
+		}
 	}
 }
 

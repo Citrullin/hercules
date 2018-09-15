@@ -157,9 +157,8 @@ func checkSnapshotFileIntegrity(path string) error {
 
 /*
 Checks if there is a snapshot lock present.
-Yes:
-If lock file is present, run LoadSnapshot.
-Otherwise run MakeSnapshot.
+If yes, it checks if there is a snapshot lock filename.
+If filename is present, run LoadSnapshot, otherwise run MakeSnapshot.
 */
 func checkPendingSnapshot() {
 	timestamp, filename := IsLocked(nil)

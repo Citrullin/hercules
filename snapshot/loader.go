@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"../convert"
 	"../db"
@@ -33,12 +32,6 @@ func LoadSnapshot(path string) error {
 		return nil
 	}
 	Lock(timestamp, path, nil)
-
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
-
-	// Give time for other processes to finalize
-	time.Sleep(WAIT_SNAPSHOT_DURATION)
 
 	logs.Log.Debug("Saving trimmable TXs flags...")
 	err = trimData(timestamp)

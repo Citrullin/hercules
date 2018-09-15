@@ -15,7 +15,6 @@ import (
 const (
 	SNAPSHOT_SEPARATOR         = "==="
 	TIMESTAMP_MIN              = 1525017600
-	WAIT_SNAPSHOT_DURATION     = time.Duration(3) * time.Second
 	MIN_SPENT_ADDRESSES        = 521970
 	MAX_LATEST_TRANSACTION_AGE = 300
 )
@@ -27,24 +26,24 @@ var (
 	keySnapshotFile       = []byte{ns.NamespaceSnapshotFile}
 
 	snapshotTicker            *time.Ticker
-	edgeTransactions          chan *[]byte
+	snapshotTickerQuit        = make(chan struct{})
+	edgeTransactions          = make(chan *[]byte, 10000000)
+	edgeTransactionsWaitGroup = &sync.WaitGroup{}
+	edgeTransactionsQueueQuit = make(chan struct{})
 	CurrentTimestamp          int64
 	SnapshotInProgress        = false
 	SnapshotWaitGroup         = &sync.WaitGroup{}
 	lowEndDevice              = false
 	timeLeftToSnapshotSeconds int64
+	ended                     = false
 )
 
 func Start() {
 	logs.Log.Debug("Loading snapshots module")
-	edgeTransactions = make(chan *[]byte, 10000000)
 
 	lowEndDevice = config.AppConfig.GetBool("light")
 	CurrentTimestamp = GetSnapshotTimestamp(nil)
 	logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
-
-	// Does this need to be done before snapshot is loaded/made ?
-	go trimTXRunner()
 
 	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
@@ -53,15 +52,27 @@ func Start() {
 	snapshotInterval := config.AppConfig.GetInt64("snapshots.interval")
 	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
 
-	go startAutosnapshots(snapshotInterval, snapshotPeriod)
-
 	loadSnapshotFiles()
+
+	go startAutosnapshots(snapshotInterval, snapshotPeriod)
+	go trimTXRunner()
 }
 
 func End() {
-	snapshotTicker.Stop()
+	ended = true
+
+	if snapshotTicker != nil {
+		snapshotTicker.Stop()
+		close(snapshotTickerQuit)
+	}
+	close(edgeTransactionsQueueQuit)
+
 	SnapshotWaitGroup.Wait()
+
+	edgeTransactionsWaitGroup.Wait()
 	close(edgeTransactions)
+
+	logs.Log.Debug("Snapshot module exited")
 }
 
 func loadSnapshotFiles() {
@@ -208,6 +219,7 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 
 		t := time.NewTicker(time.Duration(timeLeftToSnapshotSeconds) * time.Second)
 		<-t.C // Waits until it ticks
+		t.Stop()
 
 		MakeSnapshot(snapshotTimestamp, "")
 	}
@@ -215,15 +227,23 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.", snapshotInterval, snapshotPeriod)
 
 	snapshotTicker = time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
-	for range snapshotTicker.C {
-		logs.Log.Info("Starting automatic snapshot...")
-		if !SnapshotInProgress {
-			snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
-			MakeSnapshot(snapshotTimestamp, "")
-		} else {
-			logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
-		}
+	for {
+		select {
+		case <-snapshotTickerQuit:
+			return
 
+		case <-snapshotTicker.C:
+			if ended {
+				break
+			}
+			logs.Log.Info("Starting automatic snapshot...")
+			if !SnapshotInProgress {
+				snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
+				MakeSnapshot(snapshotTimestamp, "")
+			} else {
+				logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
+			}
+		}
 	}
 }
 

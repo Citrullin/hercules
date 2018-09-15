@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"../convert"
 	"../db"
@@ -20,11 +19,6 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error
 		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
-
-	// Give time for other processes to finalize
-	time.Sleep(WAIT_SNAPSHOT_DURATION)
 
 	// Load values
 	err := loadIRISnapshotValues(valuesPath)

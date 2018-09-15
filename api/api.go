@@ -111,7 +111,7 @@ func serveHttps(api *gin.Engine) {
 	privateKeyPath := config.AppConfig.GetString("api.https.privateKeyPath")
 
 	if err := http.ListenAndServeTLS(serveOnAddress, certificatePath, privateKeyPath, api); err != nil && err != http.ErrServerClosed {
-		logs.Log.Fatal("API Server Error", err)
+		logs.Log.Fatal("API server error", err)
 	}
 }
 
@@ -125,7 +125,7 @@ func serveHttp(api *gin.Engine) {
 	}
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logs.Log.Fatal("API Server Error", err)
+		logs.Log.Fatal("API server error", err)
 	}
 }
 
@@ -133,10 +133,10 @@ func End() {
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := srv.Shutdown(ctx); err != nil {
-			logs.Log.Fatal("API Server Shutdown Error:", err)
+			logs.Log.Fatal("API server Shutdown Error:", err)
 		}
-		logs.Log.Debug("API Server exited")
 		cancel()
+		logs.Log.Debug("API server exited")
 	}
 }
 

@@ -18,18 +18,18 @@ import (
 )
 
 const (
-	MWM                = 14
-	maxQueueSize       = 1000000
-	reportInterval     = time.Duration(60) * time.Second
-	tipRemoverInterval = time.Duration(1) * time.Minute
-	cleanupInterval    = time.Duration(10) * time.Second
-	maxTipAge          = time.Duration(1) * time.Hour
-	TRYTES_SIZE        = 2673
-	PACKET_SIZE        = 1650
-	REQ_HASH_SIZE      = 46
-	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
-	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
-	TX_TRITS_LENGTH    = 8019
+	MWM                  = 14
+	maxQueueSize         = 1000000
+	reportInterval       = time.Duration(60) * time.Second
+	tipRemoverInterval   = time.Duration(1) * time.Minute
+	cleanupInterval      = time.Duration(10) * time.Second
+	maxTipAge            = time.Duration(1) * time.Hour
+	TRYTES_SIZE          = 2673
+	PACKET_SIZE          = 1650
+	REQ_HASH_SIZE        = 46
+	HASH_SIZE            = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
+	DATA_SIZE            = PACKET_SIZE - REQ_HASH_SIZE
+	TX_TRITS_LENGTH      = 8019
 	fingerPrintCacheSize = 10 * 1024 * 1024 // 10MB
 )
 
@@ -55,6 +55,10 @@ var (
 	outgoing                   = 0
 	fingerPrintTTL             = 20 // seconds
 	fingerPrintCache           = freecache.NewCache(fingerPrintCacheSize)
+	cleanupTicker        *time.Ticker
+	cleanupWaitGroup     = &sync.WaitGroup{}
+	cleanupTickerQuit    = make(chan struct{})
+	ended                = false
 )
 
 type Message struct {
@@ -115,15 +119,74 @@ func Start() {
 	logs.Log.Info("Tangle started!")
 }
 
+func End() {
+	ended = true
+
+	if tangleReportTicker != nil {
+		tangleReportTicker.Stop()
+		close(tangleReportTickerQuit)
+	}
+	if outgoingRunnerTicker != nil {
+		outgoingRunnerTicker.Stop()
+		close(outgoingRunnerTickerQuit)
+	}
+	if tipRemoverTicker != nil {
+		tipRemoverTicker.Stop()
+		close(tipRemoverTickerQuit)
+	}
+	if milestoneTicker != nil {
+		milestoneTicker.Stop()
+		close(milestoneTickerQuit)
+	}
+	if removeOrphanedPendingTicker != nil {
+		removeOrphanedPendingTicker.Stop()
+		close(removeOrphanedPendingTickerQuit)
+	}
+	if cleanupTicker != nil {
+		cleanupTicker.Stop()
+		close(cleanupTickerQuit)
+	}
+	close(pendingMilestoneQueueQuit)
+	close(confirmQueueQuit)
+
+	tipRemoverWaitGroup.Wait()
+	milestoneTickerWaitGroup.Wait()
+	removeOrphanedPendingWaitGroup.Wait()
+	cleanupWaitGroup.Wait()
+	outgoingRunnerWaitGroup.Wait()
+	pendingMilestoneWaitGroup.Wait()
+	confirmQueueWaitGroup.Wait()
+
+	close(srv.Outgoing)
+	srv.OutgoingWaitGroup.Wait()
+
+	close(pendingMilestoneQueue)
+	close(confirmQueue)
+	logs.Log.Debug("Tangle module exited")
+}
+
 func cleanup() {
+	cleanupWaitGroup.Add(1)
+	defer cleanupWaitGroup.Done()
+
 	interval := cleanupInterval
 	if lowEndDevice {
 		interval *= 3
 	}
-	cleanupTicker := time.NewTicker(interval)
-	for range cleanupTicker.C {
-		cleanupRequestQueues()
-		cleanupStalledRequests()
+
+	cleanupTicker = time.NewTicker(interval)
+	for {
+		select {
+		case <-cleanupTickerQuit:
+			return
+
+		case <-cleanupTicker.C:
+			if ended {
+				break
+			}
+			cleanupRequestQueues()
+			cleanupStalledRequests()
+		}
 	}
 }
 

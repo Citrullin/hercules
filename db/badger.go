@@ -16,9 +16,11 @@ func init() {
 }
 
 type Badger struct {
-	db            *badger.DB
-	dbLock        *sync.Mutex
-	cleanUpTicker *time.Ticker
+	db                     *badger.DB
+	dbLock                 *sync.Mutex
+	cleanUpTicker          *time.Ticker
+	cleanUpTickerWaitGroup *sync.WaitGroup
+	cleanUpTickerQuit      chan struct{}
 }
 
 func startBadger() (Interface, error) {
@@ -31,7 +33,7 @@ func startBadger() (Interface, error) {
 	}
 	logs.Log.Info("Database loaded")
 
-	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval)}
+	b := &Badger{db: db, dbLock: &sync.Mutex{}, cleanUpTicker: time.NewTicker(config.BadgerCleanUpInterval), cleanUpTickerWaitGroup: &sync.WaitGroup{}, cleanUpTickerQuit: make(chan struct{})}
 	go b.cleanUp()
 	return b, nil
 }
@@ -121,15 +123,28 @@ func (b *Badger) View(fn func(Transaction) error) error {
 // deny locking of new tasks.
 func (b *Badger) Close() error {
 	b.cleanUpTicker.Stop()
+	close(b.cleanUpTickerQuit)
+
+	b.cleanUpTickerWaitGroup.Wait()
+
 	b.dbLock.Lock()
 	return b.db.Close()
 }
 
 func (b *Badger) cleanUp() {
+	b.cleanUpTickerWaitGroup.Add(1)
+	defer b.cleanUpTickerWaitGroup.Done()
+
 	executeCleanUp(b)
 
-	for range b.cleanUpTicker.C {
-		executeCleanUp(b)
+	for {
+		select {
+		case <-b.cleanUpTickerQuit:
+			return
+
+		case <-b.cleanUpTicker.C:
+			executeCleanUp(b)
+		}
 	}
 }
 

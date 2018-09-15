@@ -26,127 +26,133 @@ func incomingRunner() {
 	srv.IncomingWaitGroup.Add(1)
 	defer srv.IncomingWaitGroup.Done()
 
-	for raw := range srv.Incoming {
-		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
-		if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
-			continue
-		}
+	for {
+		select {
+		case <-srv.IncomingQueueQuit:
+			return
 
-		ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
-
-		ipIsBlocked := server.IsIPBlocked(ipAddressWithPort)
-		if ipIsBlocked {
-			// Skip message
-			continue
-		}
-
-		server.NeighborsLock.RLock()
-		neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
-		if !neighborExists {
-			// Check all known addresses => slower
-			neighborExists, neighbor = server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
-
-			server.NeighborsLock.RUnlock()
-
-			if neighborExists {
-				// If the neighbor was found now, the preferred IP is wrong => Update it!
-				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
-			} else {
-				logs.Log.Infof("Blocked unknown neighbor (%v)", ipAddressWithPort)
-				server.BlockIP(ipAddressWithPort)
+		case raw := <-srv.Incoming:
+			// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
+			if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
 				continue
 			}
-		} else {
-			server.NeighborsLock.RUnlock()
-		}
 
-		atomic.AddUint64(&server.IncTxPerSec, 1)
-		neighbor.TrackIncoming(1)
+			ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
 
-		data := (*raw.Data)[:DATA_SIZE]
-		reqHash := make([]byte, HASH_SIZE)
-		copy(reqHash, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
+			ipIsBlocked := server.IsIPBlocked(ipAddressWithPort)
+			if ipIsBlocked {
+				// Skip message
+				continue
+			}
 
-		var recHash []byte
+			server.NeighborsLock.RLock()
+			neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+			if !neighborExists {
+				// Check all known addresses => slower
+				neighborExists, neighbor = server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
 
-		//
-		// Process incoming data
-		//
-		fingerprintHash, err := fingerPrintCache.Get(data)
-		if err != nil {
-			// Message was not received in the last time
+				server.NeighborsLock.RUnlock()
 
-			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
-			tx := transaction.TritsToTX(&trits, data)
-			recHash = tx.Hash
+				if neighborExists {
+					// If the neighbor was found now, the preferred IP is wrong => Update it!
+					neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+				} else {
+					logs.Log.Infof("Blocked unknown neighbor (%v)", ipAddressWithPort)
+					server.BlockIP(ipAddressWithPort)
+					continue
+				}
+			} else {
+				server.NeighborsLock.RUnlock()
+			}
 
-			// Check again because another thread could have received
-			// the same message from another neighbor in the meantime
-			fingerprintHash, err = fingerPrintCache.Get(data)
+			atomic.AddUint64(&server.IncTxPerSec, 1)
+			neighbor.TrackIncoming(1)
+
+			data := (*raw.Data)[:DATA_SIZE]
+			reqHash := make([]byte, HASH_SIZE)
+			copy(reqHash, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
+
+			var recHash []byte
+
+			//
+			// Process incoming data
+			//
+			fingerprintHash, err := fingerPrintCache.Get(data)
 			if err != nil {
-				fingerPrintCache.Set(data, recHash, fingerPrintTTL)
+				// Message was not received in the last time
 
-				// Message was not received in the mean time
-				atomic.AddUint64(&server.NewTxPerSec, 1)
+				trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
+				tx := transaction.TritsToTX(&trits, data)
+				recHash = tx.Hash
 
-				if !bytes.Equal(data, tipBytes) {
-					// Tx was not a tip
-					if crypt.IsValidPoW(tx.Hash, MWM) {
-						// POW valid => Process the message
-						err := processIncomingTX(tx, neighbor)
-						if err != nil {
-							if err == db.ErrTransactionConflict {
-								fingerPrintCache.Del(data)
-								srv.Incoming <- raw // Process the message again
-								continue
+				// Check again because another thread could have received
+				// the same message from another neighbor in the meantime
+				fingerprintHash, err = fingerPrintCache.Get(data)
+				if err != nil {
+					fingerPrintCache.Set(data, recHash, fingerPrintTTL)
+
+					// Message was not received in the mean time
+					atomic.AddUint64(&server.NewTxPerSec, 1)
+
+					if !bytes.Equal(data, tipBytes) {
+						// Tx was not a tip
+						if crypt.IsValidPoW(tx.Hash, MWM) {
+							// POW valid => Process the message
+							err := processIncomingTX(tx, neighbor)
+							if err != nil {
+								if err == db.ErrTransactionConflict {
+									fingerPrintCache.Del(data)
+									srv.Incoming <- raw // Process the message again
+									continue
+								}
+								logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
+							} else {
+								atomic.AddUint64(&server.ValidTxPerSec, 1)
+								neighbor.LastIncomingTime = time.Now()
 							}
-							logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
 						} else {
-							atomic.AddUint64(&server.ValidTxPerSec, 1)
-							neighbor.LastIncomingTime = time.Now()
+							// POW invalid => Track invalid messages from neighbor
+							neighbor.TrackInvalid(1)
 						}
 					} else {
-						// POW invalid => Track invalid messages from neighbor
-						neighbor.TrackInvalid(1)
+						atomic.AddUint64(&server.TipReqPerSec, 1)
 					}
 				} else {
-					atomic.AddUint64(&server.TipReqPerSec, 1)
+					atomic.AddUint64(&server.KnownTxPerSec, 1)
 				}
 			} else {
 				atomic.AddUint64(&server.KnownTxPerSec, 1)
+				recHash = fingerprintHash
 			}
-		} else {
-			atomic.AddUint64(&server.KnownTxPerSec, 1)
-			recHash = fingerprintHash
+
+			//
+			// Reply to incoming request
+			//
+
+			// Pause for a while without responding to prevent flooding
+			if len(srv.Incoming) > maxIncoming {
+				continue
+			}
+
+			var reply []byte
+			var isLookingForTX = !bytes.Equal(reqHash, tipBytes[:HASH_SIZE]) && (!bytes.Equal(recHash, reqHash))
+
+			if isLookingForTX {
+				reply, _ = db.Singleton.GetBytes(ns.HashKey(reqHash, ns.NamespaceBytes))
+			} else if utils.Random(0, 100) < P_TIP_REPLY {
+				// If this is a tip request, drop randomly
+				continue
+			}
+
+			request := getSomeRequestByNeighbor(neighbor, false)
+			if isLookingForTX && request == nil && reply == nil {
+				// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
+				// then do not reply. If we do not have it, but have something to ask, then ask.
+				continue
+			}
+
+			sendReply(getMessage(reply, request, request == nil, neighbor, nil))
 		}
-
-		//
-		// Reply to incoming request
-		//
-
-		// Pause for a while without responding to prevent flooding
-		if len(srv.Incoming) > maxIncoming {
-			continue
-		}
-
-		var reply []byte
-		var isLookingForTX = !bytes.Equal(reqHash, tipBytes[:HASH_SIZE]) && (!bytes.Equal(recHash, reqHash))
-
-		if isLookingForTX {
-			reply, _ = db.Singleton.GetBytes(ns.HashKey(reqHash, ns.NamespaceBytes))
-		} else if utils.Random(0, 100) < P_TIP_REPLY {
-			// If this is a tip request, drop randomly
-			continue
-		}
-
-		request := getSomeRequestByNeighbor(neighbor, false)
-		if isLookingForTX && request == nil && reply == nil {
-			// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
-			// then do not reply. If we do not have it, but have something to ask, then ask.
-			continue
-		}
-
-		sendReply(getMessage(reply, request, request == nil, neighbor, nil))
 	}
 }
 

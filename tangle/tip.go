@@ -14,8 +14,11 @@ import (
 )
 
 var (
-	Tips     = make(map[string]time.Time) // []byte = Hash, time.Time = ReceiveTimestamp
-	TipsLock = &sync.RWMutex{}
+	Tips                 = make(map[string]time.Time) // []byte = Hash, time.Time = ReceiveTimestamp
+	TipsLock             = &sync.RWMutex{}
+	tipRemoverTicker     *time.Ticker
+	tipRemoverWaitGroup  = &sync.WaitGroup{}
+	tipRemoverTickerQuit = make(chan struct{})
 )
 
 func tipOnLoad() {
@@ -43,11 +46,23 @@ func loadTipsFromDB() {
 }
 
 func tipsRemover() {
+	tipRemoverWaitGroup.Add(1)
+	defer tipRemoverWaitGroup.Done()
+
 	executeTipsRemover()
 
-	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
-	for range tipRemoverTicker.C {
-		executeTipsRemover()
+	tipRemoverTicker = time.NewTicker(tipRemoverInterval)
+	for {
+		select {
+		case <-tipRemoverTickerQuit:
+			return
+
+		case <-tipRemoverTicker.C:
+			if ended {
+				break
+			}
+			executeTipsRemover()
+		}
 	}
 }
 

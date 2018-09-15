@@ -43,7 +43,6 @@ func main() {
 
 	db.Start()
 	snapshot.Start()
-
 	server.Start()
 	tangle.Start()
 	api.Start()
@@ -70,6 +69,7 @@ func gracefullyDies() {
 	logs.Log.Infof("Caught signal '%s': Hercules is shutting down. Please wait...", sig)
 	api.End()
 	server.End()
+	tangle.End()
 	snapshot.End()
 	db.End()
 
