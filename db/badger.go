@@ -54,18 +54,18 @@ func (b *Badger) PutBytes(key, value []byte) error {
 
 func (b *Badger) GetBytes(key []byte) ([]byte, error) {
 
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
+	dbTx := b.NewTransaction(false)
+	defer dbTx.Discard()
 
-	return tx.GetBytes(key)
+	return dbTx.GetBytes(key)
 }
 
 func (b *Badger) HasKey(key []byte) bool {
 
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
+	dbTx := b.NewTransaction(false)
+	defer dbTx.Discard()
 
-	return tx.HasKey(key)
+	return dbTx.HasKey(key)
 }
 
 func (b *Badger) Remove(key []byte) error {
@@ -82,18 +82,18 @@ func (b *Badger) RemovePrefix(prefix []byte) error {
 
 func (b *Badger) CountPrefix(prefix []byte) int {
 
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
+	dbTx := b.NewTransaction(false)
+	defer dbTx.Discard()
 
-	return tx.CountPrefix(prefix)
+	return dbTx.CountPrefix(prefix)
 }
 
 func (b *Badger) ForPrefix(prefix []byte, fetchValues bool, fn func([]byte, []byte) (bool, error)) error {
 
-	tx := b.NewTransaction(false)
-	defer tx.Discard()
+	dbTx := b.NewTransaction(false)
+	defer dbTx.Discard()
 
-	return tx.ForPrefix(prefix, fetchValues, fn)
+	return dbTx.ForPrefix(prefix, fetchValues, fn)
 }
 
 func (b *Badger) NewTransaction(update bool) Transaction {

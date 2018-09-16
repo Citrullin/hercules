@@ -71,11 +71,11 @@ func loadPendingRequests() {
 	total := 0
 	added := 0
 
-	db.Singleton.View(func(tx db.Transaction) error {
-		return ns.ForNamespace(tx, ns.NamespacePendingHash, true, func(key, hash []byte) (bool, error) {
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		return ns.ForNamespace(dbTx, ns.NamespacePendingHash, true, func(key, hash []byte) (bool, error) {
 			total++
 
-			timestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespacePendingTimestamp))
+			timestamp, err := coding.GetInt64(dbTx, ns.Key(key, ns.NamespacePendingTimestamp))
 			if err != nil {
 				logs.Log.Warning("Could not load pending Tx Timestamp")
 				return true, nil
@@ -224,10 +224,10 @@ func sendReply(msg *Message) {
 	outgoing++
 }
 
-func getMessage(resp []byte, req []byte, tip bool, neighbor *server.Neighbor, tx db.Transaction) *Message {
+func getMessage(resp []byte, req []byte, tip bool, neighbor *server.Neighbor, dbTx db.Transaction) *Message {
 	var hash []byte
 	if resp == nil {
-		hash, resp = getRandomTip(tx)
+		hash, resp = getRandomTip(dbTx)
 	}
 	// Try getting latest milestone
 	if resp == nil {
@@ -305,10 +305,10 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 
 	if save {
 		key := ns.HashKey(hash, ns.NamespacePendingHash)
-		tx := db.Singleton.NewTransaction(true)
-		tx.PutBytes(key, hash)
-		coding.PutInt64(tx, ns.Key(key, ns.NamespacePendingTimestamp), timestamp)
-		tx.Commit()
+		dbTx := db.Singleton.NewTransaction(true)
+		dbTx.PutBytes(key, hash)
+		coding.PutInt64(dbTx, ns.Key(key, ns.NamespacePendingTimestamp), timestamp)
+		dbTx.Commit()
 	}
 
 	pendingRequest = &PendingRequest{Hash: hash, Timestamp: int(timestamp), LastTried: time.Now().Add(-reRequestInterval), Neighbor: neighbor}
@@ -322,7 +322,7 @@ func addPendingRequest(hash []byte, timestamp int64, neighbor *server.Neighbor, 
 	return pendingRequest
 }
 
-func removePendingRequest(hash []byte, tx db.Transaction) bool {
+func removePendingRequest(hash []byte, dbTx db.Transaction) bool {
 
 	key := string(hash)
 	PendingRequestsLock.RLock()
@@ -335,8 +335,8 @@ func removePendingRequest(hash []byte, tx db.Transaction) bool {
 		PendingRequestsLock.Unlock()
 
 		key := ns.HashKey(hash, ns.NamespacePendingHash)
-		tx.Remove(key)
-		tx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
+		dbTx.Remove(key)
+		dbTx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
 	}
 	return ok
 }
@@ -411,8 +411,8 @@ func cleanupStalledRequests() {
 
 	var keysToRemove [][]byte
 
-	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespacePendingRequests), true, func(key []byte, times int) (bool, error) {
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		return coding.ForPrefixInt(dbTx, ns.Prefix(ns.NamespacePendingRequests), true, func(key []byte, times int) (bool, error) {
 			if times > maxTimesRequest {
 				keysToRemove = append(keysToRemove, ns.Key(key, ns.NamespacePendingRequests))
 			}
@@ -422,30 +422,30 @@ func cleanupStalledRequests() {
 
 	var requestsToRemove []string
 
-	db.Singleton.Update(func(tx db.Transaction) (err error) {
+	db.Singleton.Update(func(dbTx db.Transaction) (err error) {
 		for _, key := range keysToRemove {
 			var hash []byte
 
-			err = tx.Remove(key)
+			err = dbTx.Remove(key)
 			if err != nil {
 				return err
 			}
 
 			keyPendingHash := ns.Key(key, ns.NamespacePendingHash)
-			hash, err = tx.GetBytes(keyPendingHash)
+			hash, err = dbTx.GetBytes(keyPendingHash)
 			if err != nil {
 				return nil
 			}
 
-			err = tx.Remove(keyPendingHash)
+			err = dbTx.Remove(keyPendingHash)
 			if err != nil {
 				return err
 			}
-			err = tx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
+			err = dbTx.Remove(ns.Key(key, ns.NamespacePendingTimestamp))
 			if err != nil {
 				return err
 			}
-			err = tx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
+			err = dbTx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
 			if err != nil {
 				return err
 			}

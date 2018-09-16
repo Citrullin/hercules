@@ -51,7 +51,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 	defer f.Close()
 
 	rd := bufio.NewReader(f)
-	var tx = db.Singleton.NewTransaction(true)
+	var dbTx = db.Singleton.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -62,15 +62,15 @@ func loadIRISnapshotSpent(spentPath string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
-		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 		if err != nil {
 			if err == db.ErrTransactionTooBig {
-				err := tx.Commit()
+				err := dbTx.Commit()
 				if err != nil {
 					return err
 				}
-				tx = db.Singleton.NewTransaction(true)
-				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+				dbTx = db.Singleton.NewTransaction(true)
+				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 				if err != nil {
 					return err
 				}
@@ -80,7 +80,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 		}
 	}
 
-	return tx.Commit()
+	return dbTx.Commit()
 }
 
 func loadIRISnapshotValues(valuesPath string) error {

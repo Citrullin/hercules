@@ -196,21 +196,21 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		ns.Remove(db.Singleton, ns.NamespacePendingHash)
 		ns.Remove(db.Singleton, ns.NamespacePendingTimestamp)
 	}
-	db.Singleton.View(func(tx db.Transaction) (e error) {
+	db.Singleton.View(func(dbTx db.Transaction) (e error) {
 		x := 0
-		return ns.ForNamespace(tx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
+		return ns.ForNamespace(dbTx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
 			relKey := ns.Key(key, ns.NamespaceRelation)
-			relation, _ := tx.GetBytes(relKey)
+			relation, _ := dbTx.GetBytes(relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
-				(!tx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !tx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
-				txBytes, _ := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
+				(!dbTx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !dbTx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
+				txBytes, _ := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
 				t := transaction.TritsToFastTX(&trits, txBytes)
-				db.Singleton.Update(func(tx db.Transaction) error {
+				db.Singleton.Update(func(dbTx db.Transaction) error {
 					requestIfMissing(t.TrunkTransaction, nil)
 					requestIfMissing(t.BranchTransaction, nil)
 					return nil
@@ -219,10 +219,10 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 
 			// Re-confirm children
 			if !skipConfirmations {
-				if tx.HasKey(ns.Key(relKey, ns.NamespaceConfirmed)) {
-					db.Singleton.Update(func(tx db.Transaction) error {
-						confirmChild(relation[:16], tx)
-						confirmChild(relation[16:], tx)
+				if dbTx.HasKey(ns.Key(relKey, ns.NamespaceConfirmed)) {
+					db.Singleton.Update(func(dbTx db.Transaction) error {
+						confirmChild(relation[:16], dbTx)
+						confirmChild(relation[16:], dbTx)
 						return nil
 					})
 				}

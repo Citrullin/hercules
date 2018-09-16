@@ -41,7 +41,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 		return
 	}
 	for _, trytes := range request.Trytes {
-		err := db.Singleton.Update(func(tx db.Transaction) error {
+		err := db.Singleton.Update(func(dbTx db.Transaction) error {
 			trits := convert.TrytesToTrits(trytes)
 			bits := convert.TrytesToBytes(trytes)[:1604]
 			t := transaction.TritsToTX(&trits, bits)
@@ -49,7 +49,7 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 			// t.Address is the receiving address
 			// only when the transaction value is negative we should check for balance in the receiving address
 			if t.Value < 0 {
-				balance, err := coding.GetInt64(tx, ns.AddressKey(t.Address, ns.NamespaceBalance))
+				balance, err := coding.GetInt64(dbTx, ns.AddressKey(t.Address, ns.NamespaceBalance))
 				if err != nil {
 					addressTrytes := convert.BytesToTrytes(t.Address)
 					return errors.Errorf("Could not read address' balance. Address: %s Message: %s", addressTrytes, err)
@@ -62,8 +62,8 @@ func storeAndBroadcastTransactions(request Request, c *gin.Context, broadcast bo
 				}
 			}
 
-			if !tx.HasKey(ns.HashKey(t.Hash, ns.NamespaceHash)) {
-				err := tangle.SaveTX(t, &bits, tx)
+			if !dbTx.HasKey(ns.HashKey(t.Hash, ns.NamespaceHash)) {
+				err := tangle.SaveTX(t, &bits, dbTx)
 				if err != nil {
 					return err
 				}

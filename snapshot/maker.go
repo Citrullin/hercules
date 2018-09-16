@@ -47,7 +47,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		return false
 	}
 
-	err := db.Singleton.Update(func(tx db.Transaction) error {
+	err := db.Singleton.Update(func(dbTx db.Transaction) error {
 		if !IsEqualOrNewerThanSnapshot(timestamp, nil) {
 			logs.Log.Infof("The given snapshot (%v) timestamp is older than the current one. Skipping", timestamp)
 			return errors.New("given snapshot is older than current one")
@@ -60,28 +60,28 @@ func MakeSnapshot(timestamp int64, filename string) error {
 			logs.Log.Warning("Pending confirmations behind the snapshot horizon - cannot create snapshot!")
 			return errors.New("tangle not fully synchronized")
 		}
-		lockedTimestamp := GetSnapshotLock(tx)
+		lockedTimestamp := GetSnapshotLock(dbTx)
 		if lockedTimestamp > timestamp {
 			logs.Log.Warningf("There is a snapshot pending (%v), skipping current (%v)!", lockedTimestamp, timestamp)
 			return errors.New("pending snapshot, skipping current one")
 		}
 
-		Lock(timestamp, "", tx)
+		Lock(timestamp, "", dbTx)
 
 		logs.Log.Debug("Collecting all value bundles before the snapshot horizon...")
-		err := coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTimestamp), false, func(k []byte, txTimestamp int64) (bool, error) {
+		err := coding.ForPrefixInt64(dbTx, ns.Prefix(ns.NamespaceTimestamp), false, func(k []byte, txTimestamp int64) (bool, error) {
 			if txTimestamp > timestamp {
 				return true, nil
 			}
 
 			key := ns.Key(k, ns.NamespaceConfirmed)
-			if tx.HasKey(key) && !tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) {
-				value, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceValue))
+			if dbTx.HasKey(key) && !dbTx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) {
+				value, err := coding.GetInt64(dbTx, ns.Key(key, ns.NamespaceValue))
 				if err != nil || value == 0 {
 					return true, nil
 				}
 
-				txBytes, err := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
+				txBytes, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				if err != nil {
 					return false, err
 				}
@@ -100,7 +100,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 
 		logs.Log.Debugf("Found %v value bundles. Collecting corresponding transactions...", len(bundles))
 		for _, bundleHash := range bundles {
-			bundleTxs, snaps, bundleKeep, err := loadAllFromBundle(bundleHash, timestamp, tx)
+			bundleTxs, snaps, bundleKeep, err := loadAllFromBundle(bundleHash, timestamp, dbTx)
 			if err != nil {
 				return err
 			}
@@ -123,21 +123,21 @@ func MakeSnapshot(timestamp int64, filename string) error {
 	logs.Log.Notice("Applying snapshot. Critical moment. Do not turn off your computer.")
 	for _, kv := range txs {
 		var trimKey []byte
-		err := db.Singleton.Update(func(tx db.Transaction) error {
+		err := db.Singleton.Update(func(dbTx db.Transaction) error {
 			// First: update snapshot balances
-			address, err := tx.GetBytes(ns.Key(kv.key, ns.NamespaceAddressHash))
+			address, err := dbTx.GetBytes(ns.Key(kv.key, ns.NamespaceAddressHash))
 			if err != nil {
 				return err
 			}
 
-			_, err = coding.IncrementInt64By(tx, ns.AddressKey(address, ns.NamespaceSnapshotBalance), kv.value, false)
+			_, err = coding.IncrementInt64By(dbTx, ns.AddressKey(address, ns.NamespaceSnapshotBalance), kv.value, false)
 			if err != nil {
 				return err
 			}
 
 			// Update spents:
 			if kv.value < 0 {
-				err := coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
+				err := coding.PutBool(dbTx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
 				if err != nil {
 					return err
 				}
@@ -145,7 +145,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 
 			// Create trimming event:
 			trimKey = ns.Key(kv.key, ns.NamespaceEventTrimPending)
-			return coding.PutBool(tx, trimKey, true)
+			return coding.PutBool(dbTx, trimKey, true)
 		})
 		if err != nil {
 			return err
@@ -175,17 +175,17 @@ func MakeSnapshot(timestamp int64, filename string) error {
 		logs.Log.Debug("Scheduling transaction trimming")
 		trimData(int64(timestamp))
 		logs.Log.Notice("Snapshot applied. Critical moment over.")
-		return db.Singleton.Update(func(tx db.Transaction) error {
-			err := SetSnapshotTimestamp(timestamp, tx)
+		return db.Singleton.Update(func(dbTx db.Transaction) error {
+			err := SetSnapshotTimestamp(timestamp, dbTx)
 			if err != nil {
 				return err
 			}
 
-			err = Unlock(tx)
+			err = Unlock(dbTx)
 			if err != nil {
 				return err
 			}
-			ns.Remove(tx, ns.NamespaceEdge)
+			ns.Remove(dbTx, ns.NamespaceEdge)
 			path := config.AppConfig.GetString("snapshots.path")
 			err = SaveSnapshot(path, timestamp, filename)
 			if err != nil {
@@ -198,7 +198,7 @@ func MakeSnapshot(timestamp int64, filename string) error {
 	return errors.New("failed database snapshot integrity check")
 }
 
-func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([]KeyValue, [][]byte, []byte, error) {
+func loadAllFromBundle(bundleHash []byte, timestamp int64, dbTx db.Transaction) ([]KeyValue, [][]byte, []byte, error) {
 	var (
 		totalValue  int64 = 0
 		txs         []KeyValue
@@ -207,16 +207,16 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 	)
 
 	prefix := ns.HashKey(bundleHash, ns.NamespaceBundle)
-	err := tx.ForPrefix(prefix, false, func(k, _ []byte) (bool, error) {
+	err := dbTx.ForPrefix(prefix, false, func(k, _ []byte) (bool, error) {
 		key := make([]byte, 16)
 		copy(key, k[16:])
 
 		// Filter out unconfirmed reattachments, snapshotted txs or future snapshotted txs:
-		if !canBeSnapshotted(key, tx) {
+		if !canBeSnapshotted(key, dbTx) {
 			return true, nil
 		}
 
-		txTimestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceTimestamp))
+		txTimestamp, err := coding.GetInt64(dbTx, ns.Key(key, ns.NamespaceTimestamp))
 		if err != nil {
 			return false, err
 		}
@@ -225,7 +225,7 @@ func loadAllFromBundle(bundleHash []byte, timestamp int64, tx db.Transaction) ([
 		}
 
 		valueKey := ns.Key(key, ns.NamespaceValue)
-		value, err := coding.GetInt64(tx, valueKey)
+		value, err := coding.GetInt64(dbTx, valueKey)
 		if err != nil {
 			logs.Log.Errorf("Error reading value for %v", valueKey)
 			return false, err

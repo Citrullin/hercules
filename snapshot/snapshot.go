@@ -94,12 +94,12 @@ func loadSnapshotFiles() {
 /*
 Sets the current snapshot date in the database
 */
-func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(true)
-		defer tx.Commit()
+func SetSnapshotTimestamp(timestamp int64, dbTx db.Transaction) error {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(true)
+		defer dbTx.Commit()
 	}
-	err := coding.PutInt64(tx, keySnapshotDate, timestamp)
+	err := coding.PutInt64(dbTx, keySnapshotDate, timestamp)
 	if err == nil {
 		CurrentTimestamp = timestamp
 	}
@@ -110,55 +110,55 @@ func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
 Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
 */
-func IsLocked(tx db.Transaction) (timestamp int64, filename string) {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func IsLocked(dbTx db.Transaction) (timestamp int64, filename string) {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
-	return GetSnapshotLock(tx), GetSnapshotFileLock(tx)
+	return GetSnapshotLock(dbTx), GetSnapshotFileLock(dbTx)
 }
 
 /*
 Creates a snapshot lock in the database
 */
-func Lock(timestamp int64, filename string, tx db.Transaction) error {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(true)
-		defer tx.Commit()
+func Lock(timestamp int64, filename string, dbTx db.Transaction) error {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(true)
+		defer dbTx.Commit()
 	}
 
 	SnapshotInProgress = true
 	SnapshotWaitGroup.Add(1)
-	err := coding.PutInt64(tx, keySnapshotLock, timestamp)
+	err := coding.PutInt64(dbTx, keySnapshotLock, timestamp)
 	if err != nil {
 		return err
 	}
-	return coding.PutString(tx, keySnapshotFile, filename)
+	return coding.PutString(dbTx, keySnapshotFile, filename)
 }
 
 /*
 Removes a snapshot lock in the database
 */
-func Unlock(tx db.Transaction) error {
+func Unlock(dbTx db.Transaction) error {
 	SnapshotInProgress = false
 	SnapshotWaitGroup.Done()
-	err := tx.Remove(keySnapshotLock)
+	err := dbTx.Remove(keySnapshotLock)
 	if err != nil {
 		return err
 	}
-	return tx.Remove(keySnapshotFile)
+	return dbTx.Remove(keySnapshotFile)
 }
 
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotLock(tx db.Transaction) int64 {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func GetSnapshotLock(dbTx db.Transaction) int64 {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	timestamp, err := coding.GetInt64(tx, keySnapshotLock)
+	timestamp, err := coding.GetInt64(dbTx, keySnapshotLock)
 	if err != nil {
 		return -1
 	}
@@ -168,17 +168,17 @@ func GetSnapshotLock(tx db.Transaction) int64 {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotTimestamp(tx db.Transaction) int64 {
+func GetSnapshotTimestamp(dbTx db.Transaction) int64 {
 	if CurrentTimestamp > 0 {
 		return CurrentTimestamp
 	}
 
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	timestamp, err := coding.GetInt64(tx, keySnapshotDate)
+	timestamp, err := coding.GetInt64(dbTx, keySnapshotDate)
 	if err != nil {
 		return -1
 	}
@@ -190,13 +190,13 @@ func GetSnapshotTimestamp(tx db.Transaction) int64 {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotFileLock(tx db.Transaction) string {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func GetSnapshotFileLock(dbTx db.Transaction) string {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	filename, err := coding.GetString(tx, keySnapshotFile)
+	filename, err := coding.GetString(dbTx, keySnapshotFile)
 	if err != nil {
 		return ""
 	}

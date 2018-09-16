@@ -66,11 +66,11 @@ func findAddresses(trits []byte, single bool) []string {
 
 func find(trits []byte, prefix byte) []string {
 	var response = []string{}
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		prefix := ns.HashKey(trits, prefix)
-		return tx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
+		return dbTx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
 			key = ns.Key(key[16:], ns.NamespaceHash)
-			hash, err := tx.GetBytes(key)
+			hash, err := dbTx.GetBytes(key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}
