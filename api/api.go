@@ -133,10 +133,11 @@ func End() {
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := srv.Shutdown(ctx); err != nil {
-			logs.Log.Fatal("API server Shutdown Error:", err)
+			logs.Log.Error("API server Shutdown Error:", err)
+		} else {
+			cancel()
+			logs.Log.Debug("API server exited")
 		}
-		cancel()
-		logs.Log.Debug("API server exited")
 	}
 }
 
