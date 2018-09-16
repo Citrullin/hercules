@@ -15,7 +15,7 @@ func init() {
 	addAPICall("getTrytes", getTrytes, mainAPICalls)
 }
 
-func getTrytes(request Request, c *gin.Context, t time.Time) {
+func getTrytes(request Request, c *gin.Context, ts time.Time) {
 	var trytes []interface{}
 	db.Singleton.View(func(dbTx db.Transaction) error {
 		for _, hash := range request.Hashes {
@@ -36,13 +36,13 @@ func getTrytes(request Request, c *gin.Context, t time.Time) {
 	if trytes == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"trytes":   make([]string, 0),
-			"duration": getDuration(t),
+			"duration": getDuration(ts),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"trytes":   trytes,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }

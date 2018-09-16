@@ -16,7 +16,7 @@ func init() {
 	addAPICall("findTransactions", findTransactions, mainAPICalls)
 }
 
-func findTransactions(request Request, c *gin.Context, t time.Time) {
+func findTransactions(request Request, c *gin.Context, ts time.Time) {
 	var hashes = []string{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
@@ -48,7 +48,7 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   hashes,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 

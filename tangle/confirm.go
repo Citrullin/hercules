@@ -152,40 +152,40 @@ func confirm(key []byte, dbTx db.Transaction) (newlyConfirmed bool, retryConfirm
 	}
 
 	trits := convert.BytesToTrits(data)[:8019]
-	t := transaction.TritsToFastTX(&trits, data)
+	tx := transaction.TritsToFastTX(&trits, data)
 
-	if dbTx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) && !isMaybeMilestonePart(t) {
+	if dbTx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) && !isMaybeMilestonePart(tx) {
 		return false, false, fmt.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
-			t.Timestamp,
+			tx.Timestamp,
 			snapshot.GetSnapshotTimestamp(dbTx),
-			convert.BytesToTrytes(t.Hash))
+			convert.BytesToTrytes(tx.Hash))
 	}
 
 	// TODO: This part should be atomic with all the value and confirmes and childs?
 	//		 => If there is a DB error, revert DB commit
-	err = coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceConfirmed), int64(t.Timestamp))
+	err = coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceConfirmed), int64(tx.Timestamp))
 	if err != nil {
 		return false, true, errors.New("Could not save confirmation status!")
 	}
 
-	if t.Value != 0 {
-		_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
+	if tx.Value != 0 {
+		_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(tx.Address, ns.NamespaceBalance), tx.Value, false)
 		if err != nil {
 			return false, true, errors.New("Could not update account balance!")
 		}
-		if t.Value < 0 {
-			err := coding.PutBool(dbTx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
+		if tx.Value < 0 {
+			err := coding.PutBool(dbTx, ns.AddressKey(tx.Address, ns.NamespaceSpent), true)
 			if err != nil {
 				return false, true, errors.New("Could not update account spent status!")
 			}
 		}
 	}
 
-	err = confirmChild(ns.HashKey(t.TrunkTransaction, ns.NamespaceHash), dbTx)
+	err = confirmChild(ns.HashKey(tx.TrunkTransaction, ns.NamespaceHash), dbTx)
 	if err != nil {
 		return false, true, err
 	}
-	err = confirmChild(ns.HashKey(t.BranchTransaction, ns.NamespaceHash), dbTx)
+	err = confirmChild(ns.HashKey(tx.BranchTransaction, ns.NamespaceHash), dbTx)
 	if err != nil {
 		return false, true, err
 	}
@@ -271,16 +271,16 @@ func reapplyConfirmed() {
 		return ns.ForNamespace(dbTx, ns.NamespaceConfirmed, false, func(key, _ []byte) (bool, error) {
 			txBytes, _ := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 			trits := convert.BytesToTrits(txBytes)[:8019]
-			t := transaction.TritsToFastTX(&trits, txBytes)
-			if t.Value != 0 {
+			tx := transaction.TritsToFastTX(&trits, txBytes)
+			if tx.Value != 0 {
 				err := db.Singleton.Update(func(dbTx db.Transaction) error {
-					_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
+					_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(tx.Address, ns.NamespaceBalance), tx.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
 					}
-					if t.Value < 0 {
-						err := coding.PutBool(dbTx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
+					if tx.Value < 0 {
+						err := coding.PutBool(dbTx, ns.AddressKey(tx.Address, ns.NamespaceSpent), true)
 						if err != nil {
 							logs.Log.Errorf("Could not update account spent status: %v", err)
 							return errors.New("Could not update account spent status!")

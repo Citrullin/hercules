@@ -140,10 +140,10 @@ func removeTips(tipsToRemove []string, dbTx db.Transaction) {
 	}
 }
 
-func updateTipsOnNewTransaction(t *transaction.FastTX, dbTx db.Transaction) error {
-	addTip(string(t.Hash), t.Timestamp, dbTx)
+func updateTipsOnNewTransaction(tx *transaction.FastTX, dbTx db.Transaction) error {
+	addTip(string(tx.Hash), tx.Timestamp, dbTx)
 
-	tipsToRemove := []string{string(t.TrunkTransaction), string(t.BranchTransaction)}
+	tipsToRemove := []string{string(tx.TrunkTransaction), string(tx.BranchTransaction)}
 	removeTips(tipsToRemove, dbTx)
 	return nil
 }

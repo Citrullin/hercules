@@ -74,13 +74,13 @@ func toRunesCheckTrytes(s string, length int) ([]rune, error) {
 	return []rune(string(s)), nil
 }
 
-func toRunes(t giota.Trytes) []rune {
-	return []rune(string(t))
+func toRunes(trytes giota.Trytes) []rune {
+	return []rune(string(trytes))
 }
 
 // interrupts not PoW itself (no PoW of gIOTA supports interrupts) but stops
 // attachToTangle after the last transaction PoWed
-func interruptAttachingToTangle(request Request, c *gin.Context, t time.Time) {
+func interruptAttachingToTangle(request Request, c *gin.Context, ts time.Time) {
 	interruptAttachToTangle = true
 	c.JSON(http.StatusOK, gin.H{})
 }
@@ -92,7 +92,7 @@ func getTimestampMilliseconds() int64 {
 // attachToTangle
 // do everything with trytes and save time by not convertig to trits and back
 // all constants have to be divided by 3
-func attachToTangle(request Request, c *gin.Context, t time.Time) {
+func attachToTangle(request Request, c *gin.Context, ts time.Time) {
 	// only one attatchToTangle allowed in parallel
 	powLock.Lock()
 	defer powLock.Unlock()
@@ -242,6 +242,6 @@ func attachToTangle(request Request, c *gin.Context, t time.Time) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"trytes":   returnTrytes,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }

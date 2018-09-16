@@ -147,15 +147,15 @@ func replyError(message string, c *gin.Context) {
 	})
 }
 
-func getDuration(t time.Time) int32 {
-	return int32(time.Now().Sub(t).Nanoseconds() / int64(time.Millisecond))
+func getDuration(ts time.Time) int32 {
+	return int32(time.Now().Sub(ts).Nanoseconds() / int64(time.Millisecond))
 }
 
-type APIImplementation func(request Request, c *gin.Context, t time.Time)
+type APIImplementation func(request Request, c *gin.Context, ts time.Time)
 
 func createAPIEndpoint(endpointPath string, endpointImplementation map[string]APIImplementation) {
 	api.POST(endpointPath, func(c *gin.Context) {
-		t := time.Now()
+		ts := time.Now()
 
 		var request Request
 		err := c.ShouldBindJSON(&request)
@@ -169,7 +169,7 @@ func createAPIEndpoint(endpointPath string, endpointImplementation map[string]AP
 
 			implementation, apiCallExists := endpointImplementation[caseInsensitiveCommand]
 			if apiCallExists {
-				implementation(request, c, t)
+				implementation(request, c, ts)
 			} else {
 				logs.Log.Error("Unknown command", request.Command)
 				replyError("No known command provided", c)

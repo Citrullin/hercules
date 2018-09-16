@@ -87,9 +87,9 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 		transactions[tKey] = tx
 		transactions[string(hash)] = tx
 	}
-	t := time.Now()
-	txCache[tKey] = t
-	txCache[string(tx.Hash)] = t
+	ts := time.Now()
+	txCache[tKey] = ts
+	txCache[string(tx.Hash)] = ts
 	graph.Tx = tx
 
 	if graph.Valid && !hasConfirmedParent(reference, MaxCheckDepth, 0, seen, transactions, dbTx) {
@@ -168,9 +168,9 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 		transactions[key] = tx
 		transactions[string(hash)] = tx
 	}
-	t := time.Now()
-	txCache[key] = t
-	txCache[string(tx.Hash)] = t
+	ts := time.Now()
+	txCache[key] = ts
+	txCache[string(tx.Hash)] = ts
 
 	if tx.AttachmentTimestamp == 0 && !isMaybeMilestonePair(tx) {
 		seen[key] = false
@@ -394,10 +394,10 @@ func cleanCache() {
 		return
 	}
 
-	t := time.Now()
+	ts := time.Now()
 	var toDelete []string
 	for key, value := range txCache {
-		if t.Sub(value) > MaxTXAge {
+		if ts.Sub(value) > MaxTXAge {
 			toDelete = append(toDelete, key)
 		}
 	}

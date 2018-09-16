@@ -149,10 +149,10 @@ func loadLatestMilestoneFromDB() {
 		}
 
 		trits := convert.BytesToTrits(txBytes)[:8019]
-		t := transaction.TritsToTX(&trits, txBytes)
+		tx := transaction.TritsToTX(&trits, txBytes)
 
 		LatestMilestoneLock.Lock()
-		LatestMilestone = Milestone{t, latestIndex}
+		LatestMilestone = Milestone{tx, latestIndex}
 		LatestMilestoneLock.Unlock()
 
 		return nil
@@ -170,12 +170,12 @@ func GetLatestMilestone() *Milestone {
 	return &LatestMilestone
 }
 
-func setLatestMilestone(newIndex int, t *transaction.FastTX) (changed bool) {
+func setLatestMilestone(newIndex int, tx *transaction.FastTX) (changed bool) {
 	latestMilestone := GetLatestMilestone()
 	if latestMilestone.Index < newIndex {
 		// Conversion to get the Hashes
-		trits := convert.BytesToTrits(t.Bytes)[:8019]
-		fastTx := transaction.TritsToTX(&trits, t.Bytes)
+		trits := convert.BytesToTrits(tx.Bytes)[:8019]
+		fastTx := transaction.TritsToTX(&trits, tx.Bytes)
 
 		LatestMilestoneLock.Lock()
 		defer LatestMilestoneLock.Unlock()
@@ -309,16 +309,16 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, dbTx db.Transaction) (pen
 
 	// Get TX objects and validate
 	trits := convert.BytesToTrits(txBytes)[:8019]
-	t := transaction.TritsToFastTX(&trits, txBytes)
+	tx := transaction.TritsToFastTX(&trits, txBytes)
 
 	trits2 := convert.BytesToTrits(tx2Bytes)[:8019]
-	t2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
+	tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
 
-	checkMilestone(txBytesKey, t, t2, trits2, dbTx)
+	checkMilestone(txBytesKey, tx, tx2, trits2, dbTx)
 	return false
 }
 
-func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, trits []int, dbTx db.Transaction) (valid bool) {
+func checkMilestone(key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, dbTx db.Transaction) (valid bool) {
 	key = ns.Key(key, ns.NamespaceEventMilestonePending)
 
 	discardMilestone := func() {
@@ -330,18 +330,18 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 	}
 
 	// Verify correct bundle structure:
-	if !bytes.Equal(t2.Address, COO_ADDRESS2_BYTES) ||
-		!bytes.Equal(t2.TrunkTransaction, t.BranchTransaction) ||
-		!bytes.Equal(t2.Bundle, t.Bundle) {
-		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(t.Bundle)[:81])
+	if !bytes.Equal(tx2.Address, COO_ADDRESS2_BYTES) ||
+		!bytes.Equal(tx2.TrunkTransaction, tx.BranchTransaction) ||
+		!bytes.Equal(tx2.Bundle, tx.Bundle) {
+		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}
 
 	// Verify milestone signature and get the index:
-	milestoneIndex := getMilestoneIndex(t, trits)
+	milestoneIndex := getMilestoneIndex(tx, trits)
 	if milestoneIndex < 0 {
-		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(t.Bundle)[:81])
+		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}
@@ -357,10 +357,10 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 		logs.Log.Panicf("Could not save milestone: %v", err)
 		return false
 	}
-	setLatestMilestone(milestoneIndex, t)
+	setLatestMilestone(milestoneIndex, tx)
 
 	// Trigger confirmations
-	err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(t.Timestamp), dbTx)
+	err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(tx.Timestamp), dbTx)
 	if err != nil {
 		logs.Log.Panicf("Could not save pending confirmation: %v", err)
 		return false

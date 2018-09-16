@@ -156,44 +156,44 @@ func incomingRunner() {
 	}
 }
 
-func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
+func processIncomingTX(tx *transaction.FastTX, neighbor *server.Neighbor) error {
 	var pendingMilestone *PendingMilestone
 
 	snapTime := snapshot.GetSnapshotTimestamp(nil)
-	key := ns.HashKey(t.Hash, ns.NamespaceHash)
+	key := ns.HashKey(tx.Hash, ns.NamespaceHash)
 	futureTime := int(time.Now().Add(2 * time.Hour).Unix())
-	maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
-	isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
+	maybeMilestonePair := isMaybeMilestone(tx) || isMaybeMilestonePair(tx)
+	isOutsideOfTimeframe := !maybeMilestonePair && (tx.Timestamp > futureTime || snapTime >= int64(tx.Timestamp))
 
 	err := db.Singleton.Update(func(dbTx db.Transaction) (e error) {
 		// TODO: catch error defer here
 
-		removePendingRequest(t.Hash, dbTx)
+		removePendingRequest(tx.Hash, dbTx)
 
 		removeTx := func() {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
 			dbTx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
 			dbTx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
 			err := coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceEdge), snapTime)
-			_checkIncomingError(t, err)
+			_checkIncomingError(tx, err)
 			parentKey, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
 				err = dbTx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
-				_checkIncomingError(t, err)
+				_checkIncomingError(tx, err)
 			}
 			dbTx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 		}
 
-		if isOutsideOfTimeframe && !dbTx.HasKey(ns.HashKey(t.Bundle, ns.NamespacePendingBundle)) {
+		if isOutsideOfTimeframe && !dbTx.HasKey(ns.HashKey(tx.Bundle, ns.NamespacePendingBundle)) {
 			removeTx()
 			return nil
 		}
 
 		if dbTx.HasKey(ns.Key(key, ns.NamespaceSnapshotted)) {
-			_, err := requestIfMissing(t.TrunkTransaction, neighbor)
-			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, neighbor)
-			_checkIncomingError(t, err)
+			_, err := requestIfMissing(tx.TrunkTransaction, neighbor)
+			_checkIncomingError(tx, err)
+			_, err = requestIfMissing(tx.BranchTransaction, neighbor)
+			_checkIncomingError(tx, err)
 			removeTx()
 			return nil
 		}
@@ -201,29 +201,29 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 		if !dbTx.HasKey(key) {
 			// Tx is not in the database yet
 
-			err := SaveTX(t, &t.Bytes, dbTx)
-			_checkIncomingError(t, err)
-			if isMaybeMilestone(t) {
-				trunkBytesKey := ns.HashKey(t.TrunkTransaction, ns.NamespaceBytes)
+			err := SaveTX(tx, &tx.Bytes, dbTx)
+			_checkIncomingError(tx, err)
+			if isMaybeMilestone(tx) {
+				trunkBytesKey := ns.HashKey(tx.TrunkTransaction, ns.NamespaceBytes)
 				err := dbTx.PutBytes(ns.Key(key, ns.NamespaceEventMilestonePending), trunkBytesKey)
-				_checkIncomingError(t, err)
+				_checkIncomingError(tx, err)
 
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(t.TrunkTransaction, neighbor)
-			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, neighbor)
-			_checkIncomingError(t, err)
+			_, err = requestIfMissing(tx.TrunkTransaction, neighbor)
+			_checkIncomingError(tx, err)
+			_, err = requestIfMissing(tx.BranchTransaction, neighbor)
+			_checkIncomingError(tx, err)
 
 			// EVENTS:
 
 			pendingConfirmationKey := ns.Key(key, ns.NamespacePendingConfirmed)
 			if dbTx.HasKey(pendingConfirmationKey) {
 				err = dbTx.Remove(pendingConfirmationKey)
-				_checkIncomingError(t, err)
+				_checkIncomingError(tx, err)
 
-				err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(t.Timestamp), dbTx)
-				_checkIncomingError(t, err)
+				err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(tx.Timestamp), dbTx)
+				_checkIncomingError(tx, err)
 			}
 
 			parentKey, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
@@ -234,7 +234,7 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if (!lowEndDevice || len(srv.Incoming) < maxIncoming) && utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(t.Bytes, neighbor)
+				Broadcast(tx.Bytes, neighbor)
 			}
 
 			neighbor.TrackNew(1)
@@ -251,7 +251,7 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		addPendingRequest(t.Hash, 0, neighbor, true)
+		addPendingRequest(tx.Hash, 0, neighbor, true)
 
 		atomic.AddInt64(&totalTransactions, -1)
 		neighbor.TrackNew(-1)

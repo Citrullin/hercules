@@ -15,7 +15,7 @@ func init() {
 	addAPICall("getTransactionsToApprove", getTransactionsToApprove, mainAPICalls)
 }
 
-func getTips(request Request, c *gin.Context, t time.Time) {
+func getTips(request Request, c *gin.Context, ts time.Time) {
 	var tips = []string{}
 	tangle.TipsLock.RLock()
 	for hash := range tangle.Tips {
@@ -25,11 +25,11 @@ func getTips(request Request, c *gin.Context, t time.Time) {
 	tangle.TipsLock.RUnlock()
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   tips,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 
-func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
+func getTransactionsToApprove(request Request, c *gin.Context, ts time.Time) {
 	if (request.Depth < tangle.MinTipselDepth) || (request.Depth > tangle.MaxTipselDepth) {
 		replyError("Invalid depth input", c)
 		return
@@ -69,6 +69,6 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 	c.JSON(http.StatusOK, gin.H{
 		"trunkTransaction":  trunk[:81],
 		"branchTransaction": branch[:81],
-		"duration":          getDuration(t),
+		"duration":          getDuration(ts),
 	})
 }

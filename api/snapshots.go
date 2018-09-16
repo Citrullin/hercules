@@ -33,21 +33,21 @@ func enableSnapshotAPI(api *gin.Engine) {
 	api.Static("/snapshots", dir)
 }
 
-func getSnapshotsInfo(request Request, c *gin.Context, t time.Time) {
+func getSnapshotsInfo(request Request, c *gin.Context, ts time.Time) {
 	const latestOnly bool = false
-	response := getSnapshotsInfoResponse(latestOnly, t)
+	response := getSnapshotsInfoResponse(latestOnly, ts)
 
 	c.JSON(http.StatusOK, response)
 }
 
-func getLatestSnapshotInfo(request Request, c *gin.Context, t time.Time) {
+func getLatestSnapshotInfo(request Request, c *gin.Context, ts time.Time) {
 	const latestOnly bool = true
-	response := getSnapshotsInfoResponse(latestOnly, t)
+	response := getSnapshotsInfoResponse(latestOnly, ts)
 
 	c.JSON(http.StatusOK, response)
 }
 
-func getSnapshotsInfoResponse(latestOnly bool, t time.Time) gin.H {
+func getSnapshotsInfoResponse(latestOnly bool, ts time.Time) gin.H {
 	snapshotInfos := loadInfos(latestOnly)
 	snapshotInfosResponseHeader, snapshotInfosResponseValue := getSnapshotInfosResponseHeaderAndValue(latestOnly, snapshotInfos)
 
@@ -62,7 +62,7 @@ func getSnapshotsInfoResponse(latestOnly bool, t time.Time) gin.H {
 		"inProgress":                          snapshot.SnapshotInProgress,
 		snapshotInfosResponseHeader:           snapshotInfosResponseValue,
 		"time":     time.Now().Unix(),
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	}
 
 	return response
@@ -164,7 +164,7 @@ func getInfoIfValidSnapshot(dir string, file os.FileInfo) gin.H {
 	return nil
 }
 
-func makeSnapshot(request Request, c *gin.Context, t time.Time) {
+func makeSnapshot(request Request, c *gin.Context, ts time.Time) {
 	if request.Timestamp < 1525017600 || request.Timestamp > time.Now().Unix() {
 		replyError("Wrong UNIX timestamp provided", c)
 		return
@@ -196,7 +196,7 @@ func makeSnapshot(request Request, c *gin.Context, t time.Time) {
 	go snapshot.MakeSnapshot(request.Timestamp, request.Filename)
 	c.JSON(http.StatusOK, gin.H{
 		"time":     time.Now().Unix(),
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 

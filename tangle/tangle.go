@@ -209,10 +209,10 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 				(!dbTx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !dbTx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
 				txBytes, _ := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
-				t := transaction.TritsToFastTX(&trits, txBytes)
+				tx := transaction.TritsToFastTX(&trits, txBytes)
 				db.Singleton.Update(func(dbTx db.Transaction) error {
-					requestIfMissing(t.TrunkTransaction, nil)
-					requestIfMissing(t.BranchTransaction, nil)
+					requestIfMissing(tx.TrunkTransaction, nil)
+					requestIfMissing(tx.BranchTransaction, nil)
 					return nil
 				})
 			}

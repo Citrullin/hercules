@@ -101,10 +101,10 @@ func trimData(timestamp int64) error {
 func trimTX(hashKey []byte) error {
 	key := ns.Key(hashKey, ns.NamespaceBytes)
 	tBytes, err := db.Singleton.GetBytes(key)
-	var t *transaction.FastTX
+	var tx *transaction.FastTX
 	if err == nil {
 		trits := convert.BytesToTrits(tBytes)[:8019]
-		t = transaction.TritsToTX(&trits, tBytes)
+		tx = transaction.TritsToTX(&trits, tBytes)
 	}
 	//logs.Log.Debug("TRIMMING", hashKey)
 	return db.Singleton.Update(func(dbTx db.Transaction) error {
@@ -121,11 +121,11 @@ func trimTX(hashKey []byte) error {
 		dbTx.Remove(ns.Key(hashKey, ns.NamespaceRelation))
 		dbTx.Remove(ns.Key(hashKey, ns.NamespaceGTTA))
 		if dbTx != nil {
-			dbTx.Remove(append(ns.HashKey(t.TrunkTransaction, ns.NamespaceApprovee), hashKey...))
-			dbTx.Remove(append(ns.HashKey(t.BranchTransaction, ns.NamespaceApprovee), hashKey...))
-			dbTx.Remove(append(ns.HashKey(t.Bundle, ns.NamespaceBundle), hashKey...))
-			dbTx.Remove(append(ns.HashKey(t.Tag, ns.NamespaceTag), hashKey...))
-			dbTx.Remove(append(ns.HashKey(t.Address, ns.NamespaceAddress), hashKey...))
+			dbTx.Remove(append(ns.HashKey(tx.TrunkTransaction, ns.NamespaceApprovee), hashKey...))
+			dbTx.Remove(append(ns.HashKey(tx.BranchTransaction, ns.NamespaceApprovee), hashKey...))
+			dbTx.Remove(append(ns.HashKey(tx.Bundle, ns.NamespaceBundle), hashKey...))
+			dbTx.Remove(append(ns.HashKey(tx.Tag, ns.NamespaceTag), hashKey...))
+			dbTx.Remove(append(ns.HashKey(tx.Address, ns.NamespaceAddress), hashKey...))
 		}
 		return nil
 	})

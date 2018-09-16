@@ -47,8 +47,8 @@ func (b *Badger) Unlock() {
 }
 
 func (b *Badger) PutBytes(key, value []byte) error {
-	return b.Update(func(t Transaction) error {
-		return t.PutBytes(key, value)
+	return b.Update(func(dbTx Transaction) error {
+		return dbTx.PutBytes(key, value)
 	})
 }
 
@@ -69,14 +69,14 @@ func (b *Badger) HasKey(key []byte) bool {
 }
 
 func (b *Badger) Remove(key []byte) error {
-	return b.Update(func(t Transaction) error {
-		return coding.Remove(t, key)
+	return b.Update(func(dbTx Transaction) error {
+		return coding.Remove(dbTx, key)
 	})
 }
 
 func (b *Badger) RemovePrefix(prefix []byte) error {
-	return b.Update(func(t Transaction) error {
-		return t.RemovePrefix(prefix)
+	return b.Update(func(dbTx Transaction) error {
+		return dbTx.RemovePrefix(prefix)
 	})
 }
 

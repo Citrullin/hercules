@@ -16,7 +16,7 @@ func init() {
 	addAPICall("wereAddressesSpentFrom", wereAddressesSpentFrom, mainAPICalls)
 }
 
-func getInclusionStates(request Request, c *gin.Context, t time.Time) {
+func getInclusionStates(request Request, c *gin.Context, ts time.Time) {
 	var states = []bool{}
 	db.Singleton.View(func(dbTx db.Transaction) error {
 		for _, hash := range request.Transactions {
@@ -30,11 +30,11 @@ func getInclusionStates(request Request, c *gin.Context, t time.Time) {
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"states":   states,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 
-func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
+func wereAddressesSpentFrom(request Request, c *gin.Context, ts time.Time) {
 	var states = []bool{}
 	db.Singleton.View(func(dbTx db.Transaction) error {
 		for _, hash := range request.Addresses {
@@ -48,6 +48,6 @@ func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"states":   states,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
