@@ -2,6 +2,7 @@ package tangle
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"math/rand"
 	"sync"
@@ -11,7 +12,6 @@ import (
 	"../db"
 	"../db/coding"
 	"../db/ns"
-	"../logs"
 	"../transaction"
 )
 
@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	gTTALock     = &sync.RWMutex{}
+	gTTALock     = &sync.Mutex{}
 	txCache      = make(map[string]time.Time)
 	transactions = make(map[string]*transaction.FastTX)
 )
@@ -46,10 +46,10 @@ type GraphRating struct {
 	Graph  *GraphNode
 }
 
-func getReference(reference []byte, depth int) []byte {
+func getReference(reference []byte, depth int, dbTx db.Transaction) (result []byte) {
 	if reference != nil && len(reference) > 0 {
 		key := ns.HashKey(reference, ns.NamespaceHash)
-		if db.Singleton.HasKey(key) {
+		if dbTx.HasKey(key) {
 			return key
 		}
 	}
@@ -61,20 +61,25 @@ func getReference(reference []byte, depth int) []byte {
 /*
 Creates a sub-graph structure, directly dropping contradictory transactions.
 */
-// TODO Fix this function! It causes nodes to get out of memory and crash in the first gTTA request!
-func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, transactions map[string]*transaction.FastTX) *GraphNode {
-	approveeKeys := findApprovees(reference)
-	graph := &GraphNode{reference, nil, 1, valid, nil}
+func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen map[string]bool, valid bool, transactions map[string]*transaction.FastTX, dbTx db.Transaction) (*GraphNode, error) {
+	approveeKeys, err := findApprovees(reference, dbTx)
+	if err != nil {
+		return nil, err
+	}
+
+	graph := &GraphNode{Key: reference, Children: nil, Count: 1, Valid: valid, Tx: nil}
 
 	var tx *transaction.FastTX
 	tKey := string(reference)
 	tx, ok := transactions[tKey]
 	if !ok {
-		txBytes, err := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceBytes))
-		hash, err2 := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceHash))
+		// Transaction is not in the list yet
+		txBytes, err := dbTx.GetBytes(ns.Key(reference, ns.NamespaceBytes))
+		hash, err2 := dbTx.GetBytes(ns.Key(reference, ns.NamespaceHash))
 		if err != nil || err2 != nil {
+			// Transaction was not found in the database
 			graph.Valid = false
-			return graph
+			return graph, nil
 		}
 		trits := convert.BytesToTrits(txBytes)[:8019]
 		tx = transaction.TritsToFastTX(&trits, txBytes)
@@ -87,7 +92,7 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 	txCache[string(tx.Hash)] = t
 	graph.Tx = tx
 
-	if graph.Valid && !hasConfirmedParent(reference, MaxCheckDepth, 0, seen, transactions) {
+	if graph.Valid && !hasConfirmedParent(reference, MaxCheckDepth, 0, seen, transactions, dbTx) {
 		graph.Valid = false
 	}
 
@@ -98,8 +103,11 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 		if ok {
 			subGraph = graphRating.Graph
 		} else {
-			subGraph = buildGraph(key, graphRatings, seen, graph.Valid, transactions)
-			(*graphRatings)[stringKey] = &GraphRating{0, subGraph}
+			subGraph, err = buildGraph(key, graphRatings, seen, graph.Valid, transactions, dbTx)
+			if err != nil {
+				return nil, err
+			}
+			(*graphRatings)[stringKey] = &GraphRating{Rating: 0, Graph: subGraph}
 		}
 		if !graph.Valid && subGraph.Valid {
 			subGraph.Valid = false
@@ -110,21 +118,23 @@ func buildGraph(reference []byte, graphRatings *map[string]*GraphRating, seen ma
 		}
 		graph.Children = append(graph.Children, subGraph)
 	}
-	return graph
+	return graph, nil
 }
 
-func findApprovees(key []byte) [][]byte {
-	var response [][]byte
-	db.Singleton.View(func(tx db.Transaction) error {
-		return ns.ForNamespace(tx, ns.NamespaceApprovee, false, func(key, _ []byte) (bool, error) {
-			response = append(response, ns.Key(key[16:], ns.NamespaceHash))
-			return true, nil
-		})
+// Finds all the transactions that approve this transaction
+func findApprovees(key []byte, dbTx db.Transaction) (approvees [][]byte, err error) {
+	prefix := ns.HashKey(key, ns.NamespaceApprovee)
+	err = dbTx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
+		approvees = append(approvees, ns.Key(key[16:], ns.NamespaceHash))
+		return true, nil
 	})
-	return response
+	if err != nil {
+		return nil, err
+	}
+	return approvees, nil
 }
 
-func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen map[string]bool, transactions map[string]*transaction.FastTX) bool {
+func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen map[string]bool, transactions map[string]*transaction.FastTX, dbTx db.Transaction) bool {
 	key := string(reference)
 	answer, has := seen[key]
 	if has {
@@ -133,7 +143,7 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 	if currentDepth > maxDepth {
 		return false
 	}
-	if db.Singleton.HasKey(ns.Key(reference, ns.NamespaceConfirmed)) || db.Singleton.HasKey(ns.Key(reference, ns.NamespaceGTTA)) {
+	if dbTx.HasKey(ns.Key(reference, ns.NamespaceConfirmed)) || dbTx.HasKey(ns.Key(reference, ns.NamespaceGTTA)) {
 		seen[key] = true
 		return true
 	}
@@ -147,8 +157,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 
 	tx, ok := transactions[key]
 	if !ok {
-		txBytes, err := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceBytes))
-		hash, err2 := db.Singleton.GetBytes(ns.Key(reference, ns.NamespaceHash))
+		txBytes, err := dbTx.GetBytes(ns.Key(reference, ns.NamespaceBytes))
+		hash, err2 := dbTx.GetBytes(ns.Key(reference, ns.NamespaceHash))
 		if err != nil || err2 != nil {
 			return false
 		}
@@ -171,8 +181,8 @@ func hasConfirmedParent(reference []byte, maxDepth int, currentDepth int, seen m
 		seen[key] = false
 		return false
 	}
-	trunkOk := hasConfirmedParent(ns.HashKey(tx.TrunkTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions)
-	branchOk := hasConfirmedParent(ns.HashKey(tx.BranchTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions)
+	trunkOk := hasConfirmedParent(ns.HashKey(tx.TrunkTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions, dbTx)
+	branchOk := hasConfirmedParent(ns.HashKey(tx.BranchTransaction, ns.NamespaceHash), maxDepth, currentDepth+1, seen, transactions, dbTx)
 	ok = trunkOk && branchOk
 	seen[key] = ok
 	return ok
@@ -197,9 +207,9 @@ func calculateRating(graph *GraphNode, seenKeys map[string][]byte) int {
 
 // 4. Walk the graph
 
-func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) *GraphRating {
+func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map[string]bool, ledgerState map[string]int64, transactions map[string]*transaction.FastTX, dbTx db.Transaction) *GraphRating {
 	if rating.Graph.Children == nil {
-		if canBeUsed(rating, ledgerState, transactions) {
+		if canBeUsed(rating, ledgerState, transactions, dbTx) {
 			return rating
 		} else {
 			return nil
@@ -238,26 +248,25 @@ func walkGraph(rating *GraphRating, ratings map[string]*GraphRating, exclude map
 		}
 		if randomNumber <= 0 {
 			// 3. Select random child
-			graph := walkGraph(ratings[string(child.Key)], ratings, exclude, ledgerState, transactions)
+			graph := walkGraph(ratings[string(child.Key)], ratings, exclude, ledgerState, transactions, dbTx)
 			if graph != nil {
 				return graph
 			}
 		}
 	}
-	if canBeUsed(rating, ledgerState, transactions) {
+	if canBeUsed(rating, ledgerState, transactions, dbTx) {
 		return rating
-	} else {
-		return nil
 	}
+	return nil
 }
 
-func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
-	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (db.Singleton.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceConfirmed)) ||
-		db.Singleton.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceGTTA)) ||
-		isConsistent([]*GraphRating{rating}, ledgerState, transactions))
+func canBeUsed(rating *GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX, dbTx db.Transaction) bool {
+	return rating.Graph.Valid && rating.Graph.Tx.CurrentIndex == 0 && (dbTx.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceConfirmed)) ||
+		dbTx.HasKey(ns.Key(rating.Graph.Key, ns.NamespaceGTTA)) ||
+		isConsistent([]*GraphRating{rating}, ledgerState, transactions, dbTx))
 }
 
-func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX) bool {
+func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, transactions map[string]*transaction.FastTX, dbTx db.Transaction) bool {
 	ledgerDiff := make(map[string]int64)
 	seen := make(map[string]bool)
 	for _, r := range entryPoints {
@@ -277,7 +286,7 @@ func isConsistent(entryPoints []*GraphRating, ledgerState map[string]int64, tran
 		if value < 0 {
 			_, ok := ledgerState[addrString]
 			if !ok {
-				balance, err := coding.GetInt64(db.Singleton, ns.AddressKey([]byte(addrString), ns.NamespaceBalance))
+				balance, err := coding.GetInt64(dbTx, ns.AddressKey([]byte(addrString), ns.NamespaceBalance))
 				if err != nil {
 					balance = 0
 				}
@@ -322,25 +331,30 @@ func buildGraphDiff(ledgerDiff map[string]int64, tx *transaction.FastTX, transac
 	}
 }
 
-func GetTXToApprove(reference []byte, depth int) [][]byte {
+func GetTXToApprove(reference []byte, depth int) ([][]byte, error) {
 	gTTALock.Lock()
 	defer gTTALock.Unlock()
 	defer cleanCache()
 
+	dbTx := db.Singleton.NewTransaction(false)
+	defer dbTx.Discard()
+
 	// Reference:
-	reference = getReference(reference, depth)
+	reference = getReference(reference, depth, dbTx)
 	if reference == nil {
-		return nil
+		return nil, nil
 	}
 
 	// Graph:
-	var seen = make(map[string]bool)
-	var ledgerState = make(map[string]int64)
-	var graphRatings = make(map[string]*GraphRating)
+	seen := make(map[string]bool)
+	ledgerState := make(map[string]int64)
+	graphRatings := make(map[string]*GraphRating)
 
-	graph := buildGraph(reference, &graphRatings, seen, true, transactions)
-
-	graphRatings[string(reference)] = &GraphRating{0, graph}
+	graph, err := buildGraph(reference, &graphRatings, seen, true, transactions, dbTx)
+	if err != nil {
+		return nil, err
+	}
+	graphRatings[string(reference)] = &GraphRating{Rating: 0, Graph: graph}
 
 	for _, rating := range graphRatings {
 		seenRatings := make(map[string][]byte)
@@ -349,12 +363,12 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 
 	var results = []*GraphRating{}
 	var exclude = make(map[string]bool)
-	for x := 0; x < maxTipSearchRetries; x += 1 {
-		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude, ledgerState, transactions)
+	for x := 0; x < maxTipSearchRetries; x++ {
+		r := walkGraph(graphRatings[string(reference)], graphRatings, exclude, ledgerState, transactions, dbTx)
 		if r != nil {
 			exclude[string(r.Graph.Key)] = true
 			newResults := append(results, r)
-			consistent := isConsistent(newResults, ledgerState, transactions)
+			consistent := isConsistent(newResults, ledgerState, transactions, dbTx)
 			if !consistent {
 				continue
 			}
@@ -365,30 +379,14 @@ func GetTXToApprove(reference []byte, depth int) [][]byte {
 					coding.PutInt64(db.Singleton, ns.Key(r.Graph.Key, ns.NamespaceGTTA), time.Now().Unix())
 					answer = append(answer, r.Graph.Tx.Hash)
 					if len(answer) == 2 {
-						return answer
+						return answer, nil
 					}
 				}
 			}
 		}
 	}
 
-	logs.Log.Debug("Could not get TXs to approve")
-	return nil
-}
-
-// This function temporary. It will be removed when the tipSel logic is corrected
-func GetRandomTXToApprove() [][]byte {
-	tip1, _ := getRandomTip(nil)
-	if tip1 == nil {
-		return nil
-	}
-
-	tip2, _ := getRandomTip(nil)
-	if tip2 == nil {
-		return nil
-	}
-
-	return [][]byte{tip1, tip2}
+	return nil, errors.New("Could not get transactions to approve")
 }
 
 func cleanCache() {

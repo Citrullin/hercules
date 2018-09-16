@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -46,9 +47,11 @@ func getTransactionsToApprove(request Request, c *gin.Context, t time.Time) {
 		reference = nil
 	}
 
-	// Use it when fixed
-	//tips := tangle.GetTXToApprove(reference, request.Depth)
-	tips := tangle.GetRandomTXToApprove()
+	tips, err := tangle.GetTXToApprove(reference, request.Depth)
+	if err != nil {
+		replyError(fmt.Sprint(err), c)
+		return
+	}
 
 	if tips == nil || len(tips) < 2 {
 		replyError("Could not get transactions to approve", c)
