@@ -3,6 +3,7 @@ package tangle
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"../convert"
@@ -20,7 +21,12 @@ const (
 )
 
 var (
-	confirmQueue chan *PendingConfirmation
+	confirmQueue                    = make(chan *PendingConfirmation, maxQueueSize)
+	confirmQueueWaitGroup           = &sync.WaitGroup{}
+	confirmQueueQuit                = make(chan struct{})
+	removeOrphanedPendingTicker     *time.Ticker
+	removeOrphanedPendingWaitGroup  = &sync.WaitGroup{}
+	removeOrphanedPendingTickerQuit = make(chan struct{})
 )
 
 type PendingConfirmation struct {
@@ -29,7 +35,6 @@ type PendingConfirmation struct {
 }
 
 func confirmOnLoad() {
-	confirmQueue = make(chan *PendingConfirmation, maxQueueSize)
 
 	loadPendingConfirmations()
 	logs.Log.Infof("Loaded %v pending confirmations", len(confirmQueue))
@@ -40,8 +45,8 @@ func confirmOnLoad() {
 }
 
 func loadPendingConfirmations() {
-	db.Singleton.View(func(tx db.Transaction) error {
-		coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceEventConfirmationPending), true, func(key []byte, timestamp int64) (bool, error) {
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		coding.ForPrefixInt64(dbTx, ns.Prefix(ns.NamespaceEventConfirmationPending), true, func(key []byte, timestamp int64) (bool, error) {
 			confirmQueue <- &PendingConfirmation{
 				ns.Key(key, ns.NamespaceEventConfirmationPending),
 				timestamp,
@@ -53,140 +58,164 @@ func loadPendingConfirmations() {
 }
 
 func startConfirmThread() {
-	for pendingConfirmation := range confirmQueue {
-		confirmed := false
-		retryConfirm := true
+	confirmQueueWaitGroup.Add(1)
+	defer confirmQueueWaitGroup.Done()
 
-		err := db.Singleton.Update(func(tx db.Transaction) (err error) {
-			confirmed, retryConfirm, err = confirm(pendingConfirmation.key, tx)
-			if !retryConfirm {
-				tx.Remove(ns.Key(pendingConfirmation.key, ns.NamespaceEventConfirmationPending))
+	for {
+		select {
+		case <-confirmQueueQuit:
+			return
+
+		case pendingConfirmation := <-confirmQueue:
+			if ended {
+				break
 			}
-			return err
-		})
-		if err != nil {
-			logs.Log.Errorf("Error during confirmation: %v", err)
-		}
+			confirmed := false
+			retryConfirm := true
 
-		if retryConfirm {
-			confirmQueue <- pendingConfirmation
-		}
+			err := db.Singleton.Update(func(dbTx db.Transaction) (err error) {
+				confirmed, retryConfirm, err = confirm(pendingConfirmation.key, dbTx)
+				if !retryConfirm {
+					dbTx.Remove(ns.Key(pendingConfirmation.key, ns.NamespaceEventConfirmationPending))
+				}
+				return err
+			})
+			if err != nil {
+				logs.Log.Errorf("Error during confirmation: %v", err)
+			}
 
-		if confirmed {
-			totalConfirmations++
+			if retryConfirm {
+				confirmQueue <- pendingConfirmation
+			}
+
+			if confirmed {
+				totalConfirmations++
+			}
 		}
 	}
 }
 
 func startUnknownVerificationThread() {
-	removeOrphanedPendingTicker := time.NewTicker(UNKNOWN_CHECK_INTERVAL)
-	for range removeOrphanedPendingTicker.C {
-		db.Singleton.View(func(tx db.Transaction) error {
-			var toRemove [][]byte
-			ns.ForNamespace(tx, ns.NamespacePendingConfirmed, false, func(key, _ []byte) (bool, error) {
-				if tx.HasKey(ns.Key(key, ns.NamespaceHash)) {
-					k := make([]byte, len(key))
-					copy(k, key)
-					toRemove = append(toRemove, k)
-				}
-				return true, nil
-			})
+	removeOrphanedPendingWaitGroup.Add(1)
+	defer removeOrphanedPendingWaitGroup.Done()
 
-			for _, key := range toRemove {
-				logs.Log.Debug("Removing orphaned pending confirmed key", key)
-				err := db.Singleton.Update(func(tx db.Transaction) error {
-					if err := tx.Remove(key); err != nil {
+	removeOrphanedPendingTicker = time.NewTicker(UNKNOWN_CHECK_INTERVAL)
+	for {
+		select {
+		case <-removeOrphanedPendingTickerQuit:
+			return
+
+		case <-removeOrphanedPendingTicker.C:
+			if ended {
+				break
+			}
+			db.Singleton.View(func(dbTx db.Transaction) error {
+				var toRemove [][]byte
+				ns.ForNamespace(dbTx, ns.NamespacePendingConfirmed, false, func(key, _ []byte) (bool, error) {
+					if dbTx.HasKey(ns.Key(key, ns.NamespaceHash)) {
+						k := make([]byte, len(key))
+						copy(k, key)
+						toRemove = append(toRemove, k)
+					}
+					return true, nil
+				})
+
+				for _, key := range toRemove {
+					logs.Log.Debug("Removing orphaned pending confirmed key", key)
+					err := db.Singleton.Update(func(dbTx db.Transaction) error {
+						if err := dbTx.Remove(key); err != nil {
+							return err
+						}
+						return confirmChild(ns.Key(key, ns.NamespaceHash), dbTx)
+					})
+					if err != nil {
 						return err
 					}
-					return confirmChild(ns.Key(key, ns.NamespaceHash), tx)
-				})
-				if err != nil {
-					return err
 				}
-			}
-			return nil
-		})
+				return nil
+			})
+		}
 	}
 }
 
-func confirm(key []byte, tx db.Transaction) (newlyConfirmed bool, retryConfirm bool, err error) {
+func confirm(key []byte, dbTx db.Transaction) (newlyConfirmed bool, retryConfirm bool, err error) {
 
-	if tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
+	if dbTx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
 		// Already confirmed
 		return false, false, nil
 	}
 
-	data, err := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
+	data, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 	if err != nil {
 		// Probably the tx is not yet committed to the database. Simply retry.
 		return false, true, nil
 	}
 
 	trits := convert.BytesToTrits(data)[:8019]
-	t := transaction.TritsToFastTX(&trits, data)
+	tx := transaction.TritsToFastTX(&trits, data)
 
-	if tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) && !isMaybeMilestonePart(t) {
+	if dbTx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) && !isMaybeMilestonePart(tx) {
 		return false, false, fmt.Errorf("TX behind snapshot horizon, skipping (%v vs %v). Possible DB inconsistency! TX: %v",
-			t.Timestamp,
-			snapshot.GetSnapshotTimestamp(tx),
-			convert.BytesToTrytes(t.Hash))
+			tx.Timestamp,
+			snapshot.GetSnapshotTimestamp(dbTx),
+			convert.BytesToTrytes(tx.Hash))
 	}
 
 	// TODO: This part should be atomic with all the value and confirmes and childs?
 	//		 => If there is a DB error, revert DB commit
-	err = coding.PutInt64(tx, ns.Key(key, ns.NamespaceConfirmed), int64(t.Timestamp))
+	err = coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceConfirmed), int64(tx.Timestamp))
 	if err != nil {
 		return false, true, errors.New("Could not save confirmation status!")
 	}
 
-	if t.Value != 0 {
-		_, err := coding.IncrementInt64By(tx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
+	if tx.Value != 0 {
+		_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(tx.Address, ns.NamespaceBalance), tx.Value, false)
 		if err != nil {
 			return false, true, errors.New("Could not update account balance!")
 		}
-		if t.Value < 0 {
-			err := coding.PutBool(tx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
+		if tx.Value < 0 {
+			err := coding.PutBool(dbTx, ns.AddressKey(tx.Address, ns.NamespaceSpent), true)
 			if err != nil {
 				return false, true, errors.New("Could not update account spent status!")
 			}
 		}
 	}
 
-	err = confirmChild(ns.HashKey(t.TrunkTransaction, ns.NamespaceHash), tx)
+	err = confirmChild(ns.HashKey(tx.TrunkTransaction, ns.NamespaceHash), dbTx)
 	if err != nil {
 		return false, true, err
 	}
-	err = confirmChild(ns.HashKey(t.BranchTransaction, ns.NamespaceHash), tx)
+	err = confirmChild(ns.HashKey(tx.BranchTransaction, ns.NamespaceHash), dbTx)
 	if err != nil {
 		return false, true, err
 	}
 	return true, false, nil
 }
 
-func confirmChild(key []byte, tx db.Transaction) error {
+func confirmChild(key []byte, dbTx db.Transaction) error {
 	if bytes.Equal(key, tipHashKey) {
 		// Doesn't need confirmation
 		return nil
 	}
-	if tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
+	if dbTx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) {
 		// Already confirmed
 		return nil
 	}
 
 	keyPending := ns.Key(key, ns.NamespaceEventConfirmationPending)
-	if tx.HasKey(keyPending) {
+	if dbTx.HasKey(keyPending) {
 		// Confirmation is already pending
 		return nil
 	}
 
-	timestamp, err := coding.GetInt64(tx, ns.Key(key, ns.NamespaceTimestamp))
+	timestamp, err := coding.GetInt64(dbTx, ns.Key(key, ns.NamespaceTimestamp))
 	if err == nil {
-		err = addPendingConfirmation(keyPending, timestamp, tx)
+		err = addPendingConfirmation(keyPending, timestamp, dbTx)
 		if err != nil {
 			return fmt.Errorf("Could not save child confirm status: %v", err)
 		}
-	} else if !tx.HasKey(ns.Key(key, ns.NamespaceEdge)) && tx.HasKey(ns.Key(key, ns.NamespacePendingHash)) {
-		err = coding.PutInt64(tx, ns.Key(key, ns.NamespacePendingConfirmed), time.Now().Unix())
+	} else if !dbTx.HasKey(ns.Key(key, ns.NamespaceEdge)) && dbTx.HasKey(ns.Key(key, ns.NamespacePendingHash)) {
+		err = coding.PutInt64(dbTx, ns.Key(key, ns.NamespacePendingConfirmed), time.Now().Unix())
 		if err != nil {
 			return fmt.Errorf("Could not save child pending confirm status: %v", err)
 		}
@@ -194,8 +223,8 @@ func confirmChild(key []byte, tx db.Transaction) error {
 	return nil
 }
 
-func addPendingConfirmation(key []byte, timestamp int64, tx db.Transaction) error {
-	err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEventConfirmationPending), timestamp)
+func addPendingConfirmation(key []byte, timestamp int64, dbTx db.Transaction) error {
+	err := coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceEventConfirmationPending), timestamp)
 	if err == nil {
 		// TODO: find a way to add to the queue AFTER the tx has been committed.
 		confirmQueue <- &PendingConfirmation{key, timestamp}
@@ -237,21 +266,21 @@ func removeConfirmInProgress(key []byte) {
 
 func reapplyConfirmed() {
 	logs.Log.Debug("Reapplying confirmed TXs to balances")
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		x := 0
-		return ns.ForNamespace(tx, ns.NamespaceConfirmed, false, func(key, _ []byte) (bool, error) {
-			txBytes, _ := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
+		return ns.ForNamespace(dbTx, ns.NamespaceConfirmed, false, func(key, _ []byte) (bool, error) {
+			txBytes, _ := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 			trits := convert.BytesToTrits(txBytes)[:8019]
-			t := transaction.TritsToFastTX(&trits, txBytes)
-			if t.Value != 0 {
-				err := db.Singleton.Update(func(tx db.Transaction) error {
-					_, err := coding.IncrementInt64By(tx, ns.AddressKey(t.Address, ns.NamespaceBalance), t.Value, false)
+			tx := transaction.TritsToFastTX(&trits, txBytes)
+			if tx.Value != 0 {
+				err := db.Singleton.Update(func(dbTx db.Transaction) error {
+					_, err := coding.IncrementInt64By(dbTx, ns.AddressKey(tx.Address, ns.NamespaceBalance), tx.Value, false)
 					if err != nil {
 						logs.Log.Errorf("Could not update account balance: %v", err)
 						return errors.New("Could not update account balance!")
 					}
-					if t.Value < 0 {
-						err := coding.PutBool(tx, ns.AddressKey(t.Address, ns.NamespaceSpent), true)
+					if tx.Value < 0 {
+						err := coding.PutBool(dbTx, ns.AddressKey(tx.Address, ns.NamespaceSpent), true)
 						if err != nil {
 							logs.Log.Errorf("Could not update account spent status: %v", err)
 							return errors.New("Could not update account spent status!")

@@ -37,12 +37,17 @@ const (
 )
 
 var (
-	COO_ADDRESS_BYTES     = convert.TrytesToBytes(COO_ADDRESS)[:49]
-	COO_ADDRESS2_BYTES    = convert.TrytesToBytes(COO_ADDRESS2)[:49]
-	pendingMilestoneQueue = make(chan *PendingMilestone, maxQueueSize)
-	LatestMilestone       Milestone // TODO: Access latest milestone only via GetLatestMilestone()
-	LatestMilestoneLock   = &sync.RWMutex{}
-	lastMilestoneCheck    = time.Now()
+	COO_ADDRESS_BYTES         = convert.TrytesToBytes(COO_ADDRESS)[:49]
+	COO_ADDRESS2_BYTES        = convert.TrytesToBytes(COO_ADDRESS2)[:49]
+	pendingMilestoneQueue     = make(chan *PendingMilestone, maxQueueSize)
+	pendingMilestoneWaitGroup = &sync.WaitGroup{}
+	pendingMilestoneQueueQuit = make(chan struct{})
+	LatestMilestone           Milestone // TODO: Access latest milestone only via GetLatestMilestone()
+	LatestMilestoneLock       = &sync.RWMutex{}
+	lastMilestoneCheck        = time.Now()
+	milestoneTicker           *time.Ticker
+	milestoneTickerWaitGroup  = &sync.WaitGroup{}
+	milestoneTickerQuit       = make(chan struct{})
 )
 
 // TODO: remove this? Or add an API interface?
@@ -114,7 +119,7 @@ func milestoneOnLoad() {
 
 func loadLatestMilestoneFromDB() {
 	logs.Log.Infof("Loading latest milestone from database...")
-	err := db.Singleton.View(func(tx db.Transaction) error {
+	err := db.Singleton.View(func(dbTx db.Transaction) error {
 		var latestKey []byte
 		latestIndex := 0
 
@@ -122,7 +127,7 @@ func loadLatestMilestoneFromDB() {
 		LatestMilestone = Milestone{tipFastTX, latestIndex}
 		LatestMilestoneLock.Unlock()
 
-		err := coding.ForPrefixInt(tx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, index int) (bool, error) {
+		err := coding.ForPrefixInt(dbTx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, index int) (bool, error) {
 			if index >= latestIndex {
 				latestKey = ns.Key(key, ns.NamespaceBytes)
 				latestIndex = index
@@ -138,16 +143,16 @@ func loadLatestMilestoneFromDB() {
 			return nil
 		}
 
-		txBytes, err := tx.GetBytes(latestKey)
+		txBytes, err := dbTx.GetBytes(latestKey)
 		if err != nil {
 			return err
 		}
 
 		trits := convert.BytesToTrits(txBytes)[:8019]
-		t := transaction.TritsToTX(&trits, txBytes)
+		tx := transaction.TritsToTX(&trits, txBytes)
 
 		LatestMilestoneLock.Lock()
-		LatestMilestone = Milestone{t, latestIndex}
+		LatestMilestone = Milestone{tx, latestIndex}
 		LatestMilestoneLock.Unlock()
 
 		return nil
@@ -165,12 +170,12 @@ func GetLatestMilestone() *Milestone {
 	return &LatestMilestone
 }
 
-func setLatestMilestone(newIndex int, t *transaction.FastTX) (changed bool) {
+func setLatestMilestone(newIndex int, tx *transaction.FastTX) (changed bool) {
 	latestMilestone := GetLatestMilestone()
 	if latestMilestone.Index < newIndex {
 		// Conversion to get the Hashes
-		trits := convert.BytesToTrits(t.Bytes)[:8019]
-		fastTx := transaction.TritsToTX(&trits, t.Bytes)
+		trits := convert.BytesToTrits(tx.Bytes)[:8019]
+		fastTx := transaction.TritsToTX(&trits, tx.Bytes)
 
 		LatestMilestoneLock.Lock()
 		defer LatestMilestoneLock.Unlock()
@@ -190,81 +195,102 @@ func addPendingMilestoneToQueue(pendingMilestone *PendingMilestone) {
 Runs checking of pending milestones.
 */
 func startMilestoneChecker() {
+	milestoneTickerWaitGroup.Add(1)
+	defer milestoneTickerWaitGroup.Done()
 
-	milestoneTicker := time.NewTicker(milestoneCheckInterval)
-	for range milestoneTicker.C {
+	milestoneTicker = time.NewTicker(milestoneCheckInterval)
+	for {
+		select {
+		case <-milestoneTickerQuit:
+			return
 
-		// Do not check at every tick since it could take longer than a single tick
-		if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
-			// Get all pending milestones
-			var pairs []PendingMilestone
-			db.Singleton.View(func(tx db.Transaction) error {
-				return ns.ForNamespace(tx, ns.NamespaceEventMilestonePending, true, func(key, value []byte) (bool, error) {
-					k := make([]byte, len(key))
-					v := make([]byte, len(value))
-					copy(k, key)
-					copy(v, value)
-					pairs = append(pairs, PendingMilestone{k, v})
-					return true, nil
-				})
-			})
-
-			for _, pair := range pairs {
-				db.Singleton.Update(func(tx db.Transaction) (e error) {
-					/*
-						defer func() {
-							if err := recover(); err != nil {
-								e = errors.New("Failed milestone check!")
-							}
-						}()*/
-					preCheckMilestone(pair.Key, pair.TX2BytesKey, tx)
-					return nil
-				})
+		case <-milestoneTicker.C:
+			if ended {
+				break
 			}
-			lastMilestoneCheck = time.Now()
+			// Do not check at every tick since it could take longer than a single tick
+			if time.Now().Sub(lastMilestoneCheck) > totalMilestoneCheckInterval {
+				// Get all pending milestones
+				var pairs []PendingMilestone
+				db.Singleton.View(func(dbTx db.Transaction) error {
+					return ns.ForNamespace(dbTx, ns.NamespaceEventMilestonePending, true, func(key, value []byte) (bool, error) {
+						k := make([]byte, len(key))
+						v := make([]byte, len(value))
+						copy(k, key)
+						copy(v, value)
+						pairs = append(pairs, PendingMilestone{k, v})
+						return true, nil
+					})
+				})
+
+				for _, pair := range pairs {
+					db.Singleton.Update(func(dbTx db.Transaction) (e error) {
+						/*
+							defer func() {
+								if err := recover(); err != nil {
+									e = errors.New("Failed milestone check!")
+								}
+							}()*/
+						preCheckMilestone(pair.Key, pair.TX2BytesKey, dbTx)
+						return nil
+					})
+				}
+				lastMilestoneCheck = time.Now()
+			}
 		}
 	}
 }
 
 func processPendingMilestones() {
-	for pendingMilestone := range pendingMilestoneQueue {
+	pendingMilestoneWaitGroup.Add(1)
+	defer pendingMilestoneWaitGroup.Done()
 
-		db.Singleton.Update(func(tx db.Transaction) (e error) {
-			key := ns.Key(pendingMilestone.Key, ns.NamespaceEventMilestonePending)
-			TX2BytesKey := pendingMilestone.TX2BytesKey
-			if TX2BytesKey == nil {
-				relation, err := tx.GetBytes(ns.Key(key, ns.NamespaceRelation))
-				if err != nil {
-					// The 0-index milestone TX relations doesn't exist.
-					// Clearly an error here!
-					tx.Remove(key)
-					logs.Log.Panicf("A milestone has disappeared!")
-				}
-				TX2BytesKey = ns.Key(relation[:16], ns.NamespaceHash)
+	for {
+		select {
+		case <-pendingMilestoneQueueQuit:
+			return
+
+		case pendingMilestone := <-pendingMilestoneQueue:
+			if ended {
+				break
 			}
-			/*
-				defer func() {
-					if err := recover(); err != nil {
-						e = errors.New("Failed queue milestone check!")
+			db.Singleton.Update(func(dbTx db.Transaction) (e error) {
+				key := ns.Key(pendingMilestone.Key, ns.NamespaceEventMilestonePending)
+				TX2BytesKey := pendingMilestone.TX2BytesKey
+				if TX2BytesKey == nil {
+					relation, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceRelation))
+					if err != nil {
+						// The 0-index milestone TX relations doesn't exist.
+						// Clearly an error here!
+						dbTx.Remove(key)
+						logs.Log.Panicf("A milestone has disappeared!")
 					}
-				}()*/
-			pending := preCheckMilestone(key, TX2BytesKey, tx)
-			if pending {
-				pendingMilestoneQueue <- pendingMilestone
-			}
-			return nil
-		})
+					TX2BytesKey = ns.Key(relation[:16], ns.NamespaceHash)
+				}
+				/*
+					defer func() {
+						if err := recover(); err != nil {
+							e = errors.New("Failed queue milestone check!")
+						}
+					}()*/
+				pending := preCheckMilestone(key, TX2BytesKey, dbTx)
+				if pending {
+					pendingMilestoneQueue <- pendingMilestone
+				}
+				return nil
+			})
+		}
 	}
 }
 
-func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pending bool) {
+func preCheckMilestone(key []byte, TX2BytesKey []byte, dbTx db.Transaction) (pending bool) {
 
 	var txBytesKey = ns.Key(key, ns.NamespaceBytes)
 
 	// 2. Check if 1-index TX already exists
-	tx2Bytes, err := tx.GetBytes(TX2BytesKey)
+	tx2Bytes, err := dbTx.GetBytes(TX2BytesKey)
 	if err != nil {
-		err := tx.PutBytes(ns.Key(TX2BytesKey, ns.NamespaceEventMilestonePairPending), key)
+		err := dbTx.PutBytes(ns.Key(TX2BytesKey, ns.NamespaceEventMilestonePairPending), key)
 		if err != nil {
 			logs.Log.Panicf("Could not add pending milestone pair: %v", err)
 		}
@@ -272,7 +298,7 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 	}
 
 	// 3. Check that the 0-index TX also exists.
-	txBytes, err := tx.GetBytes(txBytesKey)
+	txBytes, err := dbTx.GetBytes(txBytesKey)
 	if err != nil {
 		// The 0-index milestone TX doesn't exist.
 		// Clearly an error here!
@@ -283,20 +309,20 @@ func preCheckMilestone(key []byte, TX2BytesKey []byte, tx db.Transaction) (pendi
 
 	// Get TX objects and validate
 	trits := convert.BytesToTrits(txBytes)[:8019]
-	t := transaction.TritsToFastTX(&trits, txBytes)
+	tx := transaction.TritsToFastTX(&trits, txBytes)
 
 	trits2 := convert.BytesToTrits(tx2Bytes)[:8019]
-	t2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
+	tx2 := transaction.TritsToFastTX(&trits2, tx2Bytes)
 
-	checkMilestone(txBytesKey, t, t2, trits2, tx)
+	checkMilestone(txBytesKey, tx, tx2, trits2, dbTx)
 	return false
 }
 
-func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, trits []int, tx db.Transaction) (valid bool) {
+func checkMilestone(key []byte, tx *transaction.FastTX, tx2 *transaction.FastTX, trits []int, dbTx db.Transaction) (valid bool) {
 	key = ns.Key(key, ns.NamespaceEventMilestonePending)
 
 	discardMilestone := func() {
-		err := tx.Remove(key)
+		err := dbTx.Remove(key)
 		if err != nil {
 			logs.Log.Panicf("Could not remove pending milestone: %v", err)
 		}
@@ -304,37 +330,37 @@ func checkMilestone(key []byte, t *transaction.FastTX, t2 *transaction.FastTX, t
 	}
 
 	// Verify correct bundle structure:
-	if !bytes.Equal(t2.Address, COO_ADDRESS2_BYTES) ||
-		!bytes.Equal(t2.TrunkTransaction, t.BranchTransaction) ||
-		!bytes.Equal(t2.Bundle, t.Bundle) {
-		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(t.Bundle)[:81])
+	if !bytes.Equal(tx2.Address, COO_ADDRESS2_BYTES) ||
+		!bytes.Equal(tx2.TrunkTransaction, tx.BranchTransaction) ||
+		!bytes.Equal(tx2.Bundle, tx.Bundle) {
+		logs.Log.Warning("Milestone bundle verification failed for:\n ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}
 
 	// Verify milestone signature and get the index:
-	milestoneIndex := getMilestoneIndex(t, trits)
+	milestoneIndex := getMilestoneIndex(tx, trits)
 	if milestoneIndex < 0 {
-		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(t.Bundle)[:81])
+		logs.Log.Warning("Milestone signature verification failed for: ", convert.BytesToTrytes(tx.Bundle)[:81])
 		discardMilestone()
 		return false
 	}
 
 	// Save milestone (remove pending) and update latest:
-	err := tx.Remove(key)
+	err := dbTx.Remove(key)
 	if err != nil {
 		logs.Log.Errorf("Could not remove pending milestone: %v", err)
 	}
 
-	err = coding.PutInt(tx, ns.Key(key, ns.NamespaceMilestone), milestoneIndex)
+	err = coding.PutInt(dbTx, ns.Key(key, ns.NamespaceMilestone), milestoneIndex)
 	if err != nil {
 		logs.Log.Panicf("Could not save milestone: %v", err)
 		return false
 	}
-	setLatestMilestone(milestoneIndex, t)
+	setLatestMilestone(milestoneIndex, tx)
 
 	// Trigger confirmations
-	err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(t.Timestamp), tx)
+	err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(tx.Timestamp), dbTx)
 	if err != nil {
 		logs.Log.Panicf("Could not save pending confirmation: %v", err)
 		return false
@@ -388,12 +414,13 @@ func GetMilestoneKeyByIndex(index int, acceptNearest bool) []byte {
 	currentIndex := LatestMilestone.Index + 1
 	latestIndex := 0
 
-	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt(tx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, ms int) (bool, error) {
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		return coding.ForPrefixInt(dbTx, ns.Prefix(ns.NamespaceMilestone), true, func(key []byte, ms int) (bool, error) {
 			if ms == index {
 				milestoneKey = ns.Key(key, ns.NamespaceHash)
 				return false, nil
 			} else if acceptNearest && (ms < currentIndex) && (ms > latestIndex) {
+				// TODO: search for nearest distance better?
 				milestoneKey = ns.Key(key, ns.NamespaceHash)
 				latestIndex = ms
 			}

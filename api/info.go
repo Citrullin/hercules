@@ -17,7 +17,7 @@ func init() {
 	addAPICall("getNodeInfo", getNodeInfo, mainAPICalls)
 }
 
-func getNodeInfo(request Request, c *gin.Context, t time.Time) {
+func getNodeInfo(request Request, c *gin.Context, ts time.Time) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 
@@ -53,6 +53,6 @@ func getNodeInfo(request Request, c *gin.Context, t time.Time) {
 		"isSynchronized":                     snapshot.IsSynchronized(),
 		"tips":                               tipsCnt,
 		"time":                               time.Now().Unix(),
-		"duration":                           getDuration(t),
+		"duration":                           getDuration(ts),
 	})
 }

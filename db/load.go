@@ -36,5 +36,5 @@ func loadDB() (Interface, error) {
 
 func End() {
 	Singleton.End()
-	logs.Log.Debug("DB exited")
+	logs.Log.Debug("DB module exited")
 }

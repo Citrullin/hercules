@@ -18,7 +18,7 @@ func init() {
 	addAPICall("listAllAccounts", listAllAccounts, mainAPICalls)
 }
 
-func getBalances(request Request, c *gin.Context, t time.Time) {
+func getBalances(request Request, c *gin.Context, ts time.Time) {
 	if request.Addresses == nil {
 		return
 	}
@@ -43,16 +43,16 @@ func getBalances(request Request, c *gin.Context, t time.Time) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"balances":       balances,
-		"duration":       getDuration(t),
+		"duration":       getDuration(ts),
 		"milestone":      convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
 		"milestoneIndex": tangle.LatestMilestone.Index,
 	})
 }
 
-func listAllAccounts(request Request, c *gin.Context, t time.Time) {
+func listAllAccounts(request Request, c *gin.Context, ts time.Time) {
 	var accounts = make(map[string]interface{})
-	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceBalance), false, func(key []byte, value int64) (bool, error) {
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		return coding.ForPrefixInt64(dbTx, ns.Prefix(ns.NamespaceBalance), false, func(key []byte, value int64) (bool, error) {
 			if value == 0 {
 				return true, nil
 			}
@@ -64,7 +64,7 @@ func listAllAccounts(request Request, c *gin.Context, t time.Time) {
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"accounts":       accounts,
-		"duration":       getDuration(t),
+		"duration":       getDuration(ts),
 		"milestone":      convert.BytesToTrytes(tangle.LatestMilestone.TX.Hash)[:81],
 		"milestoneIndex": tangle.LatestMilestone.Index,
 	})

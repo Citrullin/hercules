@@ -16,7 +16,7 @@ func init() {
 	addAPICall("findTransactions", findTransactions, mainAPICalls)
 }
 
-func findTransactions(request Request, c *gin.Context, t time.Time) {
+func findTransactions(request Request, c *gin.Context, ts time.Time) {
 	var hashes = []string{}
 	for _, address := range request.Addresses {
 		if !convert.IsTrytes(address, 81) {
@@ -48,7 +48,7 @@ func findTransactions(request Request, c *gin.Context, t time.Time) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"hashes":   hashes,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 
@@ -66,11 +66,11 @@ func findAddresses(trits []byte, single bool) []string {
 
 func find(trits []byte, prefix byte) []string {
 	var response = []string{}
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		prefix := ns.HashKey(trits, prefix)
-		return tx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
+		return dbTx.ForPrefix(prefix, false, func(key, _ []byte) (bool, error) {
 			key = ns.Key(key[16:], ns.NamespaceHash)
-			hash, err := tx.GetBytes(key)
+			hash, err := dbTx.GetBytes(key)
 			if err == nil {
 				response = append(response, convert.BytesToTrytes(hash)[:81])
 			}

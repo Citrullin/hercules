@@ -17,7 +17,7 @@ func init() {
 	addAPICall("getNeighbors", getNeighbors, mainAPICalls)
 }
 
-func addNeighbors(request Request, c *gin.Context, t time.Time) {
+func addNeighbors(request Request, c *gin.Context, ts time.Time) {
 	if request.Uris != nil {
 		added := 0
 		for _, address := range request.Uris {
@@ -33,12 +33,12 @@ func addNeighbors(request Request, c *gin.Context, t time.Time) {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"addedNeighbors": added,
-			"duration":       getDuration(t),
+			"duration":       getDuration(ts),
 		})
 	}
 }
 
-func removeNeighbors(request Request, c *gin.Context, t time.Time) {
+func removeNeighbors(request Request, c *gin.Context, ts time.Time) {
 	if request.Uris != nil {
 		removed := 0
 		for _, address := range request.Uris {
@@ -54,12 +54,12 @@ func removeNeighbors(request Request, c *gin.Context, t time.Time) {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"removedNeighbors": removed,
-			"duration":         getDuration(t),
+			"duration":         getDuration(ts),
 		})
 	}
 }
 
-func getNeighbors(request Request, c *gin.Context, t time.Time) {
+func getNeighbors(request Request, c *gin.Context, ts time.Time) {
 	server.NeighborsLock.RLock()
 
 	// Get the keys of the map to sort the neighbors
@@ -91,6 +91,6 @@ func getNeighbors(request Request, c *gin.Context, t time.Time) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"neighbors": neighbors,
-		"duration":  getDuration(t),
+		"duration":  getDuration(ts),
 	})
 }

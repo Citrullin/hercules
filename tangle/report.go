@@ -1,12 +1,19 @@
 package tangle
 
 import (
+	"sync"
 	"time"
 
 	"../db"
 	"../db/ns"
 	"../logs"
 	"../server"
+)
+
+var (
+	tangleReportTicker          *time.Ticker
+	tangleReportTickerWaitGroup = &sync.WaitGroup{}
+	tangleReportTickerQuit      = make(chan struct{})
 )
 
 func Report() {
@@ -28,9 +35,22 @@ func Report() {
 }
 
 func report() {
+	tangleReportTickerWaitGroup.Add(1)
+	defer tangleReportTickerWaitGroup.Done()
+
 	Report()
-	tangleReportTicker := time.NewTicker(reportInterval)
-	for range tangleReportTicker.C {
-		Report()
+
+	tangleReportTicker = time.NewTicker(reportInterval)
+	for {
+		select {
+		case <-tangleReportTickerQuit:
+			return
+
+		case <-tangleReportTicker.C:
+			if ended {
+				break
+			}
+			Report()
+		}
 	}
 }

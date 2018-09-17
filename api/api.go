@@ -111,7 +111,7 @@ func serveHttps(api *gin.Engine) {
 	privateKeyPath := config.AppConfig.GetString("api.https.privateKeyPath")
 
 	if err := http.ListenAndServeTLS(serveOnAddress, certificatePath, privateKeyPath, api); err != nil && err != http.ErrServerClosed {
-		logs.Log.Fatal("API Server Error", err)
+		logs.Log.Fatal("API server error", err)
 	}
 }
 
@@ -125,7 +125,7 @@ func serveHttp(api *gin.Engine) {
 	}
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logs.Log.Fatal("API Server Error", err)
+		logs.Log.Fatal("API server error", err)
 	}
 }
 
@@ -133,10 +133,11 @@ func End() {
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := srv.Shutdown(ctx); err != nil {
-			logs.Log.Fatal("API Server Shutdown Error:", err)
+			logs.Log.Error("API server Shutdown Error:", err)
+		} else {
+			cancel()
+			logs.Log.Debug("API server exited")
 		}
-		logs.Log.Debug("API Server exited")
-		cancel()
 	}
 }
 
@@ -146,15 +147,15 @@ func replyError(message string, c *gin.Context) {
 	})
 }
 
-func getDuration(t time.Time) int32 {
-	return int32(time.Now().Sub(t).Nanoseconds() / int64(time.Millisecond))
+func getDuration(ts time.Time) int32 {
+	return int32(time.Now().Sub(ts).Nanoseconds() / int64(time.Millisecond))
 }
 
-type APIImplementation func(request Request, c *gin.Context, t time.Time)
+type APIImplementation func(request Request, c *gin.Context, ts time.Time)
 
 func createAPIEndpoint(endpointPath string, endpointImplementation map[string]APIImplementation) {
 	api.POST(endpointPath, func(c *gin.Context) {
-		t := time.Now()
+		ts := time.Now()
 
 		var request Request
 		err := c.ShouldBindJSON(&request)
@@ -168,7 +169,7 @@ func createAPIEndpoint(endpointPath string, endpointImplementation map[string]AP
 
 			implementation, apiCallExists := endpointImplementation[caseInsensitiveCommand]
 			if apiCallExists {
-				implementation(request, c, t)
+				implementation(request, c, ts)
 			} else {
 				logs.Log.Error("Unknown command", request.Command)
 				replyError("No known command provided", c)

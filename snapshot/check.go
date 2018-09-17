@@ -21,16 +21,16 @@ import (
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
-	current := GetSnapshotTimestamp(tx)
+func IsNewerThanSnapshot(timestamp int64, dbTx db.Transaction) bool {
+	current := GetSnapshotTimestamp(dbTx)
 	return timestamp > current
 }
 
 /*
 Returns if the given timestamp is more recent than the current database snapshot.
 */
-func IsEqualOrNewerThanSnapshot(timestamp int64, tx db.Transaction) bool {
-	current := GetSnapshotTimestamp(tx)
+func IsEqualOrNewerThanSnapshot(timestamp int64, dbTx db.Transaction) bool {
+	current := GetSnapshotTimestamp(dbTx)
 	return timestamp >= current
 }
 
@@ -157,9 +157,8 @@ func checkSnapshotFileIntegrity(path string) error {
 
 /*
 Checks if there is a snapshot lock present.
-Yes:
-If lock file is present, run LoadSnapshot.
-Otherwise run MakeSnapshot.
+If yes, it checks if there is a snapshot lock filename.
+If filename is present, run LoadSnapshot, otherwise run MakeSnapshot.
 */
 func checkPendingSnapshot() {
 	timestamp, filename := IsLocked(nil)
@@ -181,8 +180,8 @@ func checkPendingSnapshot() {
 /*
 Returns whether a transaction from the database can be snapshotted
 */
-func canBeSnapshotted(key []byte, tx db.Transaction) bool {
-	return tx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) &&
-		!tx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) &&
-		!tx.HasKey(ns.Key(key, ns.NamespaceSnapshotted))
+func canBeSnapshotted(key []byte, dbTx db.Transaction) bool {
+	return dbTx.HasKey(ns.Key(key, ns.NamespaceConfirmed)) &&
+		!dbTx.HasKey(ns.Key(key, ns.NamespaceEventTrimPending)) &&
+		!dbTx.HasKey(ns.Key(key, ns.NamespaceSnapshotted))
 }

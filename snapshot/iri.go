@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"../convert"
 	"../db"
@@ -20,11 +19,6 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error
 		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
 	}
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
-
-	// Give time for other processes to finalize
-	time.Sleep(WAIT_SNAPSHOT_DURATION)
 
 	// Load values
 	err := loadIRISnapshotValues(valuesPath)
@@ -57,7 +51,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 	defer f.Close()
 
 	rd := bufio.NewReader(f)
-	var tx = db.Singleton.NewTransaction(true)
+	var dbTx = db.Singleton.NewTransaction(true)
 	for {
 		line, err := rd.ReadString('\n')
 		if err != nil {
@@ -68,15 +62,15 @@ func loadIRISnapshotSpent(spentPath string) error {
 			logs.Log.Fatalf("read file line error: %v", err)
 			return err
 		}
-		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 		if err != nil {
 			if err == db.ErrTransactionTooBig {
-				err := tx.Commit()
+				err := dbTx.Commit()
 				if err != nil {
 					return err
 				}
-				tx = db.Singleton.NewTransaction(true)
-				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+				dbTx = db.Singleton.NewTransaction(true)
+				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 				if err != nil {
 					return err
 				}
@@ -86,7 +80,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 		}
 	}
 
-	return tx.Commit()
+	return dbTx.Commit()
 }
 
 func loadIRISnapshotValues(valuesPath string) error {

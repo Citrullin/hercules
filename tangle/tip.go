@@ -14,8 +14,11 @@ import (
 )
 
 var (
-	Tips     = make(map[string]time.Time) // []byte = Hash, time.Time = ReceiveTimestamp
-	TipsLock = &sync.RWMutex{}
+	Tips                 = make(map[string]time.Time) // []byte = Hash, time.Time = ReceiveTimestamp
+	TipsLock             = &sync.RWMutex{}
+	tipRemoverTicker     *time.Ticker
+	tipRemoverWaitGroup  = &sync.WaitGroup{}
+	tipRemoverTickerQuit = make(chan struct{})
 )
 
 func tipOnLoad() {
@@ -27,9 +30,9 @@ func loadTipsFromDB() {
 	TipsLock.Lock()
 	defer TipsLock.Unlock()
 
-	db.Singleton.View(func(tx db.Transaction) error {
-		return coding.ForPrefixInt64(tx, ns.Prefix(ns.NamespaceTip), true, func(key []byte, timestamp int64) (bool, error) {
-			hash, err := tx.GetBytes(ns.Key(key, ns.NamespaceHash))
+	db.Singleton.View(func(dbTx db.Transaction) error {
+		return coding.ForPrefixInt64(dbTx, ns.Prefix(ns.NamespaceTip), true, func(key []byte, timestamp int64) (bool, error) {
+			hash, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceHash))
 			if err != nil {
 				return true, nil
 			}
@@ -43,11 +46,23 @@ func loadTipsFromDB() {
 }
 
 func tipsRemover() {
+	tipRemoverWaitGroup.Add(1)
+	defer tipRemoverWaitGroup.Done()
+
 	executeTipsRemover()
 
-	tipRemoverTicker := time.NewTicker(tipRemoverInterval)
-	for range tipRemoverTicker.C {
-		executeTipsRemover()
+	tipRemoverTicker = time.NewTicker(tipRemoverInterval)
+	for {
+		select {
+		case <-tipRemoverTickerQuit:
+			return
+
+		case <-tipRemoverTicker.C:
+			if ended {
+				break
+			}
+			executeTipsRemover()
+		}
 	}
 }
 
@@ -55,8 +70,8 @@ func executeTipsRemover() {
 	tipsToRemove, tipsCnt := getTipsToRemove()
 	logs.Log.Infof("Tips to remove: %v/%v", len(tipsToRemove), tipsCnt)
 
-	db.Singleton.Update(func(tx db.Transaction) error {
-		removeTips(tipsToRemove, tx)
+	db.Singleton.Update(func(dbTx db.Transaction) error {
+		removeTips(tipsToRemove, dbTx)
 		return nil
 	})
 }
@@ -79,9 +94,9 @@ func getTipsToRemove() (tipsToRemove []string, tipsCnt int) {
 	}
 	TipsLock.RUnlock()
 
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		for hash, keyToCheck := range keysToCheck {
-			if tx.CountPrefix(keyToCheck) > 0 {
+			if dbTx.CountPrefix(keyToCheck) > 0 {
 				// Tip was already approved
 				tipsToRemove = append(tipsToRemove, hash)
 			}
@@ -92,7 +107,7 @@ func getTipsToRemove() (tipsToRemove []string, tipsCnt int) {
 	return tipsToRemove, tipsCnt
 }
 
-func addTip(hash string, timestamp int, tx db.Transaction) error {
+func addTip(hash string, timestamp int, dbTx db.Transaction) error {
 
 	TipsLock.RLock()
 	if _, exists := Tips[hash]; !exists {
@@ -102,12 +117,12 @@ func addTip(hash string, timestamp int, tx db.Transaction) error {
 		tipAge := time.Duration(time.Now().Sub(timestampUnix))
 		key := ns.HashKey([]byte(hash), ns.NamespaceApprovee)
 
-		if tipAge < maxTipAge && tx.CountPrefix(key) < 1 {
+		if tipAge < maxTipAge && dbTx.CountPrefix(key) < 1 {
 			TipsLock.Lock()
 			Tips[hash] = timestampUnix
 			TipsLock.Unlock()
 
-			return coding.PutInt64(tx, ns.Key(key, ns.NamespaceTip), int64(timestamp))
+			return coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceTip), int64(timestamp))
 		}
 	} else {
 		TipsLock.RUnlock()
@@ -115,25 +130,25 @@ func addTip(hash string, timestamp int, tx db.Transaction) error {
 	return nil
 }
 
-func removeTips(tipsToRemove []string, tx db.Transaction) {
+func removeTips(tipsToRemove []string, dbTx db.Transaction) {
 	TipsLock.Lock()
 	defer TipsLock.Unlock()
 
 	for _, hash := range tipsToRemove {
-		tx.Remove(ns.HashKey([]byte(hash), ns.NamespaceTip))
+		dbTx.Remove(ns.HashKey([]byte(hash), ns.NamespaceTip))
 		delete(Tips, hash)
 	}
 }
 
-func updateTipsOnNewTransaction(t *transaction.FastTX, tx db.Transaction) error {
-	addTip(string(t.Hash), t.Timestamp, tx)
+func updateTipsOnNewTransaction(tx *transaction.FastTX, dbTx db.Transaction) error {
+	addTip(string(tx.Hash), tx.Timestamp, dbTx)
 
-	tipsToRemove := []string{string(t.TrunkTransaction), string(t.BranchTransaction)}
-	removeTips(tipsToRemove, tx)
+	tipsToRemove := []string{string(tx.TrunkTransaction), string(tx.BranchTransaction)}
+	removeTips(tipsToRemove, dbTx)
 	return nil
 }
 
-func getRandomTip(tx db.Transaction) (hash []byte, txBytes []byte) {
+func getRandomTip(dbTx db.Transaction) (hash []byte, txBytes []byte) {
 	TipsLock.RLock()
 
 	if len(Tips) < 1 {
@@ -144,13 +159,13 @@ func getRandomTip(tx db.Transaction) (hash []byte, txBytes []byte) {
 	hashStr := randmap.FastKey(Tips).(string)
 	TipsLock.RUnlock()
 
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Commit()
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
 	hash = []byte(hashStr)
-	txBytes, err := tx.GetBytes(ns.HashKey(hash, ns.NamespaceBytes))
+	txBytes, err := dbTx.GetBytes(ns.HashKey(hash, ns.NamespaceBytes))
 	if err != nil {
 		return nil, nil
 	}

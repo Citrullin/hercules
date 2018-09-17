@@ -26,188 +26,207 @@ func incomingRunner() {
 	srv.IncomingWaitGroup.Add(1)
 	defer srv.IncomingWaitGroup.Done()
 
-	for raw := range srv.Incoming {
-		// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
-		if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
-			continue
-		}
+	for {
+		select {
+		case <-srv.IncomingQueueQuit:
+			return
 
-		ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
-
-		var neighbor *server.Neighbor
-
-		server.NeighborsLock.RLock()
-		neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
-		if !neighborExists {
-			// Check all known addresses => slower
-			neighborExists, neighbor = server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
-
-			server.NeighborsLock.RUnlock()
-
-			if neighborExists {
-				// If the neighbor was found now, the preferred IP is wrong => Update it!
-				neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+		case raw := <-srv.Incoming:
+			// Hard limit for low-end devices. Prevent flooding, discard incoming while the queue is full.
+			if lowEndDevice && len(srv.Incoming) > maxIncoming*2 {
+				continue
 			}
-		} else {
-			server.NeighborsLock.RUnlock()
-		}
 
-		if !neighborExists {
-			logs.Log.Warningf("Received from an unknown neighbor (%v)", ipAddressWithPort)
-			continue
-		}
+			ipAddressWithPort := (*raw.Addr).String() // Format <ip>:<port>
 
-		atomic.AddUint64(&server.IncTxPerSec, 1)
-		neighbor.TrackIncoming(1)
+			ipIsBlocked := server.IsIPBlocked(ipAddressWithPort)
+			if ipIsBlocked {
+				// Skip message
+				continue
+			}
 
-		data := (*raw.Data)[:DATA_SIZE]
-		reqHash := make([]byte, HASH_SIZE)
-		copy(reqHash, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
+			server.NeighborsLock.RLock()
+			neighborExists, neighbor := server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, false)
+			if !neighborExists {
+				// Check all known addresses => slower
+				neighborExists, neighbor = server.CheckNeighbourExistsByIPAddressWithPort(ipAddressWithPort, true)
 
-		var recHash []byte
+				server.NeighborsLock.RUnlock()
 
-		//
-		// Process incoming data
-		//
-		fingerprintHash := ns.HashKey(data, ns.NamespaceFingerprint)
-		fingerprint := getFingerprint(fingerprintHash)
-		if fingerprint == nil {
-			// Message was not received in the last time
-			atomic.AddUint64(&server.NewTxPerSec, 1)
+				if neighborExists {
+					// If the neighbor was found now, the preferred IP is wrong => Update it!
+					neighbor.UpdateIPAddressWithPort(ipAddressWithPort)
+				} else {
+					logs.Log.Infof("Blocked unknown neighbor (%v)", ipAddressWithPort)
+					server.BlockIP(ipAddressWithPort)
+					continue
+				}
+			} else {
+				server.NeighborsLock.RUnlock()
+			}
 
-			trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
-			tx := transaction.TritsToTX(&trits, data)
-			recHash = tx.Hash
+			atomic.AddUint64(&server.IncTxPerSec, 1)
+			neighbor.TrackIncoming(1)
 
-			addFingerprint(fingerprintHash, recHash)
+			data := (*raw.Data)[:DATA_SIZE]
+			reqHash := make([]byte, HASH_SIZE)
+			copy(reqHash, (*raw.Data)[DATA_SIZE:PACKET_SIZE])
 
-			if !bytes.Equal(data, tipBytes) {
-				// Tx was not a tip
-				if crypt.IsValidPoW(tx.Hash, MWM) {
-					// POW valid => Process the message
-					err := processIncomingTX(tx, neighbor)
-					if err != nil {
-						if err == db.ErrTransactionConflict {
-							removeFingerprint(fingerprintHash)
-							srv.Incoming <- raw
-							continue
+			var recHash []byte
+
+			//
+			// Process incoming data
+			//
+			fingerprintHash, err := fingerPrintCache.Get(data)
+			if err != nil {
+				// Message was not received in the last time
+
+				trits := convert.BytesToTrits(data)[:TX_TRITS_LENGTH]
+				tx := transaction.TritsToTX(&trits, data)
+				recHash = tx.Hash
+
+				// Check again because another thread could have received
+				// the same message from another neighbor in the meantime
+				fingerprintHash, err = fingerPrintCache.Get(data)
+				if err != nil {
+					fingerPrintCache.Set(data, recHash, fingerPrintTTL)
+
+					// Message was not received in the mean time
+					atomic.AddUint64(&server.NewTxPerSec, 1)
+
+					if !bytes.Equal(data, tipBytes) {
+						// Tx was not a tip
+						if crypt.IsValidPoW(tx.Hash, MWM) {
+							// POW valid => Process the message
+							err = processIncomingTX(tx, neighbor)
+							if err != nil {
+								if err == db.ErrTransactionConflict {
+									fingerPrintCache.Del(data)
+									srv.Incoming <- raw // Process the message again
+									continue
+								}
+								logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
+							} else {
+								atomic.AddUint64(&server.ValidTxPerSec, 1)
+								neighbor.LastIncomingTime = time.Now()
+							}
+						} else {
+							// POW invalid => Track invalid messages from neighbor
+							neighbor.TrackInvalid(1)
 						}
-						logs.Log.Errorf("Processing incoming message failed! Err: %v", err)
 					} else {
-						atomic.AddUint64(&server.ValidTxPerSec, 1)
-						neighbor.LastIncomingTime = time.Now()
+						atomic.AddUint64(&server.TipReqPerSec, 1)
 					}
 				} else {
-					// POW invalid => Track invalid messages from neighbor
-					neighbor.TrackInvalid(1)
+					atomic.AddUint64(&server.KnownTxPerSec, 1)
 				}
+			} else {
+				atomic.AddUint64(&server.KnownTxPerSec, 1)
+				recHash = fingerprintHash
 			}
-		} else {
-			atomic.AddUint64(&server.KnownTxPerSec, 1)
-			recHash = fingerprint.ReceiveHash
+
+			//
+			// Reply to incoming request
+			//
+
+			// Pause for a while without responding to prevent flooding
+			if len(srv.Incoming) > maxIncoming {
+				continue
+			}
+
+			var reply []byte
+			var isLookingForTX = !bytes.Equal(reqHash, tipBytes[:HASH_SIZE]) && (!bytes.Equal(recHash, reqHash))
+
+			if isLookingForTX {
+				reply, _ = db.Singleton.GetBytes(ns.HashKey(reqHash, ns.NamespaceBytes))
+			} else if utils.Random(0, 100) < P_TIP_REPLY {
+				// If this is a tip request, drop randomly
+				continue
+			}
+
+			request := getSomeRequestByNeighbor(neighbor, false)
+			if isLookingForTX && request == nil && reply == nil {
+				// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
+				// then do not reply. If we do not have it, but have something to ask, then ask.
+				continue
+			}
+
+			sendReply(getMessage(reply, request, request == nil, neighbor, nil))
 		}
-
-		//
-		// Reply to incoming request
-		//
-
-		// Pause for a while without responding to prevent flooding
-		if len(srv.Incoming) > maxIncoming {
-			continue
-		}
-
-		var reply []byte
-		var isLookingForTX = !bytes.Equal(reqHash, tipBytes[:HASH_SIZE]) && (!bytes.Equal(recHash, reqHash))
-
-		if isLookingForTX {
-			reply, _ = db.Singleton.GetBytes(ns.HashKey(reqHash, ns.NamespaceBytes))
-		} else if utils.Random(0, 100) < P_TIP_REPLY {
-			// If this is a tip request, drop randomly
-			continue
-		}
-
-		request := getSomeRequestByNeighbor(neighbor, false)
-		if isLookingForTX && request == nil && reply == nil {
-			// If the peer wants a specific TX and we do not have it and we have nothing to ask for,
-			// then do not reply. If we do not have it, but have something to ask, then ask.
-			continue
-		}
-
-		sendReply(getMessage(reply, request, request == nil, neighbor, nil))
 	}
 }
 
-func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
+func processIncomingTX(tx *transaction.FastTX, neighbor *server.Neighbor) error {
 	var pendingMilestone *PendingMilestone
 
 	snapTime := snapshot.GetSnapshotTimestamp(nil)
-	key := ns.HashKey(t.Hash, ns.NamespaceHash)
+	key := ns.HashKey(tx.Hash, ns.NamespaceHash)
 	futureTime := int(time.Now().Add(2 * time.Hour).Unix())
-	maybeMilestonePair := isMaybeMilestone(t) || isMaybeMilestonePair(t)
-	isOutsideOfTimeframe := !maybeMilestonePair && (t.Timestamp > futureTime || snapTime >= int64(t.Timestamp))
+	maybeMilestonePair := isMaybeMilestone(tx) || isMaybeMilestonePair(tx)
+	isOutsideOfTimeframe := !maybeMilestonePair && (tx.Timestamp > futureTime || snapTime >= int64(tx.Timestamp))
 
-	err := db.Singleton.Update(func(tx db.Transaction) (e error) {
+	err := db.Singleton.Update(func(dbTx db.Transaction) (e error) {
 		// TODO: catch error defer here
 
-		removePendingRequest(t.Hash, tx)
+		removePendingRequest(tx.Hash, dbTx)
 
 		removeTx := func() {
 			//logs.Log.Debugf("Skipping this TX: %v", convert.BytesToTrytes(tx.Hash)[:81])
-			tx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
-			tx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
-			err := coding.PutInt64(tx, ns.Key(key, ns.NamespaceEdge), snapTime)
-			_checkIncomingError(t, err)
-			parentKey, err := tx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
+			dbTx.Remove(ns.Key(key, ns.NamespacePendingConfirmed))
+			dbTx.Remove(ns.Key(key, ns.NamespaceEventConfirmationPending))
+			err := coding.PutInt64(dbTx, ns.Key(key, ns.NamespaceEdge), snapTime)
+			_checkIncomingError(tx, err)
+			parentKey, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
-				err = tx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
-				_checkIncomingError(t, err)
+				err = dbTx.Remove(ns.Key(parentKey, ns.NamespaceEventMilestonePending))
+				_checkIncomingError(tx, err)
 			}
-			tx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
+			dbTx.Remove(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 		}
 
-		if isOutsideOfTimeframe && !tx.HasKey(ns.HashKey(t.Bundle, ns.NamespacePendingBundle)) {
+		if isOutsideOfTimeframe && !dbTx.HasKey(ns.HashKey(tx.Bundle, ns.NamespacePendingBundle)) {
 			removeTx()
 			return nil
 		}
 
-		if tx.HasKey(ns.Key(key, ns.NamespaceSnapshotted)) {
-			_, err := requestIfMissing(t.TrunkTransaction, neighbor)
-			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, neighbor)
-			_checkIncomingError(t, err)
+		if dbTx.HasKey(ns.Key(key, ns.NamespaceSnapshotted)) {
+			_, err := requestIfMissing(tx.TrunkTransaction, neighbor)
+			_checkIncomingError(tx, err)
+			_, err = requestIfMissing(tx.BranchTransaction, neighbor)
+			_checkIncomingError(tx, err)
 			removeTx()
 			return nil
 		}
 
-		if !tx.HasKey(key) {
+		if !dbTx.HasKey(key) {
 			// Tx is not in the database yet
 
-			err := SaveTX(t, &t.Bytes, tx)
-			_checkIncomingError(t, err)
-			if isMaybeMilestone(t) {
-				trunkBytesKey := ns.HashKey(t.TrunkTransaction, ns.NamespaceBytes)
-				err := tx.PutBytes(ns.Key(key, ns.NamespaceEventMilestonePending), trunkBytesKey)
-				_checkIncomingError(t, err)
+			err := SaveTX(tx, &tx.Bytes, dbTx)
+			_checkIncomingError(tx, err)
+			if isMaybeMilestone(tx) {
+				trunkBytesKey := ns.HashKey(tx.TrunkTransaction, ns.NamespaceBytes)
+				err := dbTx.PutBytes(ns.Key(key, ns.NamespaceEventMilestonePending), trunkBytesKey)
+				_checkIncomingError(tx, err)
 
 				pendingMilestone = &PendingMilestone{key, trunkBytesKey}
 			}
-			_, err = requestIfMissing(t.TrunkTransaction, neighbor)
-			_checkIncomingError(t, err)
-			_, err = requestIfMissing(t.BranchTransaction, neighbor)
-			_checkIncomingError(t, err)
+			_, err = requestIfMissing(tx.TrunkTransaction, neighbor)
+			_checkIncomingError(tx, err)
+			_, err = requestIfMissing(tx.BranchTransaction, neighbor)
+			_checkIncomingError(tx, err)
 
 			// EVENTS:
 
 			pendingConfirmationKey := ns.Key(key, ns.NamespacePendingConfirmed)
-			if tx.HasKey(pendingConfirmationKey) {
-				err = tx.Remove(pendingConfirmationKey)
-				_checkIncomingError(t, err)
+			if dbTx.HasKey(pendingConfirmationKey) {
+				err = dbTx.Remove(pendingConfirmationKey)
+				_checkIncomingError(tx, err)
 
-				err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(t.Timestamp), tx)
-				_checkIncomingError(t, err)
+				err = addPendingConfirmation(ns.Key(key, ns.NamespaceEventConfirmationPending), int64(tx.Timestamp), dbTx)
+				_checkIncomingError(tx, err)
 			}
 
-			parentKey, err := tx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
+			parentKey, err := dbTx.GetBytes(ns.Key(key, ns.NamespaceEventMilestonePairPending))
 			if err == nil {
 				pendingMilestone = &PendingMilestone{parentKey, ns.Key(key, ns.NamespaceBytes)}
 			}
@@ -215,7 +234,7 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 			// Re-broadcast new TX. Not always.
 			// Here, it is actually possible to favor nearer neighbours!
 			if (!lowEndDevice || len(srv.Incoming) < maxIncoming) && utils.Random(0, 100) < P_BROADCAST {
-				Broadcast(t.Bytes, neighbor)
+				Broadcast(tx.Bytes, neighbor)
 			}
 
 			neighbor.TrackNew(1)
@@ -232,7 +251,7 @@ func processIncomingTX(t *transaction.FastTX, neighbor *server.Neighbor) error {
 			addPendingMilestoneToQueue(pendingMilestone)
 		}
 	} else {
-		addPendingRequest(t.Hash, 0, neighbor, true)
+		addPendingRequest(tx.Hash, 0, neighbor, true)
 
 		atomic.AddInt64(&totalTransactions, -1)
 		neighbor.TrackNew(-1)

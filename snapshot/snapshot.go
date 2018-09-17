@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"sync"
 	"time"
 
 	"../config"
@@ -14,7 +15,6 @@ import (
 const (
 	SNAPSHOT_SEPARATOR         = "==="
 	TIMESTAMP_MIN              = 1525017600
-	WAIT_SNAPSHOT_DURATION     = time.Duration(3) * time.Second
 	MIN_SPENT_ADDRESSES        = 521970
 	MAX_LATEST_TRANSACTION_AGE = 300
 )
@@ -25,23 +25,25 @@ var (
 	keySnapshotLock       = []byte{ns.NamespaceSnapshotLock}
 	keySnapshotFile       = []byte{ns.NamespaceSnapshotFile}
 
-	edgeTransactions          chan *[]byte
+	snapshotTicker            *time.Ticker
+	snapshotTickerQuit        = make(chan struct{})
+	edgeTransactions          = make(chan *[]byte, 10000000)
+	edgeTransactionsWaitGroup = &sync.WaitGroup{}
+	edgeTransactionsQueueQuit = make(chan struct{})
 	CurrentTimestamp          int64
-	InProgress                = false
+	SnapshotInProgress        = false
+	SnapshotWaitGroup         = &sync.WaitGroup{}
 	lowEndDevice              = false
 	timeLeftToSnapshotSeconds int64
+	ended                     = false
 )
 
 func Start() {
 	logs.Log.Debug("Loading snapshots module")
-	edgeTransactions = make(chan *[]byte, 10000000)
 
 	lowEndDevice = config.AppConfig.GetBool("light")
 	CurrentTimestamp = GetSnapshotTimestamp(nil)
 	logs.Log.Infof("Current snapshot timestamp: %v", CurrentTimestamp)
-
-	// Does this need to be done before snapshot is loaded/made ?
-	go trimTXRunner()
 
 	// TODO Refactor this function name and content so it is more readable
 	checkPendingSnapshot()
@@ -50,9 +52,27 @@ func Start() {
 	snapshotInterval := config.AppConfig.GetInt64("snapshots.interval")
 	ensureSnapshotIsUpToDate(snapshotInterval, snapshotPeriod)
 
-	go startAutosnapshots(snapshotInterval, snapshotPeriod)
-
 	loadSnapshotFiles()
+
+	go startAutosnapshots(snapshotInterval, snapshotPeriod)
+	go trimTXRunner()
+}
+
+func End() {
+	ended = true
+
+	if snapshotTicker != nil {
+		snapshotTicker.Stop()
+		close(snapshotTickerQuit)
+	}
+	close(edgeTransactionsQueueQuit)
+
+	SnapshotWaitGroup.Wait()
+
+	edgeTransactionsWaitGroup.Wait()
+	close(edgeTransactions)
+
+	logs.Log.Debug("Snapshot module exited")
 }
 
 func loadSnapshotFiles() {
@@ -74,12 +94,12 @@ func loadSnapshotFiles() {
 /*
 Sets the current snapshot date in the database
 */
-func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(true)
-		defer tx.Commit()
+func SetSnapshotTimestamp(timestamp int64, dbTx db.Transaction) error {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(true)
+		defer dbTx.Commit()
 	}
-	err := coding.PutInt64(tx, keySnapshotDate, timestamp)
+	err := coding.PutInt64(dbTx, keySnapshotDate, timestamp)
 	if err == nil {
 		CurrentTimestamp = timestamp
 	}
@@ -90,53 +110,55 @@ func SetSnapshotTimestamp(timestamp int64, tx db.Transaction) error {
 Returns timestamp if snapshot lock is present. Otherwise negative number.
 If this is a file lock (snapshot being loaded from a file)
 */
-func IsLocked(tx db.Transaction) (timestamp int64, filename string) {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func IsLocked(dbTx db.Transaction) (timestamp int64, filename string) {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
-	return GetSnapshotLock(tx), GetSnapshotFileLock(tx)
+	return GetSnapshotLock(dbTx), GetSnapshotFileLock(dbTx)
 }
 
 /*
 Creates a snapshot lock in the database
 */
-func Lock(timestamp int64, filename string, tx db.Transaction) error {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(true)
-		defer tx.Commit()
+func Lock(timestamp int64, filename string, dbTx db.Transaction) error {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(true)
+		defer dbTx.Commit()
 	}
 
-	InProgress = true
-	err := coding.PutInt64(tx, keySnapshotLock, timestamp)
+	SnapshotInProgress = true
+	SnapshotWaitGroup.Add(1)
+	err := coding.PutInt64(dbTx, keySnapshotLock, timestamp)
 	if err != nil {
 		return err
 	}
-	return coding.PutString(tx, keySnapshotFile, filename)
+	return coding.PutString(dbTx, keySnapshotFile, filename)
 }
 
 /*
 Removes a snapshot lock in the database
 */
-func Unlock(tx db.Transaction) error {
-	InProgress = false
-	err := tx.Remove(keySnapshotLock)
+func Unlock(dbTx db.Transaction) error {
+	SnapshotInProgress = false
+	SnapshotWaitGroup.Done()
+	err := dbTx.Remove(keySnapshotLock)
 	if err != nil {
 		return err
 	}
-	return tx.Remove(keySnapshotFile)
+	return dbTx.Remove(keySnapshotFile)
 }
 
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotLock(tx db.Transaction) int64 {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func GetSnapshotLock(dbTx db.Transaction) int64 {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	timestamp, err := coding.GetInt64(tx, keySnapshotLock)
+	timestamp, err := coding.GetInt64(dbTx, keySnapshotLock)
 	if err != nil {
 		return -1
 	}
@@ -146,17 +168,17 @@ func GetSnapshotLock(tx db.Transaction) int64 {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotTimestamp(tx db.Transaction) int64 {
+func GetSnapshotTimestamp(dbTx db.Transaction) int64 {
 	if CurrentTimestamp > 0 {
 		return CurrentTimestamp
 	}
 
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	timestamp, err := coding.GetInt64(tx, keySnapshotDate)
+	timestamp, err := coding.GetInt64(dbTx, keySnapshotDate)
 	if err != nil {
 		return -1
 	}
@@ -168,13 +190,13 @@ func GetSnapshotTimestamp(tx db.Transaction) int64 {
 /*
 Returns the date unix timestamp of the last snapshot
 */
-func GetSnapshotFileLock(tx db.Transaction) string {
-	if tx == nil {
-		tx = db.Singleton.NewTransaction(false)
-		defer tx.Discard()
+func GetSnapshotFileLock(dbTx db.Transaction) string {
+	if dbTx == nil {
+		dbTx = db.Singleton.NewTransaction(false)
+		defer dbTx.Discard()
 	}
 
-	filename, err := coding.GetString(tx, keySnapshotFile)
+	filename, err := coding.GetString(dbTx, keySnapshotFile)
 	if err != nil {
 		return ""
 	}
@@ -197,22 +219,31 @@ func startAutosnapshots(snapshotInterval, snapshotPeriod int64) {
 
 		t := time.NewTicker(time.Duration(timeLeftToSnapshotSeconds) * time.Second)
 		<-t.C // Waits until it ticks
+		t.Stop()
 
 		MakeSnapshot(snapshotTimestamp, "")
 	}
 
 	logs.Log.Infof("Automatic snapshots will be done every %v hours, keeping the past %v hours.", snapshotInterval, snapshotPeriod)
 
-	snapshotTicker := time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
-	for range snapshotTicker.C {
-		logs.Log.Info("Starting automatic snapshot...")
-		if !InProgress {
-			snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
-			MakeSnapshot(snapshotTimestamp, "")
-		} else {
-			logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
-		}
+	snapshotTicker = time.NewTicker(time.Duration(60*snapshotInterval) * time.Minute)
+	for {
+		select {
+		case <-snapshotTickerQuit:
+			return
 
+		case <-snapshotTicker.C:
+			if ended {
+				break
+			}
+			logs.Log.Info("Starting automatic snapshot...")
+			if !SnapshotInProgress {
+				snapshotTimestamp := getNextSnapshotTimestamp(snapshotPeriod)
+				MakeSnapshot(snapshotTimestamp, "")
+			} else {
+				logs.Log.Warning("D'oh! A snapshot is already in progress. Skipping current run.")
+			}
+		}
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"../convert"
 	"../db"
@@ -34,12 +33,6 @@ func LoadSnapshot(path string) error {
 	}
 	Lock(timestamp, path, nil)
 
-	db.Singleton.Lock()
-	defer db.Singleton.Unlock()
-
-	// Give time for other processes to finalize
-	time.Sleep(WAIT_SNAPSHOT_DURATION)
-
 	logs.Log.Debug("Saving trimmable TXs flags...")
 	err = trimData(timestamp)
 	logs.Log.Debug("Saved trimmable TXs flags:", len(edgeTransactions))
@@ -53,13 +46,13 @@ func LoadSnapshot(path string) error {
 	}
 
 	if checkDatabaseSnapshot() {
-		return db.Singleton.Update(func(tx db.Transaction) error {
-			err := SetSnapshotTimestamp(timestamp, tx)
+		return db.Singleton.Update(func(dbTx db.Transaction) error {
+			err := SetSnapshotTimestamp(timestamp, dbTx)
 			if err != nil {
 				return err
 			}
 
-			err = Unlock(tx)
+			err = Unlock(dbTx)
 			if err != nil {
 				return err
 			}
@@ -70,29 +63,29 @@ func LoadSnapshot(path string) error {
 	}
 }
 
-func loadValueSnapshot(address []byte, value int64, tx db.Transaction) error {
+func loadValueSnapshot(address []byte, value int64, dbTx db.Transaction) error {
 	addressKey := ns.AddressKey(address, ns.NamespaceSnapshotBalance)
-	err := coding.PutInt64(tx, addressKey, value)
+	err := coding.PutInt64(dbTx, addressKey, value)
 	if err != nil {
 		return err
 	}
-	err = coding.PutInt64(tx, ns.AddressKey(address, ns.NamespaceBalance), value)
+	err = coding.PutInt64(dbTx, ns.AddressKey(address, ns.NamespaceBalance), value)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func loadSpentSnapshot(address []byte, tx db.Transaction) error {
-	// err := tx.PutBytes(ns.AddressKey(address, ns.NamespaceSnapshotSpent), address)
+func loadSpentSnapshot(address []byte, dbTx db.Transaction) error {
+	// err := dbTx.PutBytes(ns.AddressKey(address, ns.NamespaceSnapshotSpent), address)
 	// if err != nil {
 	// 	return err
 	// }
-	err := coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
+	err := coding.PutBool(dbTx, ns.AddressKey(address, ns.NamespaceSnapshotSpent), true)
 	if err != nil {
 		return err
 	}
-	err = coding.PutBool(tx, ns.AddressKey(address, ns.NamespaceSpent), true)
+	err = coding.PutBool(dbTx, ns.AddressKey(address, ns.NamespaceSpent), true)
 	if err != nil {
 		return err
 	}
@@ -126,7 +119,7 @@ func doLoadSnapshot(path string, timestamp int64) error {
 	var total int64 = 0
 	var totalSpent int64 = 0
 	var firstLine = true
-	var tx = db.Singleton.NewTransaction(true)
+	var dbTx = db.Singleton.NewTransaction(true)
 
 	for {
 		line, err := rd.ReadString('\n')
@@ -160,15 +153,15 @@ func doLoadSnapshot(path string, timestamp int64) error {
 				return err
 			}
 			total += value
-			err = loadValueSnapshot(address, value, tx)
+			err = loadValueSnapshot(address, value, dbTx)
 			if err != nil {
 				if err == db.ErrTransactionTooBig {
-					err := tx.Commit()
+					err := dbTx.Commit()
 					if err != nil {
 						return err
 					}
-					tx = db.Singleton.NewTransaction(true)
-					err = loadValueSnapshot(address, value, tx)
+					dbTx = db.Singleton.NewTransaction(true)
+					err = loadValueSnapshot(address, value, dbTx)
 					if err != nil {
 						return err
 					}
@@ -178,15 +171,15 @@ func doLoadSnapshot(path string, timestamp int64) error {
 			}
 		} else if stage == 1 {
 			totalSpent++
-			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+			err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 			if err != nil {
 				if err == db.ErrTransactionTooBig {
-					err := tx.Commit()
+					err := dbTx.Commit()
 					if err != nil {
 						return err
 					}
-					tx = db.Singleton.NewTransaction(true)
-					err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], tx)
+					dbTx = db.Singleton.NewTransaction(true)
+					err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
 					if err != nil {
 						return err
 					}
@@ -199,11 +192,11 @@ func doLoadSnapshot(path string, timestamp int64) error {
 			err = loadKey(key, timestamp)
 			if err != nil {
 				if err == db.ErrTransactionTooBig {
-					err := tx.Commit()
+					err := dbTx.Commit()
 					if err != nil {
 						return err
 					}
-					tx = db.Singleton.NewTransaction(true)
+					dbTx = db.Singleton.NewTransaction(true)
 					err = loadKey(key, timestamp)
 					if err != nil {
 						return err
@@ -215,7 +208,7 @@ func doLoadSnapshot(path string, timestamp int64) error {
 		}
 	}
 
-	err = tx.Commit()
+	err = dbTx.Commit()
 	if err != nil {
 		return err
 	}

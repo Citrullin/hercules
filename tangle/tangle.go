@@ -13,21 +13,24 @@ import (
 	"../logs"
 	"../server"
 	"../transaction"
+
+	"github.com/coocood/freecache"
 )
 
 const (
-	MWM                = 14
-	maxQueueSize       = 1000000
-	reportInterval     = time.Duration(60) * time.Second
-	tipRemoverInterval = time.Duration(1) * time.Minute
-	cleanupInterval    = time.Duration(10) * time.Second
-	maxTipAge          = time.Duration(1) * time.Hour
-	TRYTES_SIZE        = 2673
-	PACKET_SIZE        = 1650
-	REQ_HASH_SIZE      = 46
-	HASH_SIZE          = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
-	DATA_SIZE          = PACKET_SIZE - REQ_HASH_SIZE
-	TX_TRITS_LENGTH    = 8019
+	MWM                  = 14
+	maxQueueSize         = 1000000
+	reportInterval       = time.Duration(60) * time.Second
+	tipRemoverInterval   = time.Duration(1) * time.Minute
+	cleanupInterval      = time.Duration(10) * time.Second
+	maxTipAge            = time.Duration(1) * time.Hour
+	TRYTES_SIZE          = 2673
+	PACKET_SIZE          = 1650
+	REQ_HASH_SIZE        = 46
+	HASH_SIZE            = 49 // This is not "46" on purpose, because all hashes in the DB are stored with length 49
+	DATA_SIZE            = PACKET_SIZE - REQ_HASH_SIZE
+	TX_TRITS_LENGTH      = 8019
+	fingerPrintCacheSize = 10 * 1024 * 1024 // 10MB
 )
 
 var (
@@ -50,6 +53,12 @@ var (
 	saved                      = 0
 	discarded                  = 0
 	outgoing                   = 0
+	fingerPrintTTL             = 20 // seconds
+	fingerPrintCache           = freecache.NewCache(fingerPrintCacheSize)
+	cleanupTicker        *time.Ticker
+	cleanupWaitGroup     = &sync.WaitGroup{}
+	cleanupTickerQuit    = make(chan struct{})
+	ended                = false
 )
 
 type Message struct {
@@ -83,8 +92,11 @@ func Start() {
 	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
 	totalConfirmations = int64(ns.Count(db.Singleton, ns.NamespaceConfirmed))
 
+	if lowEndDevice {
+		fingerPrintTTL = fingerPrintTTL * 3
+	}
+
 	// reapplyConfirmed()
-	fingerprintsOnLoad()
 	tipOnLoad()
 	pendingOnLoad()
 	milestoneOnLoad()
@@ -107,16 +119,74 @@ func Start() {
 	logs.Log.Info("Tangle started!")
 }
 
+func End() {
+	ended = true
+
+	if tangleReportTicker != nil {
+		tangleReportTicker.Stop()
+		close(tangleReportTickerQuit)
+	}
+	if outgoingRunnerTicker != nil {
+		outgoingRunnerTicker.Stop()
+		close(outgoingRunnerTickerQuit)
+	}
+	if tipRemoverTicker != nil {
+		tipRemoverTicker.Stop()
+		close(tipRemoverTickerQuit)
+	}
+	if milestoneTicker != nil {
+		milestoneTicker.Stop()
+		close(milestoneTickerQuit)
+	}
+	if removeOrphanedPendingTicker != nil {
+		removeOrphanedPendingTicker.Stop()
+		close(removeOrphanedPendingTickerQuit)
+	}
+	if cleanupTicker != nil {
+		cleanupTicker.Stop()
+		close(cleanupTickerQuit)
+	}
+	close(pendingMilestoneQueueQuit)
+	close(confirmQueueQuit)
+
+	tipRemoverWaitGroup.Wait()
+	milestoneTickerWaitGroup.Wait()
+	removeOrphanedPendingWaitGroup.Wait()
+	cleanupWaitGroup.Wait()
+	outgoingRunnerWaitGroup.Wait()
+	pendingMilestoneWaitGroup.Wait()
+	confirmQueueWaitGroup.Wait()
+
+	close(srv.Outgoing)
+	srv.OutgoingWaitGroup.Wait()
+
+	close(pendingMilestoneQueue)
+	close(confirmQueue)
+	logs.Log.Debug("Tangle module exited")
+}
+
 func cleanup() {
+	cleanupWaitGroup.Add(1)
+	defer cleanupWaitGroup.Done()
+
 	interval := cleanupInterval
 	if lowEndDevice {
 		interval *= 3
 	}
-	cleanupTicker := time.NewTicker(interval)
-	for range cleanupTicker.C {
-		cleanupFingerprints()
-		cleanupRequestQueues()
-		cleanupStalledRequests()
+
+	cleanupTicker = time.NewTicker(interval)
+	for {
+		select {
+		case <-cleanupTickerQuit:
+			return
+
+		case <-cleanupTicker.C:
+			if ended {
+				break
+			}
+			cleanupRequestQueues()
+			cleanupStalledRequests()
+		}
 	}
 }
 
@@ -126,33 +196,33 @@ func checkConsistency(skipRequests bool, skipConfirmations bool) {
 		ns.Remove(db.Singleton, ns.NamespacePendingHash)
 		ns.Remove(db.Singleton, ns.NamespacePendingTimestamp)
 	}
-	db.Singleton.View(func(tx db.Transaction) (e error) {
+	db.Singleton.View(func(dbTx db.Transaction) (e error) {
 		x := 0
-		return ns.ForNamespace(tx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
+		return ns.ForNamespace(dbTx, ns.NamespaceHash, true, func(key, value []byte) (bool, error) {
 			relKey := ns.Key(key, ns.NamespaceRelation)
-			relation, _ := tx.GetBytes(relKey)
+			relation, _ := dbTx.GetBytes(relKey)
 
 			// TODO: remove pending and pending unknown?
 
 			// Check pairs exist
 			if !skipRequests &&
-				(!tx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !tx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
-				txBytes, _ := tx.GetBytes(ns.Key(key, ns.NamespaceBytes))
+				(!dbTx.HasKey(ns.Key(relation[:16], ns.NamespaceHash)) || !dbTx.HasKey(ns.Key(relation[16:], ns.NamespaceHash))) {
+				txBytes, _ := dbTx.GetBytes(ns.Key(key, ns.NamespaceBytes))
 				trits := convert.BytesToTrits(txBytes)[:8019]
-				t := transaction.TritsToFastTX(&trits, txBytes)
-				db.Singleton.Update(func(tx db.Transaction) error {
-					requestIfMissing(t.TrunkTransaction, nil)
-					requestIfMissing(t.BranchTransaction, nil)
+				tx := transaction.TritsToFastTX(&trits, txBytes)
+				db.Singleton.Update(func(dbTx db.Transaction) error {
+					requestIfMissing(tx.TrunkTransaction, nil)
+					requestIfMissing(tx.BranchTransaction, nil)
 					return nil
 				})
 			}
 
 			// Re-confirm children
 			if !skipConfirmations {
-				if tx.HasKey(ns.Key(relKey, ns.NamespaceConfirmed)) {
-					db.Singleton.Update(func(tx db.Transaction) error {
-						confirmChild(relation[:16], tx)
-						confirmChild(relation[16:], tx)
+				if dbTx.HasKey(ns.Key(relKey, ns.NamespaceConfirmed)) {
+					db.Singleton.Update(func(dbTx db.Transaction) error {
+						confirmChild(relation[:16], dbTx)
+						confirmChild(relation[16:], dbTx)
 						return nil
 					})
 				}

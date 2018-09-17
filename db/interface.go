@@ -29,7 +29,7 @@ type Interface interface {
 	Manipulator
 	Lock()
 	Unlock()
-	NewTransaction(bool) Transaction
+	NewTransaction(update bool) Transaction
 	Update(func(Transaction) error) error
 	View(func(Transaction) error) error
 	Close() error

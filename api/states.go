@@ -16,38 +16,38 @@ func init() {
 	addAPICall("wereAddressesSpentFrom", wereAddressesSpentFrom, mainAPICalls)
 }
 
-func getInclusionStates(request Request, c *gin.Context, t time.Time) {
+func getInclusionStates(request Request, c *gin.Context, ts time.Time) {
 	var states = []bool{}
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		for _, hash := range request.Transactions {
 			if !convert.IsTrytes(hash, 81) {
 				replyError("Wrong hash trytes", c)
 				return nil
 			}
-			states = append(states, tx.HasKey(ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceConfirmed)))
+			states = append(states, dbTx.HasKey(ns.HashKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceConfirmed)))
 		}
 		return nil
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"states":   states,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
 
-func wereAddressesSpentFrom(request Request, c *gin.Context, t time.Time) {
+func wereAddressesSpentFrom(request Request, c *gin.Context, ts time.Time) {
 	var states = []bool{}
-	db.Singleton.View(func(tx db.Transaction) error {
+	db.Singleton.View(func(dbTx db.Transaction) error {
 		for _, hash := range request.Addresses {
 			if !convert.IsTrytes(hash, 81) {
 				replyError("Wrong hash trytes", c)
 				return nil
 			}
-			states = append(states, tx.HasKey(ns.AddressKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceSpent)))
+			states = append(states, dbTx.HasKey(ns.AddressKey(convert.TrytesToBytes(hash)[:49], ns.NamespaceSpent)))
 		}
 		return nil
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"states":   states,
-		"duration": getDuration(t),
+		"duration": getDuration(ts),
 	})
 }
