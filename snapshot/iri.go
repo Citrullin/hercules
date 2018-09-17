@@ -14,7 +14,7 @@ import (
 )
 
 func LoadIRISnapshot(valuesPath string, spentPaths []string, timestamp int64) error {
-	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer", valuesPath)
+	logs.Log.Noticef("Reading IRI snapshot, please do not kill the process or stop the computer: %v", valuesPath)
 	if CurrentTimestamp > 0 {
 		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
 		return nil
@@ -53,6 +53,8 @@ func loadIRISnapshotSpents(spentPaths []string) (err error) {
 }
 
 func loadIRISnapshotSpent(spentPath string) error {
+	logs.Log.Noticef("Loading spent addresses file: %v", spentPath)
+
 	f, err := os.OpenFile(spentPath, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		logs.Log.Fatalf("open file error: %v", err)
@@ -62,17 +64,29 @@ func loadIRISnapshotSpent(spentPath string) error {
 
 	rd := bufio.NewReader(f)
 	var dbTx = db.Singleton.NewTransaction(true)
+
+	lineNr := 0
 	for {
+		lineNr++
 		line, err := rd.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 
-			logs.Log.Fatalf("read file line error: %v", err)
+			logs.Log.Fatalf("read file line error (%d): %v", lineNr, err)
 			return err
 		}
-		err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			continue
+		}
+
+		if len(trimmedLine) != 81 {
+			logs.Log.Fatalf("Wrong address in line (%d): %v", lineNr, trimmedLine)
+		}
+
+		err = loadSpentSnapshot(convert.TrytesToBytes(trimmedLine)[:49], dbTx)
 		if err != nil {
 			if err == db.ErrTransactionTooBig {
 				err := dbTx.Commit()
@@ -80,7 +94,7 @@ func loadIRISnapshotSpent(spentPath string) error {
 					return err
 				}
 				dbTx = db.Singleton.NewTransaction(true)
-				err = loadSpentSnapshot(convert.TrytesToBytes(strings.TrimSpace(line))[:49], dbTx)
+				err = loadSpentSnapshot(convert.TrytesToBytes(trimmedLine)[:49], dbTx)
 				if err != nil {
 					return err
 				}
