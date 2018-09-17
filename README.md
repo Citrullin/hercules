@@ -285,7 +285,7 @@ Hercules will fail to start. Once the database is initialised, you do not
 need this option any longer. It will be ignored if the database has been already initialised
 with a snapshot file. The same applies for the IRI snapshots below:
 
-#### --snapshots.loadIRIFile="snapshotMainnet.txt" --snapshots.loadIRISpentFile="previousEpochsSpentAddresses.txt" --snapshots.loadIRITimestamp=1525017600
+#### --snapshots.loadIRIFile="snapshotMainnet.txt" --snapshots.loadIRISpentFiles="previousEpochsSpentAddresses1.txt,previousEpochsSpentAddresses2.txt" --snapshots.loadIRITimestamp=1525017600
 
 Instead of using proprietary Hercules snapshot files, you can use the snapshot files
 from the IRI that can be downloaded [here](https://github.com/iotaledger/iri/tree/dev/src/main/resources).

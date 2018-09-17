@@ -77,13 +77,13 @@ func End() {
 
 func loadSnapshotFiles() {
 	snapshotToLoad := config.AppConfig.GetString("snapshots.loadFile")
-	iri1 := config.AppConfig.GetString("snapshots.loadIRIFile")
-	iri2 := config.AppConfig.GetString("snapshots.loadIRISpentFile")
+	iriFile := config.AppConfig.GetString("snapshots.loadIRIFile")
+	spentFiles := config.AppConfig.GetStringSlice("snapshots.loadIRISpentFiles")
 	iriTimestamp := config.AppConfig.GetInt64("snapshots.loadIRITimestamp")
 	if len(snapshotToLoad) > 0 {
 		LoadSnapshot(snapshotToLoad)
-	} else if len(iri1) > 0 && len(iri2) > 0 && iriTimestamp > 0 {
-		LoadIRISnapshot(iri1, iri2, iriTimestamp)
+	} else if len(iriFile) > 0 && len(spentFiles) > 0 && iriTimestamp > 0 {
+		LoadIRISnapshot(iriFile, spentFiles, iriTimestamp)
 	}
 
 	if !checkDatabaseSnapshot() {
