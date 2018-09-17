@@ -105,7 +105,7 @@ func declareSnapshotConfigs() {
 		"otherwise <timestamp>.snap wil be used")
 	flag.String("snapshots.loadFile", "", "Path to a snapshot file to load")
 	flag.String("snapshots.loadIRIFile", "", "Path to an IRI snapshot file to load")
-	flag.String("snapshots.loadIRISpentFile", "", "Path to an IRI spent snapshot file to load")
+	flag.StringSlice("snapshots.loadIRISpentFiles", []string{}, "Slice with paths to the IRI spent snapshot files to load")
 	flag.Int("snapshots.loadIRITimestamp", 0, "Timestamp for which to load the given IRI snapshot files.")
 	flag.Int("snapshots.interval", 0, "Interval in hours to automatically make the snapshots. 0 = off")
 	// Lesser period increases the probability that some addresses will not be consistent with the global state.

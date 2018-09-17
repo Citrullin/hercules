@@ -58,7 +58,7 @@
     "path": "snapshots",
     "loadFile": "",
     "loadIRIFile": "",
-    "loadIRISpentFile": "",
+    "loadIRISpentFiles": [""],
     "loadIRITimestamp": 0,
     "interval": 0,
     "period": 168,

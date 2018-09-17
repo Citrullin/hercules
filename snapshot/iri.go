@@ -13,7 +13,7 @@ import (
 	"../logs"
 )
 
-func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error {
+func LoadIRISnapshot(valuesPath string, spentPaths []string, timestamp int64) error {
 	logs.Log.Notice("Reading IRI snapshot, please do not kill the process or stop the computer", valuesPath)
 	if CurrentTimestamp > 0 {
 		logs.Log.Info("It seems that the the tangle database already exists. Skipping snapshot load from file.")
@@ -27,7 +27,7 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error
 		return err
 	}
 	// Load spent
-	err = loadIRISnapshotSpent(spentPath)
+	err = loadIRISnapshotSpents(spentPaths)
 	if err != nil {
 		logs.Log.Error("Failed loading IRI snapshot spent flags!", err)
 		return err
@@ -40,6 +40,16 @@ func LoadIRISnapshot(valuesPath string, spentPath string, timestamp int64) error
 		logs.Log.Panic("Snapshot loading failed. The database is in an unstable state!")
 	}
 	return nil
+}
+
+func loadIRISnapshotSpents(spentPaths []string) (err error) {
+	for _, spentPath := range spentPaths {
+		err = loadIRISnapshotSpent(spentPath)
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
 
 func loadIRISnapshotSpent(spentPath string) error {
