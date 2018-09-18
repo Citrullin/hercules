@@ -24,7 +24,7 @@ const (
 
 var (
 	lastTip                  = time.Now()
-	PendingRequests          map[string]*PendingRequest
+	PendingRequests          = make(map[string]*PendingRequest)
 	PendingRequestsLock      = &sync.RWMutex{}
 	outgoingRunnerTicker     *time.Ticker
 	outgoingRunnerWaitGroup  = &sync.WaitGroup{}
@@ -57,7 +57,6 @@ func Broadcast(data []byte, excludeNeighbor *server.Neighbor) int {
 }
 
 func pendingOnLoad() {
-	PendingRequests = make(map[string]*PendingRequest)
 	loadPendingRequests()
 }
 

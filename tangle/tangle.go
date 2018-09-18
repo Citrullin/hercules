@@ -43,9 +43,9 @@ var (
 
 	// vars
 	srv                  *server.Server
-	LastIncomingTime     map[string]time.Time
-	LastIncomingTimeLock = &sync.RWMutex{}
-	RequestQueues        map[string]*RequestQueue
+	LastIncomingTime           = make(map[string]time.Time)
+	LastIncomingTimeLock       = &sync.RWMutex{}
+	RequestQueues              = make(map[string]*RequestQueue, maxQueueSize)
 	RequestQueuesLock          = &sync.RWMutex{}
 	lowEndDevice               = false
 	totalTransactions    int64 = 0
@@ -84,9 +84,6 @@ func Start() {
 	srv = server.GetServer()
 
 	// TODO: need a way to cleanup queues for disconnected/gone neighbors
-	RequestQueues = make(map[string]*RequestQueue, maxQueueSize)
-	LastIncomingTime = make(map[string]time.Time)
-
 	lowEndDevice = config.AppConfig.GetBool("light")
 
 	totalTransactions = int64(ns.Count(db.Singleton, ns.NamespaceHash))
