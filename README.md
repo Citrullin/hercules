@@ -66,6 +66,13 @@ Now run `go version` to make sure that everything works and you have the correct
 sudo apt-get install gcc
 ```
 
+### Install dep
+
+```
+curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+```
+Installation for other platforms: https://github.com/golang/dep
+
 ### Get Hercules
 
 **Using "git clone"**
@@ -83,9 +90,8 @@ This will download and place the hercules source files in `$HOME` (/home/your_us
 If you want to build Hercules in a different directory you just need to change the path in the commands below:
 
 ```
-go get -d ./...
 mkdir build
-go build -v -o build/hercules hercules.go
+go build -v -o build/hercules
 ```
 
 That's it! Hercules is ready to be used.
