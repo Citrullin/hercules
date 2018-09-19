@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"../logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 type SnapshotHeader struct {

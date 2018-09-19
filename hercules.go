@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"./api"
-	"./config"
-	"./db"
-	"./logs"
-	"./server"
-	"./snapshot"
-	"./tangle"
-	"./utils"
+	"gitlab.com/semkodev/hercules/api"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/utils"
 
 	_ "net/http/pprof"
 

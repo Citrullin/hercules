@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"../logs"
+	"gitlab.com/semkodev/hercules/logs"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )

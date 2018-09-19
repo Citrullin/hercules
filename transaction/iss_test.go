@@ -4,7 +4,7 @@ import "testing"
 import (
 	"reflect"
 
-	"../convert"
+	"gitlab.com/semkodev/hercules/convert"
 )
 
 const (

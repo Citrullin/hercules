@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"../config"
-	"../logs"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/logs"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )

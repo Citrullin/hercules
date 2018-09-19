@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"../convert"
-	"../tangle"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/tangle"
 	"github.com/gin-gonic/gin"
 )
 

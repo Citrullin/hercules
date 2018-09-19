@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"../config"
-	"../logs"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 func Hello() {

@@ -5,11 +5,11 @@ import (
 	"runtime"
 	"time"
 
-	"../convert"
-	"../server"
-	"../snapshot"
-	"../tangle"
-	"../utils"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/utils"
 	"github.com/gin-gonic/gin"
 )
 

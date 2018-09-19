@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"../config"
-	"../logs"
-	"../snapshot"
-	"../utils"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"gitlab.com/semkodev/hercules/utils"
 	"github.com/gin-gonic/gin"
 )
 

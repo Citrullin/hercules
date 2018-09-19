@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"../../logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 type Iterator interface {

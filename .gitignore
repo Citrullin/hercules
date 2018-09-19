@@ -11,3 +11,4 @@ data/*
 *.pem
 *.exe
 *.log
+vendor/

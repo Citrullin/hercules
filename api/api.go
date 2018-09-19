@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"../config"
-	"../logs"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/logs"
 	"github.com/gin-gonic/gin"
 )
 

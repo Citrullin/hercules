@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"../config"
-	"../logs"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 const (

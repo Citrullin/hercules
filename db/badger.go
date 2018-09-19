@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"../config"
-	"../db/coding"
-	"../logs"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/logs"
 	"github.com/dgraph-io/badger"
 )
 

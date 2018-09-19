@@ -4,7 +4,7 @@ import (
 	"hash"
 	"math/big"
 
-	"../convert"
+	"gitlab.com/semkodev/hercules/convert"
 	"github.com/tonnerre/golang-go.crypto/sha3"
 )
 

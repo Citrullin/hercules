@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"../convert"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../snapshot"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"gitlab.com/semkodev/hercules/transaction"
 	"github.com/pkg/errors"
 )
 

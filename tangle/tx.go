@@ -3,12 +3,12 @@ package tangle
 import (
 	"github.com/pkg/errors"
 
-	"../convert"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 func SaveTX(tx *transaction.FastTX, raw *[]byte, dbTx db.Transaction) (e error) {

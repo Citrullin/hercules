@@ -3,7 +3,7 @@ package db
 import (
 	"fmt"
 
-	"../logs"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 var (

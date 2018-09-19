@@ -10,12 +10,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"../config"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../utils"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/utils"
 )
 
 /*

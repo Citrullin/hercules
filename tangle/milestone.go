@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"../convert"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 type Milestone struct {

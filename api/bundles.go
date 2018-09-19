@@ -7,13 +7,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 
-	"../convert"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../tangle"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/tangle"
+	"gitlab.com/semkodev/hercules/transaction"
 )
 
 func init() {

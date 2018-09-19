@@ -1,8 +1,8 @@
 package transaction
 
 import (
-	"../convert"
-	"../crypt"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/crypt"
 )
 
 const (

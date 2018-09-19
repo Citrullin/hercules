@@ -1,6 +1,6 @@
 package crypt
 
-import "../convert"
+import "gitlab.com/semkodev/hercules/convert"
 
 func IsValidPoW(hsh []byte, mwm int) bool {
 	hash := convert.BytesToTrits(hsh)

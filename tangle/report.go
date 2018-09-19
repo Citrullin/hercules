@@ -4,10 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"../db"
-	"../db/ns"
-	"../logs"
-	"../server"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
 )
 
 var (

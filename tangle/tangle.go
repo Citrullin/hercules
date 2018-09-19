@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"../config"
-	"../convert"
-	"../db"
-	"../db/ns"
-	"../logs"
-	"../server"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/transaction"
 
 	"github.com/coocood/freecache"
 )

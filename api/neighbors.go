@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"../logs"
-	"../server"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
 	"github.com/gin-gonic/gin"
 )
 

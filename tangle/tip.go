@@ -4,11 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../transaction"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/transaction"
 
 	"github.com/lukechampine/randmap" // github.com/lukechampine/randmap/safe is safer, but for now we use the faster one
 )

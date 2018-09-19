@@ -4,12 +4,12 @@ import (
 	"sync"
 	"time"
 
-	"../config"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../utils"
+	"gitlab.com/semkodev/hercules/config"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/utils"
 )
 
 const (

@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"../convert"
-	"../db"
-	"../db/ns"
-	"../logs"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
 )
 
 func LoadIRISnapshot(valuesPath string, spentPaths []string, timestamp int64) error {

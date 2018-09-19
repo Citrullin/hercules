@@ -5,16 +5,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"../convert"
-	"../crypt"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
-	"../server"
-	"../snapshot"
-	"../transaction"
-	"../utils"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/crypt"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
+	"gitlab.com/semkodev/hercules/server"
+	"gitlab.com/semkodev/hercules/snapshot"
+	"gitlab.com/semkodev/hercules/transaction"
+	"gitlab.com/semkodev/hercules/utils"
 )
 
 const (

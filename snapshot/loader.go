@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"../convert"
-	"../db"
-	"../db/coding"
-	"../db/ns"
-	"../logs"
+	"gitlab.com/semkodev/hercules/convert"
+	"gitlab.com/semkodev/hercules/db"
+	"gitlab.com/semkodev/hercules/db/coding"
+	"gitlab.com/semkodev/hercules/db/ns"
+	"gitlab.com/semkodev/hercules/logs"
 	"github.com/pkg/errors"
 )
 
